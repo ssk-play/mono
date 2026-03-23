@@ -876,12 +876,12 @@
     const maxBul = shotType === 2 ? 15 : 8;
     if (btn("a") && shootCooldown <= 0 && bullets.length < maxBul) {
       if (shotType === 0) {
-        bullets.push({ x: player.x + 3, y: player.y - 4, vx: 0, vy: -7 });
+        bullets.push({ x: player.x + 0, y: player.y - 4, vx: 0, vy: -7 });
       } else if (shotType === 1) {
         bullets.push({ x: player.x + 1, y: player.y - 4, vx: 0, vy: -7 });
         bullets.push({ x: player.x + 5, y: player.y - 4, vx: 0, vy: -7 });
       } else {
-        bullets.push({ x: player.x + 3, y: player.y - 4, vx: 0, vy: -7 });
+        bullets.push({ x: player.x + 0, y: player.y - 4, vx: 0, vy: -7 });
         bullets.push({ x: player.x + 1, y: player.y - 2, vx: -1.5, vy: -6.5 });
         bullets.push({ x: player.x + 5, y: player.y - 2, vx: 1.5, vy: -6.5 });
       }
@@ -889,7 +889,7 @@
       shootSound();
       // Wingmen shoot
       for (const wm of wingmen) {
-        bullets.push({ x: wm.x + 3, y: wm.y - 4, vx: 0, vy: -7 });
+        bullets.push({ x: wm.x + 0, y: wm.y - 4, vx: 0, vy: -7 });
       }
     }
 
@@ -985,7 +985,7 @@
       if (e.shootTimer <= 0 && e.y > 8 && e.y < H - 23) {
         const angle = Math.atan2(player.y - e.y, player.x - e.x);
         const spd = 2 + stage * 0.15;
-        eBullets.push({ x: e.x + 3, y: e.y + 8, vx: cos(angle) * spd, vy: sin(angle) * spd });
+        eBullets.push({ x: e.x + 0, y: e.y + 8, vx: cos(angle) * spd, vy: sin(angle) * spd });
         e.shootTimer = _max(25, 70 - stage * 4) + flr(rnd(40));
       }
 
@@ -994,7 +994,7 @@
         const b = bullets[j];
         const hitW = e.type === "large" ? 16 : 8;
         const hitH = e.type === "large" ? 16 : 8;
-        if (b.x > e.x - 2 && b.x < e.x + hitW + 1 && b.y > e.y - 2 && b.y < e.y + hitH + 1) {
+        if (b.x + 8 > e.x && b.x < e.x + hitW && b.y + 8 > e.y && b.y < e.y + hitH) {
           bullets.splice(j, 1);
           e.hp--;
           if (e.hp <= 0) {
@@ -1060,7 +1060,7 @@
         // Bullet-boss collision
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if (b.x > boss.x - 2 && b.x < boss.x + 18 && b.y > boss.y - 2 && b.y < boss.y + 18) {
+          if (b.x + 8 > boss.x && b.x < boss.x + 16 && b.y + 8 > boss.y && b.y < boss.y + 16) {
             bullets.splice(j, 1);
             boss.hp--;
             note(1, "A4", 0.02);
@@ -1112,7 +1112,7 @@
       b.y += b.vy;
       if (b.y > H + 8 || b.y < -8 || b.x < -8 || b.x > W + 8) { eBullets.splice(i, 1); continue; }
       if (invincTimer <= 0 && loopTimer <= 0) {
-        if (b.x > player.x && b.x < player.x + 8 && b.y > player.y && b.y < player.y + 8) {
+        if (b.x + 8 > player.x && b.x < player.x + 8 && b.y + 8 > player.y && b.y < player.y + 8) {
           eBullets.splice(i, 1);
           playerHit();
         }

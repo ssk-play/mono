@@ -801,7 +801,7 @@
           const angle = Math.atan2(player.y - e.y, player.x - e.x);
           const bspd = 2.5 + wave * 0.12;
           eBullets.push({
-            x: e.x + 3, y: e.y + 8,
+            x: e.x + 0, y: e.y + 8,
             vx: cos(angle) * bspd,
             vy: sin(angle) * bspd
           });
@@ -819,7 +819,7 @@
       // Bullet-enemy collision
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.x > e.x - 2 && b.x < e.x + 9 && b.y > e.y - 2 && b.y < e.y + 9) {
+        if (b.x + 8 > e.x - 2 && b.x < e.x + 9 && b.y + 8 > e.y - 2 && b.y < e.y + 9) {
           const dmg = b.power || 1;
           e.hp -= dmg;
           bullets.splice(j, 1);
@@ -849,8 +849,8 @@
 
       // Hit player
       if (invincible <= 0 &&
-          b.x > player.x && b.x < player.x + 8 &&
-          b.y > player.y && b.y < player.y + 8) {
+          b.x + 8 > player.x && b.x < player.x + 8 &&
+          b.y + 8 > player.y && b.y < player.y + 8) {
         eBullets.splice(i, 1);
         playerHit();
       }
@@ -914,14 +914,14 @@
 
   function fireDualShot() {
     // Two diverging bullets
-    bullets.push({ x: player.x + 1, y: player.y - 2, vx: -0.8, vy: -6, power: 1 });
-    bullets.push({ x: player.x + 5, y: player.y - 2, vx: 0.8, vy: -6, power: 1 });
+    bullets.push({ x: player.x + 0, y: player.y - 2, vx: -0.8, vy: -6, power: 1 });
+    bullets.push({ x: player.x + 0, y: player.y - 2, vx: 0.8, vy: -6, power: 1 });
     shootSound();
   }
 
   function fireChargeShot() {
     // 5-way spread shot
-    const cx = player.x + 3;
+    const cx = player.x + 0;
     const cy = player.y - 4;
     const angles = [-0.35, -0.17, 0, 0.17, 0.35];
     const spd = 7;

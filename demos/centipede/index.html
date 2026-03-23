@@ -628,7 +628,7 @@
     // Player shoot
     if (shootCooldown > 0) shootCooldown--;
     if (respawnTimer <= 0 && btnp("a") && !bullet && shootCooldown <= 0) {
-      bullet = { x: player.x + 3, y: player.y - 4 };
+      bullet = { x: player.x + 0, y: player.y - 4 };
       shootCooldown = 4;
       shootSound();
     }
@@ -652,7 +652,7 @@
           if (mhp > 0) {
             // Pixel-level check
             const mx = cx * 8, my = cy * 8;
-            if (bullet.x + 2 > mx && bullet.x < mx + 8 && bullet.y > my && bullet.y < my + 8) {
+            if (bullet.x + 8 > mx && bullet.x < mx + 8 && bullet.y + 8 > my && bullet.y < my + 8) {
               setMush(cx, cy, mhp - 1);
               if (mhp - 1 <= 0) score += 1;
               else score += 0;
@@ -673,8 +673,8 @@
         const segs = centipedes[ci];
         for (let si = segs.length - 1; si >= 0; si--) {
           const s = segs[si];
-          if (bullet.x + 2 > s.px && bullet.x < s.px + 8 &&
-              bullet.y > s.py && bullet.y < s.py + 8) {
+          if (bullet.x + 8 > s.px && bullet.x < s.px + 8 &&
+              bullet.y + 8 > s.py && bullet.y < s.py + 8) {
             // Hit!
             bullet = null;
             hit = true;
@@ -716,8 +716,8 @@
 
     // Bullet collision: spider
     if (bullet && spider) {
-      if (bullet.x + 2 > spider.x && bullet.x < spider.x + 8 &&
-          bullet.y > spider.y && bullet.y < spider.y + 8) {
+      if (bullet.x + 8 > spider.x && bullet.x < spider.x + 8 &&
+          bullet.y + 8 > spider.y && bullet.y < spider.y + 8) {
         // Distance-based scoring
         const dist = _abs(player.x - spider.x) + _abs(player.y - spider.y);
         if (dist < 40) score += 900;
@@ -732,8 +732,8 @@
 
     // Bullet collision: flea
     if (bullet && flea) {
-      if (bullet.x + 2 > flea.x && bullet.x < flea.x + 8 &&
-          bullet.y > flea.y && bullet.y < flea.y + 8) {
+      if (bullet.x + 8 > flea.x && bullet.x < flea.x + 8 &&
+          bullet.y + 8 > flea.y && bullet.y < flea.y + 8) {
         flea.hp--;
         bullet = null;
         if (flea.hp <= 0) {
@@ -814,8 +814,8 @@
     if (respawnTimer <= 0) {
       for (const segs of centipedes) {
         for (const s of segs) {
-          if (player.x + 6 > s.px && player.x < s.px + 7 &&
-              player.y + 6 > s.py && player.y < s.py + 7) {
+          if (player.x + 8 > s.px && player.x < s.px + 8 &&
+              player.y + 8 > s.py && player.y < s.py + 8) {
             playerDied();
             break;
           }
@@ -848,8 +848,8 @@
       if (spider.life <= 0) spider = null;
       // Spider-player collision
       if (spider && respawnTimer <= 0) {
-        if (player.x + 6 > spider.x && player.x < spider.x + 7 &&
-            player.y + 6 > spider.y && player.y < spider.y + 7) {
+        if (player.x + 8 > spider.x && player.x < spider.x + 8 &&
+            player.y + 8 > spider.y && player.y < spider.y + 8) {
           addExplosion(spider.x, spider.y);
           spider = null;
           playerDied();
@@ -880,8 +880,8 @@
       if (flea.y > H + 8) flea = null;
       // Flea-player collision
       if (flea && respawnTimer <= 0) {
-        if (player.x + 6 > flea.x && player.x < flea.x + 7 &&
-            player.y + 6 > flea.y && player.y < flea.y + 7) {
+        if (player.x + 8 > flea.x && player.x < flea.x + 8 &&
+            player.y + 8 > flea.y && player.y < flea.y + 8) {
           addExplosion(flea.x, flea.y);
           flea = null;
           playerDied();

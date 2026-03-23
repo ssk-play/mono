@@ -566,7 +566,7 @@
     // Player shoot
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("a") && shootCooldown <= 0 && bullets.length < 2) {
-      bullets.push({ x: player.x + 3, y: player.y - 4 });
+      bullets.push({ x: player.x + 0, y: player.y - 4 });
       shootCooldown = 8;
       shootSound();
     }
@@ -625,7 +625,7 @@
         // Enemy shoots while diving
         e.shootTimer--;
         if (e.shootTimer <= 0 && e.y > 0 && e.y < H - 30) {
-          eBullets.push({ x: e.x + 3, y: e.y + 8 });
+          eBullets.push({ x: e.x + 0, y: e.y + 8 });
           e.shootTimer = 30 + flr(rnd(40));
         }
       }
@@ -646,7 +646,7 @@
       // Bullet-enemy collision
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.x > e.x - 1 && b.x < e.x + 9 && b.y > e.y - 1 && b.y < e.y + 9) {
+        if (b.x + 8 > e.x && b.x < e.x + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
           bullets.splice(j, 1);
           e.hp--;
           if (e.hp <= 0) {
@@ -678,7 +678,7 @@
       eBullets[i].y += 3;
       if (eBullets[i].y > H + 8) { eBullets.splice(i, 1); continue; }
       const b = eBullets[i];
-      if (b.x > player.x && b.x < player.x + 8 && b.y > player.y && b.y < player.y + 8) {
+      if (b.x + 8 > player.x && b.x < player.x + 8 && b.y + 8 > player.y && b.y < player.y + 8) {
         eBullets.splice(i, 1);
         lives--;
         addExplosion(player.x, player.y);
@@ -738,7 +738,7 @@
           // Only bottom row or random chance
           const hasBelow = enemies.some(o => o.formCol === e.formCol && o.formRow > e.formRow && o.state === "formation");
           if (!hasBelow && rnd(1) < 0.4) {
-            eBullets.push({ x: e.x + 3, y: e.y + 8 });
+            eBullets.push({ x: e.x + 0, y: e.y + 8 });
           }
           e.shootTimer = _max(40, 120 - wave * 8) + flr(rnd(60));
         }

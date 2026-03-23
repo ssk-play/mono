@@ -740,7 +740,7 @@
       if (u.alive) {
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if (b.x > u.x - 2 && b.x < u.x + 10 && b.y > u.y - 2 && b.y < u.y + 10) {
+          if (b.x + 8 > u.x - 2 && b.x < u.x + 10 && b.y + 8 > u.y - 2 && b.y < u.y + 10) {
             bullets.splice(j, 1);
             u.alive = false;
             addExplosion(u.x - scrollX, u.y);
@@ -783,7 +783,7 @@
       // Bullet-bomb collision
       for (let j = bullets.length - 1; j >= 0; j--) {
         const bl = bullets[j];
-        if (bl.x > b.x - 4 && bl.x < b.x + 4 && bl.y > b.y - 4 && bl.y < b.y + 4) {
+        if (bl.x + 8 > b.x - 4 && bl.x < b.x + 4 && bl.y + 8 > b.y - 4 && bl.y < b.y + 4) {
           bullets.splice(j, 1);
           addExplosion(sx, b.y);
           score += 50;
@@ -803,7 +803,7 @@
       // Bullet-rock collision
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.type === "fwd" && b.x > r.x - 2 && b.x < r.x + 10 && b.y > GROUND_Y - 12 && b.y < GROUND_Y + 4) {
+        if (b.type === "fwd" && b.x + 8 > r.x - 2 && b.x < r.x + 10 && b.y + 8 > GROUND_Y - 12 && b.y < GROUND_Y + 4) {
           bullets.splice(j, 1);
           r.alive = false;
           addExplosion(sx, GROUND_Y - 10);

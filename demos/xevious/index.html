@@ -855,7 +855,7 @@
     // A button: Zapper (air shot)
     if (shootCd > 0) shootCd--;
     if (btn("a") && shootCd <= 0 && zapper.length < 3) {
-      zapper.push({ x: player.x + 3, y: player.y - 6 });
+      zapper.push({ x: player.x + 0, y: player.y - 6 });
       shootCd = 6;
       shootSound();
     }
@@ -965,7 +965,7 @@
         const dx = player.x - e.x, dy = player.y - e.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         eBullets.push({
-          x: e.x + 3, y: e.y + 6,
+          x: e.x + 0, y: e.y + 6,
           vx: (dx / dist) * 2.5, vy: (dy / dist) * 2.5
         });
         e.shootTimer = 40 + flr(rnd(50));
@@ -980,7 +980,7 @@
       // Zapper vs air enemy collision
       for (let j = zapper.length - 1; j >= 0; j--) {
         const b = zapper[j];
-        if (b.x > e.x - 2 && b.x < e.x + 10 && b.y > e.y - 2 && b.y < e.y + 10) {
+        if (b.x + 8 > e.x - 2 && b.x < e.x + 10 && b.y + 8 > e.y - 2 && b.y < e.y + 10) {
           zapper.splice(j, 1);
           e.hp--;
           if (e.hp <= 0) {
@@ -1020,8 +1020,8 @@
       }
       // Hit player
       if (invincibleTimer <= 0 &&
-          b.x > player.x && b.x < player.x + 8 &&
-          b.y > player.y && b.y < player.y + 8) {
+          b.x + 8 > player.x && b.x < player.x + 8 &&
+          b.y + 8 > player.y && b.y < player.y + 8) {
         eBullets.splice(i, 1);
         playerDie();
       }
@@ -1078,7 +1078,7 @@
         // Zapper vs boss
         for (let j = zapper.length - 1; j >= 0; j--) {
           const b = zapper[j];
-          if (b.x > boss.x - 2 && b.x < boss.x + 42 && b.y > boss.y - 2 && b.y < boss.y + 26) {
+          if (b.x + 8 > boss.x - 2 && b.x < boss.x + 42 && b.y + 8 > boss.y - 2 && b.y < boss.y + 26) {
             zapper.splice(j, 1);
             boss.hp--;
             boss.coreHit = 4;

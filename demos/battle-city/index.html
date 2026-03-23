@@ -857,7 +857,7 @@
       // Hit eagle
       const ebx = flr(GRID_W/2)-1, eby = GRID_H-2;
       const eagleX = ARENA_X+ebx*TILE, eagleY = ARENA_Y+eby*TILE;
-      if (baseAlive && b.x >= eagleX && b.x < eagleX+16 && b.y >= eagleY && b.y < eagleY+16) {
+      if (baseAlive && b.x + 8 > eagleX && b.x < eagleX+16 && b.y + 8 > eagleY && b.y < eagleY+16) {
         baseAlive = false;
         addExplosion(eagleX, eagleY, true);
         sfxExplode(); bullets.splice(i,1);
@@ -883,7 +883,7 @@
       if (b.isPlayer) {
         for (const e of enemies) {
           if (!e.alive) continue;
-          if (b.x >= e.x && b.x < e.x+14 && b.y >= e.y && b.y < e.y+14) {
+          if (b.x + 8 > e.x && b.x < e.x+14 && b.y + 8 > e.y && b.y < e.y+14) {
             e.hp--;
             if (e.hp <= 0) {
               e.alive = false; addExplosion(e.x,e.y,true); sfxExplode();
@@ -896,7 +896,7 @@
         }
       } else {
         if (player && player.alive) {
-          if (b.x >= player.x && b.x < player.x+14 && b.y >= player.y && b.y < player.y+14) {
+          if (b.x + 8 > player.x && b.x < player.x+14 && b.y + 8 > player.y && b.y < player.y+14) {
             if (shieldTimer <= 0) {
               lives--;
               addExplosion(player.x, player.y, true); sfxExplode();

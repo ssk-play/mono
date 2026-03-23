@@ -850,22 +850,32 @@
       l.y += l.vy;
       if (l.y < FIELD_T) { lasers.splice(i, 1); continue; }
 
-      // Hit bricks
-      const col = flr((l.x - BRICK_OX) / BRICK_W);
-      const row = flr((l.y - BRICK_OY) / BRICK_H);
-      if (col >= 0 && col < BRICK_COLS && row >= 0) {
-        const brick = brickAt(col, row);
-        if (brick) {
-          hitBrick(brick);
-          lasers.splice(i, 1);
-          continue;
+      // Hit bricks (AABB: 8x8 laser vs BRICK_W x BRICK_H bricks)
+      let laserHit = false;
+      const col0 = flr((l.x - BRICK_OX) / BRICK_W);
+      const col1 = flr((l.x + 8 - 1 - BRICK_OX) / BRICK_W);
+      const row0 = flr((l.y - BRICK_OY) / BRICK_H);
+      const row1 = flr((l.y + 8 - 1 - BRICK_OY) / BRICK_H);
+      for (let rr = row0; rr <= row1 && !laserHit; rr++) {
+        for (let cc = col0; cc <= col1 && !laserHit; cc++) {
+          if (cc < 0 || cc >= BRICK_COLS || rr < 0) continue;
+          const brick = brickAt(cc, rr);
+          if (brick) {
+            const bl = BRICK_OX + cc * BRICK_W;
+            const bt = BRICK_OY + rr * BRICK_H;
+            if (l.x + 8 > bl && l.x < bl + BRICK_W && l.y + 8 > bt && l.y < bt + BRICK_H) {
+              hitBrick(brick);
+              laserHit = true;
+            }
+          }
         }
       }
+      if (laserHit) { lasers.splice(i, 1); continue; }
 
       // Hit boss
       if (bossActive && bossHP > 0) {
         const bcx = (FIELD_L + FIELD_R) / 2;
-        if (l.y < bossY + 18 && l.y > bossY - 3 && _abs(l.x - bcx) < 16) {
+        if (l.x + 8 > bcx - 16 && l.x < bcx + 16 && l.y + 8 > bossY && l.y < bossY + 24) {
           bossHP--;
           explosions.push({ x: l.x, y: l.y, t: 0 });
           lasers.splice(i, 1);
@@ -879,7 +889,7 @@
       let hitE = false;
       for (let j = enemies.length - 1; j >= 0; j--) {
         const e = enemies[j];
-        if (e.alive && _abs(l.x - e.x) < 6 && _abs(l.y - e.y) < 6) {
+        if (e.alive && l.x + 8 > e.x && l.x < e.x + 8 && l.y + 8 > e.y && l.y < e.y + 8) {
           e.alive = false;
           score += 100;
           explosions.push({ x: e.x, y: e.y, t: 0 });
@@ -924,8 +934,8 @@
 
         // Paddle collision
         const padTop = FIELD_B - 8;
-        if (b.vy > 0 && b.y >= padTop && b.y <= padTop + 8 &&
-            b.x >= paddle.x - pw - 2 && b.x <= paddle.x + pw + 2) {
+        if (b.vy > 0 && b.y + 8 > padTop && b.y < padTop + 8 &&
+            b.x + 8 > paddle.x - pw && b.x < paddle.x + pw) {
           b.y = padTop - 1;
           const hitPos = (b.x - paddle.x) / (pw + 2); // -1 to 1
           const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
@@ -959,13 +969,13 @@
             const brr = bl + BRICK_W;
             const bbb = bt + BRICK_H;
 
-            if (b.x + 2 > bl && b.x - 2 < brr && b.y + 2 > bt && b.y - 2 < bbb) {
+            if (b.x + 8 > bl && b.x < brr && b.y + 8 > bt && b.y < bbb) {
               hitBrick(brick);
 
-              const overlapL = (b.x + 2) - bl;
-              const overlapR = brr - (b.x - 2);
-              const overlapT = (b.y + 2) - bt;
-              const overlapB = bbb - (b.y - 2);
+              const overlapL = (b.x + 8) - bl;
+              const overlapR = brr - b.x;
+              const overlapT = (b.y + 8) - bt;
+              const overlapB = bbb - b.y;
               const minO = min(min(overlapL, overlapR), min(overlapT, overlapB));
 
               if (minO === overlapL || minO === overlapR) b.vx = -b.vx;
@@ -981,7 +991,7 @@
         // Boss collision
         if (bossActive && bossHP > 0) {
           const bcx = (FIELD_L + FIELD_R) / 2;
-          if (b.y < bossY + 18 && b.y > bossY - 3 && _abs(b.x - bcx) < 16) {
+          if (b.x + 8 > bcx - 16 && b.x < bcx + 16 && b.y + 8 > bossY && b.y < bossY + 24) {
             b.vy = _abs(b.vy);
             b.y = bossY + 19;
             bossHP--;
@@ -993,7 +1003,7 @@
 
         // Enemy collisions
         for (const e of enemies) {
-          if (e.alive && _abs(b.x - e.x) < 7 && _abs(b.y - e.y) < 7) {
+          if (e.alive && b.x + 8 > e.x && b.x < e.x + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
             b.vy = -b.vy;
             b.vx += (rnd(1) - 0.5) * 0.6;
             e.alive = false;
@@ -1018,8 +1028,8 @@
       p.y += p.vy;
       if (p.y > FIELD_B + 10) { powerups.splice(i, 1); continue; }
       const padTop = FIELD_B - 8;
-      if (p.y >= padTop - 4 && p.y <= padTop + 8 &&
-          p.x >= paddle.x - pw - 5 && p.x <= paddle.x + pw + 5) {
+      if (p.y + 7 > padTop && p.y < padTop + 8 &&
+          p.x + 10 > paddle.x - pw && p.x < paddle.x + pw) {
         activatePower(p.type);
         powerups.splice(i, 1);
       }

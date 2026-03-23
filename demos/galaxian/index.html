@@ -676,7 +676,7 @@
 
       // Fire — ONE bullet at a time (Galaxian constraint!)
       if (btnp("a") && !playerBullet) {
-        playerBullet = { x: player.x + 3, y: player.y - 2 };
+        playerBullet = { x: player.x + 0, y: player.y - 2 };
         shootSound();
       }
     }
@@ -738,7 +738,7 @@
         // Diving enemies fire
         e.shootTimer--;
         if (e.shootTimer <= 0 && e.y > 10 && e.y < H - 38) {
-          eBullets.push({ x: e.x + 3, y: e.y + 8 });
+          eBullets.push({ x: e.x + 0, y: e.y + 8 });
           e.shootTimer = 20 + flr(rnd(30));
           note(1, "D4", 0.02);
         }
@@ -760,7 +760,7 @@
       // Bullet-enemy collision
       if (playerBullet) {
         const b = playerBullet;
-        if (b.x > e.x - 2 && b.x < e.x + 9 && b.y > e.y - 2 && b.y < e.y + 9) {
+        if (b.x + 8 > e.x && b.x < e.x + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
           playerBullet = null;
           e.hp--;
           if (e.hp <= 0) {
@@ -813,7 +813,7 @@
       // Hit player
       if (player.alive) {
         const b = eBullets[i];
-        if (b && b.x > player.x - 1 && b.x < player.x + 9 && b.y > player.y - 1 && b.y < player.y + 9) {
+        if (b && b.x + 8 > player.x && b.x < player.x + 8 && b.y + 8 > player.y && b.y < player.y + 8) {
           eBullets.splice(i, 1);
           killPlayer();
         }
@@ -845,7 +845,7 @@
             o.formCol === e.formCol && o.formRow > e.formRow && o.state === "formation"
           );
           if (!hasBelow && rnd(1) < 0.3) {
-            eBullets.push({ x: e.x + 3, y: e.y + 8 });
+            eBullets.push({ x: e.x + 0, y: e.y + 8 });
           }
           e.shootTimer = _max(30, 100 - wave * 6) + flr(rnd(60));
         }

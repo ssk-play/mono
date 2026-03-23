@@ -764,7 +764,7 @@
     // Player shoot
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("a") && bullet === null && shootCooldown <= 0) {
-      bullet = { x: player.x + 3, y: player.y - 4 };
+      bullet = { x: player.x + 0, y: player.y - 4 };
       shootCooldown = 6;
       shootSound();
     }
@@ -837,8 +837,8 @@
         const a = aliens[i];
         if (!a.alive) continue;
         const pos = getAlienPos(a);
-        if (bullet.x + 1 > pos.x && bullet.x < pos.x + 8 &&
-            bullet.y > pos.y && bullet.y < pos.y + 8) {
+        if (bullet.x + 8 > pos.x && bullet.x < pos.x + 8 &&
+            bullet.y + 8 > pos.y && bullet.y < pos.y + 8) {
           a.alive = false;
           score += a.pts;
           addExplosion(pos.x, pos.y, false);
@@ -862,8 +862,8 @@
 
     // --- Bullet vs UFO ---
     if (bullet && ufo) {
-      if (bullet.x > ufo.x && bullet.x < ufo.x + 8 &&
-          bullet.y > ufo.y && bullet.y < ufo.y + 8) {
+      if (bullet.x + 8 > ufo.x && bullet.x < ufo.x + 8 &&
+          bullet.y + 8 > ufo.y && bullet.y < ufo.y + 8) {
         const ufoPoints = [50, 100, 150, 200, 300][flr(rnd(5))];
         score += ufoPoints;
         ufoScoreShow = ufoPoints;
@@ -890,7 +890,7 @@
         const shooter = bottomAliens[flr(rnd(bottomAliens.length))];
         const pos = getAlienPos(shooter);
         eBullets.push({
-          x: pos.x + 3, y: pos.y + 8,
+          x: pos.x + 0, y: pos.y + 8,
           type: flr(rnd(2))
         });
       }
@@ -915,8 +915,8 @@
 
       // Bullet vs player
       if (invulnTimer <= 0 &&
-          b.x > player.x && b.x < player.x + 8 &&
-          b.y > player.y && b.y < player.y + 8) {
+          b.x + 8 > player.x && b.x < player.x + 8 &&
+          b.y + 8 > player.y && b.y < player.y + 8) {
         eBullets.splice(i, 1);
         lives--;
         addExplosion(player.x, player.y, true);

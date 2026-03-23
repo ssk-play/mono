@@ -1019,7 +1019,7 @@
       // Can shoot while on elevator
       if (shootCooldown > 0) shootCooldown--;
       if (btnp("a") && shootCooldown <= 0) {
-        bullets.push({ x: player.x + (player.dir > 0 ? 8 : -4), y: player.y + 3, dir: player.dir });
+        bullets.push({ x: player.x + (player.dir > 0 ? 8 : -4), y: player.y + 0, dir: player.dir });
         shootCooldown = 10;
         shootSound();
         player.shooting = true;
@@ -1143,7 +1143,7 @@
       // Shoot
       if (shootCooldown > 0) shootCooldown--;
       if (btnp("a") && shootCooldown <= 0 && !player.ducking) {
-        bullets.push({ x: player.x + (player.dir > 0 ? 8 : -4), y: player.y + 3, dir: player.dir });
+        bullets.push({ x: player.x + (player.dir > 0 ? 8 : -4), y: player.y + 0, dir: player.dir });
         shootCooldown = 10;
         shootSound();
         player.shooting = true;
@@ -1205,7 +1205,7 @@
       if (invincible <= 0 && !player.dead) {
         const ph = player.ducking ? 4 : 8;
         const py = player.ducking ? player.y + 4 : player.y;
-        if (b.x > player.x - 2 && b.x < player.x + 8 && b.y > py && b.y < py + ph) {
+        if (b.x + 8 > player.x - 2 && b.x < player.x + 8 && b.y + 8 > py && b.y < py + ph) {
           eBullets.splice(i, 1);
           killPlayer();
           continue;
@@ -1300,7 +1300,7 @@
         // Shoot at player
         e.shootCooldown--;
         if (e.shootCooldown <= 0 && sameFloor && distToPlayer < 133 && distToPlayer > 20) {
-          eBullets.push({ x: e.x + (e.dir > 0 ? 8 : -4), y: e.y + 3, dir: e.dir });
+          eBullets.push({ x: e.x + (e.dir > 0 ? 8 : -4), y: e.y + 0, dir: e.dir });
           e.shootCooldown = 30 + flr(rnd(30));
           note(1, "E5", 0.03);
         }
@@ -1321,7 +1321,7 @@
       // Bullet-enemy collision
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.x > e.x - 2 && b.x < e.x + 8 && _abs(b.y - (e.y + 4)) < 6) {
+        if (b.x + 8 > e.x - 2 && b.x < e.x + 8 && _abs(b.y - (e.y + 4)) < 6) {
           bullets.splice(j, 1);
           e.hp--;
           if (e.hp <= 0) {

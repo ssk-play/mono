@@ -764,7 +764,7 @@
     // Shooting
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("a") && shootCooldown <= 0 && bullets.length < 3) {
-      bullets.push({ x: player.x + 3, y: player.y - 6 });
+      bullets.push({ x: player.x + 0, y: player.y - 6 });
       shootCooldown = 6;
       shootSound();
     }

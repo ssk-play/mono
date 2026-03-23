@@ -1063,7 +1063,7 @@
           for (let j = enemies.length - 1; j >= 0; j--) {
             const e = enemies[j];
             if (!e.alive) continue;
-            if (_abs(b.x - e.x) < 8 && _abs(b.y - e.y) < 8) {
+            if (b.x + 8 > e.x && b.x < e.x + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
               b.trappedEnemy = { type: e.type };
               b.state = "floating";
               b.vx = 0;
@@ -1090,7 +1090,7 @@
 
         // Player can pop trapped bubbles by touching them
         if (b.trappedEnemy) {
-          const dx = _abs((player.x + 3) - (b.x + 4));
+          const dx = _abs((player.x + 0) - (b.x + 4));
           const dy = _abs((player.y + 4) - (b.y + 4));
           if (dx < 9 && dy < 9) {
             // Pop! Defeat enemy
@@ -1138,7 +1138,7 @@
 
       // Enemy-player collision
       if (invincible <= 0) {
-        const dx = _abs((player.x + 3) - (e.x + 3));
+        const dx = _abs((player.x + 0) - (e.x + 0));
         const dy = _abs((player.y + 4) - (e.y + 4));
         if (dx < 7 && dy < 7) {
           // Player dies
@@ -1195,7 +1195,7 @@
       if (it.y > H + 16) { items.splice(i, 1); continue; }
 
       // Player picks up item
-      const dx = _abs((player.x + 3) - (it.x + 4));
+      const dx = _abs((player.x + 0) - (it.x + 4));
       const dy = _abs((player.y + 4) - (it.y + 4));
       if (dx < 8 && dy < 8) {
         score += it.pts;

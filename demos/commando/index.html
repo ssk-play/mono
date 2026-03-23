@@ -972,7 +972,7 @@
         if (pdir === 1) { bdx = 5; bdy = 0; }
         else if (pdir === 2) { bdx = 0; bdy = 5; }
         else if (pdir === 3) { bdx = -5; bdy = 0; }
-        shoot(px + 3, py + 2, bdx, bdy, "p");
+        shoot(px + 0, py + 2, bdx, bdy, "p");
         note(0, "E5", 0.05);
       }
 
@@ -1176,7 +1176,7 @@
         const dy = py - esy;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 0 && dist < 150) {
-          shoot(e.x + 3, esy + 3, (dx / dist) * 3, (dy / dist) * 3, "e");
+          shoot(e.x + 0, esy + 0, (dx / dist) * 3, (dy / dist) * 3, "e");
         }
       }
 

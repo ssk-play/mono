@@ -753,7 +753,7 @@
     // Player shoot
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("a") && shootCooldown <= 0 && bullets.length < 3) {
-      bullets.push({ x: player.x + 3, y: player.y - 4 });
+      bullets.push({ x: player.x + 0, y: player.y - 4 });
       shootCooldown = 7;
       shootSound();
     }
@@ -836,7 +836,7 @@
         }
         e.shootTimer--;
         if (e.shootTimer <= 0 && e.y > 0 && e.y < H - 30) {
-          eBullets.push({ x: e.x + 3, y: e.y + 8 });
+          eBullets.push({ x: e.x + 0, y: e.y + 8 });
           e.shootTimer = _max(20, 40 - loop * 3) + flr(rnd(30));
         }
       }
@@ -935,7 +935,7 @@
         if (e.shootTimer <= 0) {
           const hasBelow = enemies.some(o => o.formCol === e.formCol && o.formRow > e.formRow && o.state === "formation");
           if (!hasBelow && rnd(1) < 0.5) {
-            eBullets.push({ x: e.x + 3, y: e.y + 8 });
+            eBullets.push({ x: e.x + 0, y: e.y + 8 });
           }
           e.shootTimer = _max(30, 100 - loop * 8) + flr(rnd(50));
         }
@@ -986,7 +986,7 @@
       for (let s = 0; s < spread; s++) {
         const angle = Math.PI / 2 + (s - (spread - 1) / 2) * 0.2;
         eBullets.push({
-          x: b.x + 3, y: b.y + 12,
+          x: b.x + 0, y: b.y + 12,
           vx: cos(angle) * 2,
           vy: sin(angle) * 2.5,
           aimed: true,

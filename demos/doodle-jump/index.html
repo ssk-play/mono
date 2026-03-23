@@ -727,7 +727,7 @@
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("a") && shootCooldown <= 0) {
       bullets.push({
-        x: player.x + 3,
+        x: player.x + 0,
         y: player.y - 2,
         vy: -8,
         alive: true
@@ -843,7 +843,7 @@
       // Bullet hits enemy
       for (const e of enemies) {
         if (!e.alive) continue;
-        if (b.x > e.x - 2 && b.x < e.x + 10 && b.y > e.y - 2 && b.y < e.y + 10) {
+        if (b.x + 8 > e.x - 2 && b.x < e.x + 10 && b.y + 8 > e.y - 2 && b.y < e.y + 10) {
           e.alive = false;
           b.alive = false;
           sfxEnemyHit();
