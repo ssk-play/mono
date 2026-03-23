@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Game Portal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --black: #1a1a1a;
+    --dark: #6b6b6b;
+    --light: #b0b0b0;
+    --white: #e8e8e8;
+    --accent: #f0f0f0;
+  }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    padding: 40px 20px 20px;
+    border-bottom: 1px solid #333;
+  }
+  header h1 {
+    font-size: 48px;
+    letter-spacing: 12px;
+    color: var(--white);
+    text-shadow: 2px 2px 0 var(--dark);
+    margin-bottom: 8px;
+  }
+  header p {
+    color: var(--dark);
+    font-size: 14px;
+    letter-spacing: 3px;
+  }
+  .spec-bar {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .spec-bar span {
+    font-size: 11px;
+    color: var(--light);
+    background: #222;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid #333;
+  }
+
+  /* ── Controls ── */
+  .toolbar {
+    max-width: 1200px;
+    margin: 20px auto;
+    padding: 0 20px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .search-box {
+    flex: 1;
+    min-width: 200px;
+    background: #222;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: var(--white);
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-box:focus { border-color: var(--light); }
+  .search-box::placeholder { color: var(--dark); }
+
+  .filter-btn {
+    background: #222;
+    border: 1px solid #444;
+    color: var(--light);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .filter-btn:hover { border-color: var(--light); color: var(--white); }
+  .filter-btn.active { background: var(--dark); color: var(--white); border-color: var(--dark); }
+
+  .game-count {
+    font-size: 12px;
+    color: var(--dark);
+    margin-left: auto;
+  }
+
+  /* ── Grid ── */
+  .grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  /* ── Card ── */
+  .card {
+    background: #1e1e1e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .card:hover {
+    border-color: var(--light);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  .card:active { transform: translateY(0); }
+
+  .card-preview {
+    width: 100%;
+    aspect-ratio: 3/2;
+    background: var(--black);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-preview canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .card-preview .play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(26,26,26,0.7);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .card:hover .play-overlay { opacity: 1; }
+  .play-icon {
+    width: 48px;
+    height: 48px;
+    border: 2px solid var(--white);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .play-icon::after {
+    content: '';
+    display: block;
+    width: 0;
+    height: 0;
+    border-left: 16px solid var(--white);
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    margin-left: 4px;
+  }
+
+  .card-info {
+    padding: 10px 12px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--white);
+    margin-bottom: 4px;
+  }
+  .card-genre {
+    font-size: 10px;
+    color: var(--dark);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ── Fullscreen Player ── */
+  .player-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,10,0.95);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+  .player-backdrop.open { display: flex; }
+
+  .player-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+    width: 960px;
+    max-width: 95vw;
+  }
+  .player-title {
+    font-size: 18px;
+    font-weight: 700;
+    flex: 1;
+  }
+  .player-btn {
+    background: #333;
+    border: 1px solid #555;
+    color: var(--white);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .player-btn:hover { background: #444; border-color: var(--light); }
+
+  .player-frame {
+    width: 960px;
+    height: 640px;
+    max-width: 95vw;
+    max-height: 70vh;
+    border: 3px solid #333;
+    border-radius: 8px;
+    background: var(--black);
+    box-shadow: 0 0 60px rgba(0,0,0,0.8);
+  }
+  .player-frame iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 5px;
+  }
+
+  .player-controls-hint {
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--dark);
+    letter-spacing: 1px;
+  }
+  .player-controls-hint span { color: var(--light); }
+
+  /* ── No results ── */
+  .no-results {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--dark);
+    font-size: 14px;
+  }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 40px 20px;
+    color: #333;
+    font-size: 11px;
+    border-top: 1px solid #222;
+    margin-top: 40px;
+  }
+  footer a { color: var(--dark); text-decoration: none; }
+  footer a:hover { color: var(--light); }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    header h1 { font-size: 28px; letter-spacing: 6px; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .player-frame { max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>GRAYBOX</h1>
+  <p>CONSTRAINT-DRIVEN GAME PLATFORM</p>
+  <div class="spec-bar">
+    <span>480x320</span>
+    <span>4 GRAY</span>
+    <span>30 FPS</span>
+    <span>8x8 SPR</span>
+    <span>2CH SQ</span>
+    <span>6 KEYS</span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <input type="text" class="search-box" id="search" placeholder="Search games..." autocomplete="off">
+  <button class="filter-btn active" data-genre="all">ALL</button>
+  <button class="filter-btn" data-genre="shooter">SHOOTER</button>
+  <button class="filter-btn" data-genre="action">ACTION</button>
+  <button class="filter-btn" data-genre="platformer">PLATFORMER</button>
+  <button class="filter-btn" data-genre="puzzle">PUZZLE</button>
+  <button class="filter-btn" data-genre="classic">CLASSIC</button>
+  <button class="filter-btn" data-genre="fighting">FIGHTING</button>
+  <button class="filter-btn" data-genre="other">OTHER</button>
+  <span class="game-count" id="count">60 games</span>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<!-- Fullscreen Player -->
+<div class="player-backdrop" id="player">
+  <div class="player-header">
+    <span class="player-title" id="playerTitle"></span>
+    <button class="player-btn" id="prevBtn">← PREV</button>
+    <button class="player-btn" id="nextBtn">NEXT →</button>
+    <button class="player-btn" onclick="closePlayer()">✕ CLOSE (ESC)</button>
+  </div>
+  <div class="player-frame">
+    <iframe id="playerFrame" sandbox="allow-scripts allow-same-origin"></iframe>
+  </div>
+  <div class="player-controls-hint">
+    <span>←↑↓→</span> MOVE &nbsp;&nbsp; <span>Z</span> A-BTN &nbsp;&nbsp; <span>X</span> B-BTN &nbsp;&nbsp; <span>ENTER</span> START &nbsp;&nbsp; <span>ESC</span> BACK
+  </div>
+</div>
+
+<footer>
+  <a href="docs/SPEC.md">SPEC</a> &nbsp;·&nbsp;
+  <a href="docs/API.md">API</a> &nbsp;·&nbsp;
+  <a href="docs/ROADMAP.md">ROADMAP</a> &nbsp;·&nbsp;
+  <a href="https://github.com/ssk-play/graybox">GITHUB</a>
+  <br><br>
+  GrayBox v0.1 — Constraint is creativity.
+</footer>
+
+<script>
+const GAMES = [
+  { id: "1942",              name: "1942",              genre: "shooter" },
+  { id: "arkanoid",          name: "Arkanoid",          genre: "classic" },
+  { id: "asteroids",         name: "Asteroids",         genre: "classic" },
+  { id: "balloon-fight",     name: "Balloon Fight",     genre: "platformer" },
+  { id: "battle-city",       name: "Battle City",       genre: "action" },
+  { id: "bomberman",         name: "Bomberman",         genre: "action" },
+  { id: "bosconian",         name: "Bosconian",         genre: "shooter" },
+  { id: "breakout",          name: "Breakout",          genre: "classic" },
+  { id: "bubble-bobble",     name: "Bubble Bobble",     genre: "platformer" },
+  { id: "burger-time",       name: "Burger Time",       genre: "action" },
+  { id: "centipede",         name: "Centipede",         genre: "shooter" },
+  { id: "circus-charlie",    name: "Circus Charlie",    genre: "platformer" },
+  { id: "columns",           name: "Columns",           genre: "puzzle" },
+  { id: "commando",          name: "Commando",          genre: "shooter" },
+  { id: "contra",            name: "Contra",            genre: "shooter" },
+  { id: "defender",          name: "Defender",           genre: "shooter" },
+  { id: "dig-dug",           name: "Dig Dug",           genre: "action" },
+  { id: "donkey-kong",       name: "Donkey Kong",       genre: "platformer" },
+  { id: "doodle-jump",       name: "Doodle Jump",       genre: "platformer" },
+  { id: "double-dragon",     name: "Double Dragon",     genre: "fighting" },
+  { id: "elevator-action",   name: "Elevator Action",   genre: "action" },
+  { id: "exerion",           name: "Exerion",           genre: "shooter" },
+  { id: "flappy-bird",       name: "Flappy Bird",       genre: "classic" },
+  { id: "frogger",           name: "Frogger",           genre: "classic" },
+  { id: "galaga",            name: "Galaga",            genre: "shooter" },
+  { id: "galaxian",          name: "Galaxian",          genre: "shooter" },
+  { id: "ghosts-n-goblins",  name: "Ghosts 'n Goblins", genre: "platformer" },
+  { id: "ice-climber",       name: "Ice Climber",       genre: "platformer" },
+  { id: "joust",             name: "Joust",             genre: "fighting" },
+  { id: "kungfu-master",     name: "Kung-Fu Master",    genre: "fighting" },
+  { id: "lode-runner",       name: "Lode Runner",       genre: "platformer" },
+  { id: "mappy",             name: "Mappy",             genre: "platformer" },
+  { id: "missile-command",   name: "Missile Command",   genre: "other" },
+  { id: "moon-patrol",       name: "Moon Patrol",       genre: "shooter" },
+  { id: "mr-do",             name: "Mr. Do!",           genre: "action" },
+  { id: "nibbler",           name: "Nibbler",           genre: "classic" },
+  { id: "pacman",            name: "Pac-Man",           genre: "action" },
+  { id: "paperboy",          name: "Paperboy",          genre: "other" },
+  { id: "pengo",             name: "Pengo",             genre: "action" },
+  { id: "phoenix",           name: "Phoenix",           genre: "shooter" },
+  { id: "pinball",           name: "Pinball",           genre: "other" },
+  { id: "pong",              name: "Pong",              genre: "classic" },
+  { id: "ponpoko",           name: "Ponpoko",           genre: "platformer" },
+  { id: "qbert",             name: "Q*bert",            genre: "puzzle" },
+  { id: "rally-x",           name: "Rally-X",           genre: "action" },
+  { id: "road-fighter",      name: "Road Fighter",      genre: "other" },
+  { id: "robotron",          name: "Robotron 2084",     genre: "shooter" },
+  { id: "scramble",          name: "Scramble",          genre: "shooter" },
+  { id: "simon",             name: "Simon",             genre: "puzzle" },
+  { id: "snake",             name: "Snake",             genre: "classic" },
+  { id: "sokoban",           name: "Sokoban",           genre: "puzzle" },
+  { id: "space-invaders",    name: "Space Invaders",    genre: "shooter" },
+  { id: "spy-hunter",        name: "Spy Hunter",        genre: "other" },
+  { id: "star-patrol",       name: "Star Patrol",       genre: "shooter" },
+  { id: "tempest",           name: "Tempest",           genre: "shooter" },
+  { id: "tetris",            name: "Tetris",            genre: "puzzle" },
+  { id: "time-pilot",        name: "Time Pilot",        genre: "shooter" },
+  { id: "tower-defense",     name: "Tower Defense",     genre: "other" },
+  { id: "tron",              name: "Tron",              genre: "classic" },
+  { id: "xevious",           name: "Xevious",           genre: "shooter" },
+];
+
+const grid = document.getElementById("grid");
+const search = document.getElementById("search");
+const count = document.getElementById("count");
+const player = document.getElementById("player");
+const playerFrame = document.getElementById("playerFrame");
+const playerTitle = document.getElementById("playerTitle");
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
+
+let activeGenre = "all";
+let visibleGames = [...GAMES];
+let currentIndex = -1;
+
+// ── Thumbnail generator ──
+function generateThumb(canvas, gameName) {
+  canvas.width = 120;
+  canvas.height = 80;
+  const ctx = canvas.getContext("2d");
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+
+  // Seed from name
+  let seed = 0;
+  for (let i = 0; i < gameName.length; i++) seed = ((seed << 5) - seed + gameName.charCodeAt(i)) | 0;
+  const rng = () => { seed = (seed * 16807 + 0) % 2147483647; return (seed & 0x7fffffff) / 2147483647; };
+
+  ctx.fillStyle = COLORS[0];
+  ctx.fillRect(0, 0, 120, 80);
+
+  // Scatter some pixel-art style elements
+  for (let i = 0; i < 30; i++) {
+    const c = COLORS[Math.floor(rng() * 3) + 1];
+    ctx.fillStyle = c;
+    const sz = Math.floor(rng() * 4) + 2;
+    ctx.fillRect(Math.floor(rng() * 116), Math.floor(rng() * 76), sz, sz);
+  }
+
+  // Draw game initial large
+  ctx.fillStyle = COLORS[3];
+  ctx.font = "bold 36px monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(gameName[0].toUpperCase(), 60, 40);
+
+  // Scanline effect
+  ctx.fillStyle = "rgba(0,0,0,0.15)";
+  for (let y = 0; y < 80; y += 2) ctx.fillRect(0, y, 120, 1);
+}
+
+// ── Render ──
+function render() {
+  const q = search.value.toLowerCase().trim();
+  visibleGames = GAMES.filter(g => {
+    if (activeGenre !== "all" && g.genre !== activeGenre) return false;
+    if (q && !g.name.toLowerCase().includes(q) && !g.id.includes(q) && !g.genre.includes(q)) return false;
+    return true;
+  });
+
+  count.textContent = visibleGames.length + (visibleGames.length === 1 ? " game" : " games");
+
+  grid.innerHTML = "";
+  if (visibleGames.length === 0) {
+    grid.innerHTML = '<div class="no-results">No games found.</div>';
+    return;
+  }
+
+  visibleGames.forEach((g, i) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.onclick = () => openPlayer(i);
+
+    const preview = document.createElement("div");
+    preview.className = "card-preview";
+
+    const cvs = document.createElement("canvas");
+    generateThumb(cvs, g.name);
+    preview.appendChild(cvs);
+
+    const overlay = document.createElement("div");
+    overlay.className = "play-overlay";
+    overlay.innerHTML = '<div class="play-icon"></div>';
+    preview.appendChild(overlay);
+
+    const info = document.createElement("div");
+    info.className = "card-info";
+    info.innerHTML = `<div class="card-title">${g.name}</div><div class="card-genre">${g.genre}</div>`;
+
+    card.appendChild(preview);
+    card.appendChild(info);
+    grid.appendChild(card);
+  });
+}
+
+// ── Player ──
+function openPlayer(index) {
+  currentIndex = index;
+  const g = visibleGames[index];
+  playerTitle.textContent = g.name;
+  playerFrame.src = `demos/${g.id}/index.html`;
+  player.classList.add("open");
+  document.body.style.overflow = "hidden";
+  updateNavButtons();
+}
+
+function closePlayer() {
+  player.classList.remove("open");
+  playerFrame.src = "";
+  document.body.style.overflow = "";
+  currentIndex = -1;
+}
+
+function navPlayer(delta) {
+  if (currentIndex < 0) return;
+  const next = currentIndex + delta;
+  if (next >= 0 && next < visibleGames.length) openPlayer(next);
+}
+
+function updateNavButtons() {
+  prevBtn.style.opacity = currentIndex <= 0 ? "0.3" : "1";
+  prevBtn.style.pointerEvents = currentIndex <= 0 ? "none" : "auto";
+  nextBtn.style.opacity = currentIndex >= visibleGames.length - 1 ? "0.3" : "1";
+  nextBtn.style.pointerEvents = currentIndex >= visibleGames.length - 1 ? "none" : "auto";
+}
+
+prevBtn.onclick = () => navPlayer(-1);
+nextBtn.onclick = () => navPlayer(1);
+
+// ── Events ──
+search.addEventListener("input", render);
+
+document.querySelectorAll(".filter-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeGenre = btn.dataset.genre;
+    render();
+  });
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && player.classList.contains("open")) {
+    closePlayer();
+    e.preventDefault();
+  }
+});
+
+// ── Init ──
+render();
+</script>
+
+</body>
+</html>
