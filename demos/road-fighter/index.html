@@ -826,7 +826,7 @@
 
       // Center dashed line
       const cx = flr(edges.center);
-      const dashPhase = (y + flr(roadOffset)) % 16;
+      const dashPhase = (y - flr(roadOffset)) % 16;
       if (dashPhase < 8) {
         if (cx >= 0 && cx < W) buf32[y * W + cx] = COLOR_U32[2];
       }
@@ -834,14 +834,14 @@
       // Lane markers (quarter lines, dashed)
       const q1 = flr(edges.left + roadW * 0.25);
       const q3 = flr(edges.left + roadW * 0.75);
-      const lanePhase = (y + flr(roadOffset)) % 24;
+      const lanePhase = (y - flr(roadOffset)) % 24;
       if (lanePhase < 6) {
         if (q1 >= 0 && q1 < W) buf32[y * W + q1] = COLOR_U32[2];
         if (q3 >= 0 && q3 < W) buf32[y * W + q3] = COLOR_U32[2];
       }
 
       // Shoulder rumble strips
-      const shoulderPhase = (y + flr(roadOffset * 0.7)) % 8;
+      const shoulderPhase = (y - flr(roadOffset * 0.7)) % 8;
       if (shoulderPhase < 4) {
         for (let sx = left - 4; sx < left; sx++) {
           if (sx >= 0 && sx < W) buf32[y * W + sx] = COLOR_U32[1];
