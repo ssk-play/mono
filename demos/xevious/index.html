@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Xevious</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>Z</span> SHOOT &nbsp;&nbsp; <span>X</span> BOMB &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  // Transparent sprite draw (color 0 = transparent)
+  API.sprT = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx]; if(c===0) continue;
+      const dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // XEVIOUS Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+
+  // 1: Player ship (Solvalou) - sleek forward-facing fighter
+  defSprite(1,
+    "00030000" +
+    "00333000" +
+    "00323000" +
+    "03333300" +
+    "33323330" +
+    "32333230" +
+    "30030030" +
+    "00000000"
+  );
+
+  // 2: Player shot (zapper - air bullet)
+  defSprite(2,
+    "00000000" +
+    "00030000" +
+    "00030000" +
+    "00020000" +
+    "00020000" +
+    "00010000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 3: Bomb (blaster - ground bomb, falling)
+  defSprite(3,
+    "00000000" +
+    "00030000" +
+    "00232000" +
+    "00131000" +
+    "00232000" +
+    "00030000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 4: Bomb reticle (targeting crosshair)
+  defSprite(4,
+    "00030000" +
+    "00010000" +
+    "03000030" +
+    "01000010" +
+    "03000030" +
+    "00010000" +
+    "00030000" +
+    "00000000"
+  );
+
+  // 5: Torkan (basic air enemy - diamond shape)
+  defSprite(5,
+    "00010000" +
+    "00121000" +
+    "01232100" +
+    "12323210" +
+    "01232100" +
+    "00121000" +
+    "00010000" +
+    "00000000"
+  );
+
+  // 6: Toroid (ring air enemy - donut)
+  defSprite(6,
+    "00111000" +
+    "01222100" +
+    "12200210" +
+    "12000210" +
+    "12000210" +
+    "12200210" +
+    "01222100" +
+    "00111000"
+  );
+
+  // 7: Zoshi (fast air enemy - arrow shape)
+  defSprite(7,
+    "00020000" +
+    "00232000" +
+    "02333200" +
+    "23232320" +
+    "02333200" +
+    "00232000" +
+    "00020000" +
+    "00000000"
+  );
+
+  // 8: Tank (ground target - boxy)
+  defSprite(8,
+    "00000000" +
+    "01111100" +
+    "12222210" +
+    "12332310" +
+    "12332310" +
+    "12222210" +
+    "01111100" +
+    "00000000"
+  );
+
+  // 9: Bunker (ground defense - dome shape)
+  defSprite(9,
+    "00000000" +
+    "00111000" +
+    "01222100" +
+    "12233210" +
+    "12233210" +
+    "12222210" +
+    "11111110" +
+    "00000000"
+  );
+
+  // 10: Turret (rotating ground gun)
+  defSprite(10,
+    "00000000" +
+    "00333000" +
+    "03222300" +
+    "32202230" +
+    "32200230" +
+    "03222300" +
+    "00333000" +
+    "00000000"
+  );
+
+  // 11: Fortress core (boss - center piece)
+  defSprite(11,
+    "33333333" +
+    "32222223" +
+    "32333323" +
+    "32313123" +
+    "32313123" +
+    "32333323" +
+    "32222223" +
+    "33333333"
+  );
+
+  // 12: Fortress wing (boss - side piece)
+  defSprite(12,
+    "33333300" +
+    "32222300" +
+    "32332300" +
+    "32132300" +
+    "32132300" +
+    "32332300" +
+    "32222300" +
+    "33333300"
+  );
+
+  // 13: Enemy bullet
+  defSprite(13,
+    "00000000" +
+    "00000000" +
+    "00010000" +
+    "00120000" +
+    "00120000" +
+    "00030000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 14: Explosion frame 1
+  defSprite(14,
+    "00000000" +
+    "00200100" +
+    "01003000" +
+    "00031000" +
+    "00130200" +
+    "02000010" +
+    "00100000" +
+    "00000000"
+  );
+
+  // 15: Explosion frame 2
+  defSprite(15,
+    "20010020" +
+    "01000010" +
+    "00302300" +
+    "03023030" +
+    "00232000" +
+    "01000300" +
+    "20001001" +
+    "00200010"
+  );
+
+  // 16: Ground explosion frame 1
+  defSprite(16,
+    "00000000" +
+    "00100100" +
+    "01022010" +
+    "00233200" +
+    "01233210" +
+    "00122100" +
+    "01001010" +
+    "00000000"
+  );
+
+  // 17: Ground explosion frame 2
+  defSprite(17,
+    "10001001" +
+    "01010010" +
+    "00122100" +
+    "01233210" +
+    "01233210" +
+    "00122100" +
+    "01010010" +
+    "10001001"
+  );
+
+  // 18: Life icon
+  defSprite(18,
+    "00000000" +
+    "00030000" +
+    "00333000" +
+    "03333300" +
+    "33323330" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 19: Bacura (indestructible rotating plate)
+  defSprite(19,
+    "01111110" +
+    "13333310" +
+    "13222310" +
+    "13232310" +
+    "13232310" +
+    "13222310" +
+    "13333310" +
+    "01111110"
+  );
+
+  // --- Terrain tile sprites ---
+  // 20: Grass/field (light ground)
+  defSprite(20,
+    "00000000" +
+    "00100000" +
+    "00000010" +
+    "01000000" +
+    "00000100" +
+    "00010000" +
+    "00000001" +
+    "00000000"
+  );
+  // 21: Forest/dense
+  defSprite(21,
+    "01001010" +
+    "10010001" +
+    "01100110" +
+    "10011001" +
+    "01001010" +
+    "10110001" +
+    "01001010" +
+    "10010101"
+  );
+  // 22: River/water
+  defSprite(22,
+    "00000000" +
+    "00000000" +
+    "01111110" +
+    "11111111" +
+    "11111111" +
+    "01111110" +
+    "00000000" +
+    "00000000"
+  );
+  // 23: Road
+  defSprite(23,
+    "00011000" +
+    "00011000" +
+    "00011000" +
+    "00011000" +
+    "00011000" +
+    "00011000" +
+    "00011000" +
+    "00011000"
+  );
+
+  // --- Game state ---
+  let state = "title";
+  let player, zapper, bombs, bombReticle, airEnemies, groundTargets;
+  let eBullets, explosions, particles;
+  let score, lives, scrollY, scrollSpeed;
+  let shootCd, bombCd;
+  let bossActive, boss;
+  let distanceTraveled, nextBossAt;
+  let invincibleTimer;
+
+  // Terrain map - procedurally generated strips
+  const TERRAIN_W = 60; // tiles wide
+  const TERRAIN_H = 2000; // tiles tall (scrolling)
+  const terrain = new Uint8Array(TERRAIN_W * TERRAIN_H);
+
+  function genTerrain() {
+    // Seed-based procedural terrain
+    for (let y = 0; y < TERRAIN_H; y++) {
+      for (let x = 0; x < TERRAIN_W; x++) {
+        const n = Math.sin(x * 0.3 + y * 0.1) * 0.5 + Math.sin(x * 0.1 + y * 0.25) * 0.5;
+        const n2 = Math.sin(x * 0.05 + y * 0.02) * 0.5 + 0.5;
+        if (n2 > 0.7 && _abs(n) < 0.3) {
+          terrain[y * TERRAIN_W + x] = 22; // water/river
+        } else if (n > 0.4) {
+          terrain[y * TERRAIN_W + x] = 21; // forest
+        } else if (n > -0.1) {
+          terrain[y * TERRAIN_W + x] = 20; // field
+        } else {
+          // road segments
+          if (_abs(Math.sin(y * 0.05) * 15 + 30 - x) < 2) {
+            terrain[y * TERRAIN_W + x] = 23;
+          } else {
+            terrain[y * TERRAIN_W + x] = 20;
+          }
+        }
+      }
+    }
+  }
+
+  // Air enemy wave patterns
+  const PATTERNS = [
+    // V-formation sweeping left
+    function(wave) {
+      const enemies = [];
+      for (let i = 0; i < 5; i++) {
+        enemies.push({
+          type: 5, hp: 1, pts: 100,
+          startX: -20 - i * 15, startY: 40 + _abs(i - 2) * 20,
+          pattern: "sweep_right", delay: i * 5, speed: 2.5 + wave * 0.1
+        });
+      }
+      return enemies;
+    },
+    // Column dive from top
+    function(wave) {
+      const enemies = [];
+      const cx = 60 + flr(rnd(W - 120));
+      for (let i = 0; i < 4; i++) {
+        enemies.push({
+          type: 6, hp: 1, pts: 150,
+          startX: cx, startY: -20 - i * 20,
+          pattern: "dive_zigzag", delay: i * 8, speed: 2 + wave * 0.1
+        });
+      }
+      return enemies;
+    },
+    // Circle formation
+    function(wave) {
+      const enemies = [];
+      for (let i = 0; i < 6; i++) {
+        enemies.push({
+          type: 5, hp: 1, pts: 100,
+          startX: W + 20, startY: 60 + i * 25,
+          pattern: "sweep_left", delay: i * 4, speed: 2.2 + wave * 0.1
+        });
+      }
+      return enemies;
+    },
+    // Fast arrows
+    function(wave) {
+      const enemies = [];
+      for (let i = 0; i < 3; i++) {
+        enemies.push({
+          type: 7, hp: 1, pts: 200,
+          startX: rnd(W - 40) + 20, startY: -20 - i * 30,
+          pattern: "fast_dive", delay: i * 10, speed: 3.5 + wave * 0.15
+        });
+      }
+      return enemies;
+    },
+    // Bacura wave (indestructible)
+    function(wave) {
+      const enemies = [];
+      for (let i = 0; i < 2; i++) {
+        enemies.push({
+          type: 19, hp: 999, pts: 0,
+          startX: 100 + i * 200, startY: -20,
+          pattern: "slow_descent", delay: i * 20, speed: 1.5
+        });
+      }
+      return enemies;
+    },
+    // Wide V from top
+    function(wave) {
+      const enemies = [];
+      for (let i = 0; i < 7; i++) {
+        enemies.push({
+          type: 6, hp: 1, pts: 150,
+          startX: W/2 - 90 + i * 30, startY: -20 - _abs(i - 3) * 15,
+          pattern: "dive_spread", delay: i * 3, speed: 2 + wave * 0.1
+        });
+      }
+      return enemies;
+    }
+  ];
+
+  function resetGame() {
+    player = { x: W / 2 - 4, y: H - 40, speed: 2.5 };
+    zapper = [];
+    bombs = [];
+    bombReticle = { x: W / 2 - 4, y: H - 80, active: false };
+    airEnemies = [];
+    groundTargets = [];
+    eBullets = [];
+    explosions = [];
+    particles = [];
+    score = 0;
+    lives = 3;
+    scrollY = 0;
+    scrollSpeed = 0.8;
+    shootCd = 0;
+    bombCd = 0;
+    bossActive = false;
+    boss = null;
+    distanceTraveled = 0;
+    nextBossAt = 1500 + flr(rnd(500));
+    invincibleTimer = 60;
+    genTerrain();
+    spawnGroundTargets();
+  }
+
+  let waveTimer = 0;
+  let waveCount = 0;
+
+  function spawnAirWave() {
+    waveCount++;
+    const patIdx = flr(rnd(PATTERNS.length));
+    const newEnemies = PATTERNS[patIdx](waveCount);
+    for (const def of newEnemies) {
+      airEnemies.push({
+        x: def.startX, y: def.startY,
+        type: def.type, hp: def.hp, pts: def.pts,
+        pattern: def.pattern, delay: def.delay,
+        speed: def.speed, t: 0, alive: true,
+        originX: def.startX, originY: def.startY,
+        shootTimer: 40 + flr(rnd(60))
+      });
+    }
+  }
+
+  function spawnGroundTargets() {
+    // Spread ground targets across the terrain
+    for (let i = 0; i < 120; i++) {
+      const ty = 50 + i * 15 + flr(rnd(10));
+      const tx = 20 + flr(rnd(W - 40));
+      const type = flr(rnd(3));
+      let sprId, hp, pts;
+      if (type === 0) { sprId = 8; hp = 1; pts = 200; }       // tank
+      else if (type === 1) { sprId = 9; hp = 2; pts = 300; }   // bunker
+      else { sprId = 10; hp = 1; pts = 250; }                  // turret
+      groundTargets.push({
+        x: tx, mapY: ty * 8, // mapY = position in scrolling world
+        sprId: sprId, hp: hp, pts: pts,
+        alive: true, type: type,
+        angle: rnd(6.28), // for turret rotation
+        shootTimer: 60 + flr(rnd(120))
+      });
+    }
+  }
+
+  function spawnBoss() {
+    bossActive = true;
+    boss = {
+      x: W / 2 - 20, y: -40,
+      hp: 30, maxHp: 30,
+      phase: "enter", // enter, fight, flee
+      t: 0, pts: 5000,
+      shootTimer: 0, moveAngle: 0,
+      coreHit: 0
+    };
+  }
+
+  function addExplosion(x, y, ground) {
+    explosions.push({ x: x, y: y, timer: 12, ground: !!ground });
+    const count = ground ? 12 : 8;
+    for (let i = 0; i < count; i++)
+      particles.push({
+        x: x + 4, y: y + 4,
+        vx: rnd(4) - 2, vy: rnd(4) - 2,
+        life: 6 + flr(rnd(10)),
+        color: ground ? flr(rnd(2)) + 1 : flr(rnd(3)) + 1
+      });
+  }
+
+  function shootSound() { note(0, "E6", 0.03); }
+  function bombDropSound() { note(1, "C4", 0.08); }
+  function bombHitSound() {
+    note(0, "C3", 0.1);
+    setTimeout(() => note(0, "G2", 0.08), 50);
+  }
+  function hitSound() { note(1, "C3", 0.05); setTimeout(() => note(1, "E3", 0.04), 30); }
+  function deathSound() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function bossDeathSound() {
+    note(0, "C4", 0.1);
+    setTimeout(() => note(0, "E4", 0.1), 80);
+    setTimeout(() => note(0, "G4", 0.1), 160);
+    setTimeout(() => { note(0, "C5", 0.2); note(1, "E5", 0.2); }, 240);
+  }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      scrollY += 0.3;
+      if (btnp("start") || btnp("a")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.08);
+        setTimeout(() => note(0, "E5", 0.08), 80);
+        setTimeout(() => note(0, "G5", 0.12), 160);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      scrollY += 0.2;
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("start") || btnp("a")) state = "title";
+      return;
+    }
+
+    // --- Play state ---
+    scrollY += scrollSpeed;
+    distanceTraveled += scrollSpeed;
+
+    // Invincibility
+    if (invincibleTimer > 0) invincibleTimer--;
+
+    // Player movement (all 4 directions)
+    if (btn("left")) player.x -= player.speed;
+    if (btn("right")) player.x += player.speed;
+    if (btn("up")) player.y -= player.speed;
+    if (btn("down")) player.y += player.speed;
+    player.x = _max(4, min(W - 12, player.x));
+    player.y = _max(16, min(H - 16, player.y));
+
+    // Bomb reticle follows player, offset ahead
+    bombReticle.x = player.x;
+    bombReticle.y = player.y - 50;
+    if (bombReticle.y < 16) bombReticle.y = 16;
+
+    // A button: Zapper (air shot)
+    if (shootCd > 0) shootCd--;
+    if (btn("a") && shootCd <= 0 && zapper.length < 3) {
+      zapper.push({ x: player.x + 3, y: player.y - 6 });
+      shootCd = 6;
+      shootSound();
+    }
+
+    // B button: Bomb (ground targeting)
+    if (bombCd > 0) bombCd--;
+    if (btnp("b") && bombCd <= 0 && bombs.length < 1) {
+      bombs.push({
+        x: player.x + 2, y: player.y - 4,
+        targetX: bombReticle.x + 2, targetY: bombReticle.y + 2,
+        progress: 0
+      });
+      bombCd = 20;
+      bombDropSound();
+    }
+
+    // Update zapper bullets
+    for (let i = zapper.length - 1; i >= 0; i--) {
+      zapper[i].y -= 7;
+      if (zapper[i].y < -8) zapper.splice(i, 1);
+    }
+
+    // Update bombs
+    for (let i = bombs.length - 1; i >= 0; i--) {
+      const b = bombs[i];
+      b.progress += 0.06;
+      // Lerp toward target
+      b.x += (b.targetX - b.x) * 0.08;
+      b.y += (b.targetY - b.y) * 0.08;
+      if (b.progress >= 1) {
+        // Bomb hits ground
+        addExplosion(b.targetX - 4, b.targetY - 4, true);
+        bombHitSound();
+        // Check ground target hits
+        for (let j = groundTargets.length - 1; j >= 0; j--) {
+          const gt = groundTargets[j];
+          if (!gt.alive) continue;
+          const screenY = gt.mapY - scrollY;
+          if (_abs(b.targetX - gt.x) < 12 && _abs(b.targetY - screenY) < 12) {
+            gt.hp--;
+            if (gt.hp <= 0) {
+              gt.alive = false;
+              score += gt.pts;
+              addExplosion(gt.x, screenY, true);
+            }
+          }
+        }
+        // Check boss hit by bomb
+        if (bossActive && boss && boss.phase === "fight") {
+          if (_abs(b.targetX - (boss.x + 20)) < 20 && _abs(b.targetY - (boss.y + 16)) < 20) {
+            boss.hp -= 3;
+            boss.coreHit = 6;
+            hitSound();
+          }
+        }
+        bombs.splice(i, 1);
+      }
+    }
+
+    // Spawn air enemy waves
+    waveTimer--;
+    if (waveTimer <= 0) {
+      spawnAirWave();
+      waveTimer = 90 + flr(rnd(60)) - min(waveCount * 2, 40);
+    }
+
+    // Update air enemies
+    for (let i = airEnemies.length - 1; i >= 0; i--) {
+      const e = airEnemies[i];
+      if (e.delay > 0) { e.delay--; continue; }
+      e.t++;
+
+      // Movement patterns
+      switch (e.pattern) {
+        case "sweep_right":
+          e.x = e.originX + e.t * e.speed;
+          e.y = e.originY + sin(e.t * 0.08) * 40;
+          break;
+        case "sweep_left":
+          e.x = e.originX - e.t * e.speed;
+          e.y = e.originY + sin(e.t * 0.08) * 40;
+          break;
+        case "dive_zigzag":
+          e.x = e.originX + sin(e.t * 0.1) * 60;
+          e.y = e.originY + e.t * e.speed;
+          break;
+        case "fast_dive": {
+          const targetX = player.x;
+          e.x += (targetX - e.x) * 0.02;
+          e.y += e.speed;
+          break;
+        }
+        case "slow_descent":
+          e.x = e.originX + sin(e.t * 0.03) * 30;
+          e.y = e.originY + e.t * e.speed * 0.5;
+          break;
+        case "dive_spread":
+          e.x = e.originX + sin(e.t * 0.06) * 20;
+          e.y = e.originY + e.t * e.speed * 0.8;
+          break;
+      }
+
+      // Enemy shoots
+      e.shootTimer--;
+      if (e.shootTimer <= 0 && e.y > 10 && e.y < H - 30 && e.x > 0 && e.x < W) {
+        // Aimed shot toward player
+        const dx = player.x - e.x, dy = player.y - e.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        eBullets.push({
+          x: e.x + 3, y: e.y + 6,
+          vx: (dx / dist) * 2.5, vy: (dy / dist) * 2.5
+        });
+        e.shootTimer = 40 + flr(rnd(50));
+      }
+
+      // Off-screen removal
+      if (e.y > H + 30 || e.x < -50 || e.x > W + 50) {
+        airEnemies.splice(i, 1);
+        continue;
+      }
+
+      // Zapper vs air enemy collision
+      for (let j = zapper.length - 1; j >= 0; j--) {
+        const b = zapper[j];
+        if (b.x > e.x - 2 && b.x < e.x + 10 && b.y > e.y - 2 && b.y < e.y + 10) {
+          zapper.splice(j, 1);
+          e.hp--;
+          if (e.hp <= 0) {
+            addExplosion(e.x, e.y, false);
+            score += e.pts;
+            hitSound();
+            airEnemies.splice(i, 1);
+          }
+          break;
+        }
+      }
+    }
+
+    // Ground turrets shoot at player
+    for (const gt of groundTargets) {
+      if (!gt.alive || gt.type !== 2) continue; // only turrets shoot
+      const screenY = gt.mapY - scrollY;
+      if (screenY < -10 || screenY > H + 10) continue;
+      gt.shootTimer--;
+      gt.angle = Math.atan2(player.y - screenY, player.x - gt.x);
+      if (gt.shootTimer <= 0) {
+        const dx = cos(gt.angle), dy = sin(gt.angle);
+        eBullets.push({
+          x: gt.x + 4, y: screenY + 4,
+          vx: dx * 2, vy: dy * 2
+        });
+        gt.shootTimer = 80 + flr(rnd(60));
+      }
+    }
+
+    // Update enemy bullets
+    for (let i = eBullets.length - 1; i >= 0; i--) {
+      const b = eBullets[i];
+      b.x += b.vx; b.y += b.vy;
+      if (b.x < -10 || b.x > W + 10 || b.y < -10 || b.y > H + 10) {
+        eBullets.splice(i, 1); continue;
+      }
+      // Hit player
+      if (invincibleTimer <= 0 &&
+          b.x > player.x && b.x < player.x + 8 &&
+          b.y > player.y && b.y < player.y + 8) {
+        eBullets.splice(i, 1);
+        playerDie();
+      }
+    }
+
+    // Air enemy vs player collision
+    if (invincibleTimer <= 0) {
+      for (let i = airEnemies.length - 1; i >= 0; i--) {
+        const e = airEnemies[i];
+        if (e.delay > 0) continue;
+        if (player.x + 7 > e.x && player.x < e.x + 8 &&
+            player.y + 7 > e.y && player.y < e.y + 8) {
+          if (e.hp < 999) { // not bacura
+            addExplosion(e.x, e.y, false);
+            airEnemies.splice(i, 1);
+          }
+          playerDie();
+          break;
+        }
+      }
+    }
+
+    // Boss logic
+    if (!bossActive && distanceTraveled > nextBossAt) {
+      spawnBoss();
+      nextBossAt = distanceTraveled + 2000 + flr(rnd(500));
+    }
+
+    if (bossActive && boss) {
+      boss.t++;
+      if (boss.coreHit > 0) boss.coreHit--;
+
+      if (boss.phase === "enter") {
+        boss.y += 0.8;
+        if (boss.y >= 30) { boss.phase = "fight"; boss.t = 0; }
+      } else if (boss.phase === "fight") {
+        boss.moveAngle += 0.02;
+        boss.x = W / 2 - 20 + sin(boss.moveAngle) * 80;
+        boss.y = 30 + sin(boss.moveAngle * 0.7) * 15;
+
+        // Boss shoots
+        boss.shootTimer--;
+        if (boss.shootTimer <= 0) {
+          for (let a = 0; a < 5; a++) {
+            const angle = -Math.PI / 2 + (a - 2) * 0.3;
+            eBullets.push({
+              x: boss.x + 20, y: boss.y + 24,
+              vx: cos(angle) * 2.5, vy: sin(angle) * 2.5
+            });
+          }
+          boss.shootTimer = 25 + flr(rnd(15));
+        }
+
+        // Zapper vs boss
+        for (let j = zapper.length - 1; j >= 0; j--) {
+          const b = zapper[j];
+          if (b.x > boss.x - 2 && b.x < boss.x + 42 && b.y > boss.y - 2 && b.y < boss.y + 26) {
+            zapper.splice(j, 1);
+            boss.hp--;
+            boss.coreHit = 4;
+            if (boss.hp <= 0) {
+              // Boss destroyed
+              for (let ex = 0; ex < 6; ex++)
+                addExplosion(boss.x + rnd(40) - 4, boss.y + rnd(24) - 4, false);
+              score += boss.pts;
+              bossDeathSound();
+              bossActive = false;
+              boss = null;
+            } else {
+              note(1, "A4", 0.02);
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    // Explosions
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].timer--;
+      if (explosions[i].timer <= 0) explosions.splice(i, 1);
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  };
+
+  function playerDie() {
+    lives--;
+    addExplosion(player.x, player.y, false);
+    deathSound();
+    player.x = W / 2 - 4;
+    player.y = H - 40;
+    invincibleTimer = 90;
+    if (lives <= 0) {
+      state = "gameover";
+      addExplosion(player.x - 5, player.y + 3, false);
+    }
+  }
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    cls(0);
+
+    // --- Draw terrain (parallax scrolling ground) ---
+    const tileOffY = scrollY % 8;
+    const mapRow = flr(scrollY / 8);
+    // Far layer (slower parallax - subtle dots)
+    const farOff = flr(scrollY * 0.3);
+    for (let py = -1; py < H / 8 + 1; py++) {
+      for (let px = 0; px < W / 8; px++) {
+        const my = (flr(farOff / 8) + py) % TERRAIN_H;
+        if (my < 0) continue;
+        const tile = terrain[(my % TERRAIN_H) * TERRAIN_W + (px % TERRAIN_W)];
+        if (tile === 22) {
+          // Water shimmer (far)
+          const sx = px * 8, sy = py * 8 - (farOff % 8);
+          if (sy > 11 && sy < H) {
+            pix(sx + 3, sy + 2, 1);
+            pix(sx + 6, sy + 5, 1);
+          }
+        } else if (tile === 21) {
+          // Forest shadow (far)
+          const sx = px * 8, sy = py * 8 - (farOff % 8);
+          if (sy > 11 && sy < H) {
+            pix(sx + 2, sy + 3, 1);
+            pix(sx + 5, sy + 1, 1);
+          }
+        }
+      }
+    }
+
+    // Near layer (main terrain)
+    for (let py = -1; py < H / 8 + 2; py++) {
+      for (let px = 0; px < W / 8; px++) {
+        const my = (mapRow + py) % TERRAIN_H;
+        if (my < 0) continue;
+        const tile = terrain[(my % TERRAIN_H) * TERRAIN_W + (px % TERRAIN_W)];
+        const sx = px * 8, sy = py * 8 - tileOffY;
+        if (sy < 10 || sy > H) continue;
+
+        if (tile === 21) {
+          // Forest - scattered dots
+          pix(sx + 1, sy + 0, 1);
+          pix(sx + 4, sy + 2, 1);
+          pix(sx + 0, sy + 4, 1);
+          pix(sx + 6, sy + 3, 1);
+          pix(sx + 3, sy + 6, 1);
+          pix(sx + 2, sy + 1, 1);
+        } else if (tile === 22) {
+          // Water - horizontal lines
+          const waveOff = flr(sin((sy + API.frame * 2) * 0.15) * 2);
+          for (let wx = 0; wx < 8; wx += 2) {
+            pix(sx + wx + waveOff, sy + 2, 1);
+            pix(sx + wx + 1 - waveOff, sy + 5, 1);
+          }
+        } else if (tile === 23) {
+          // Road
+          pix(sx + 3, sy, 1); pix(sx + 4, sy, 1);
+          pix(sx + 3, sy + 2, 1); pix(sx + 4, sy + 2, 1);
+          pix(sx + 3, sy + 4, 1); pix(sx + 4, sy + 4, 1);
+          pix(sx + 3, sy + 6, 1); pix(sx + 4, sy + 6, 1);
+        } else if (tile === 20) {
+          // Field - very sparse dots
+          if ((px + my) % 5 === 0) pix(sx + 3, sy + 4, 1);
+        }
+      }
+    }
+
+    // --- Draw ground targets ---
+    for (const gt of groundTargets) {
+      if (!gt.alive) continue;
+      const screenY = gt.mapY - scrollY;
+      if (screenY < 8 || screenY > H + 8) continue;
+
+      if (gt.type === 2) {
+        // Turret with rotation indicator
+        sprT(gt.sprId, flr(gt.x), flr(screenY));
+        // Draw gun barrel direction
+        const bx = gt.x + 4 + cos(gt.angle) * 5;
+        const by = screenY + 4 + sin(gt.angle) * 5;
+        pix(flr(bx), flr(by), 3);
+      } else {
+        sprT(gt.sprId, flr(gt.x), flr(screenY));
+      }
+    }
+
+    // --- Draw bomb reticle ---
+    if (state === "play") {
+      const rx = flr(bombReticle.x), ry = flr(bombReticle.y);
+      const blink = flr(API.frame / 4) % 2;
+      if (blink) {
+        // Crosshair
+        line(rx + 3, ry - 3, rx + 3, ry + 10, 2);
+        line(rx - 3, ry + 3, rx + 10, ry + 3, 2);
+        rect(rx - 1, ry + 1, 10, 6, 2);
+      }
+    }
+
+    // --- Draw bombs in flight ---
+    for (const b of bombs) {
+      const bx = flr(b.x), by = flr(b.y);
+      sprT(3, bx, by);
+      // Shadow growing as bomb descends
+      const shadowSize = flr(b.progress * 4) + 1;
+      circ(flr(b.targetX + 3), flr(b.targetY + 3), shadowSize, 1);
+    }
+
+    // --- Draw enemy bullets ---
+    for (const b of eBullets) {
+      pix(flr(b.x), flr(b.y), 3);
+      pix(flr(b.x), flr(b.y) + 1, 2);
+    }
+
+    // --- Draw air enemies ---
+    for (const e of airEnemies) {
+      if (e.delay > 0) continue;
+      if (e.x < -8 || e.x > W + 8 || e.y < -8 || e.y > H + 8) continue;
+      sprT(e.type, flr(e.x), flr(e.y));
+    }
+
+    // --- Draw zapper bullets ---
+    for (const b of zapper) sprT(2, flr(b.x), flr(b.y));
+
+    // --- Draw boss ---
+    if (bossActive && boss) {
+      const bx = flr(boss.x), by = flr(boss.y);
+      // Left wing
+      sprT(12, bx, by);
+      sprT(12, bx, by + 8);
+      // Core
+      if (boss.coreHit > 0 && flr(API.frame / 2) % 2) {
+        // Flash on hit
+        rectf(bx + 8, by, 24, 24, 3);
+      } else {
+        sprT(11, bx + 8, by);
+        sprT(11, bx + 16, by);
+        sprT(11, bx + 24, by);
+        sprT(11, bx + 8, by + 8);
+        sprT(11, bx + 16, by + 8);
+        sprT(11, bx + 24, by + 8);
+      }
+      // Right wing
+      sprT(12, bx + 32, by, true);
+      sprT(12, bx + 32, by + 8, true);
+      // Bottom
+      sprT(11, bx + 8, by + 16);
+      sprT(11, bx + 16, by + 16);
+      sprT(11, bx + 24, by + 16);
+
+      // HP bar
+      const hpW = flr((boss.hp / boss.maxHp) * 40);
+      rectf(bx, by - 5, 40, 3, 1);
+      rectf(bx, by - 5, hpW, 3, 3);
+    }
+
+    // --- Draw player ---
+    if (state === "play") {
+      if (invincibleTimer > 0 && flr(API.frame / 3) % 2) {
+        // Blink during invincibility
+      } else {
+        sprT(1, flr(player.x), flr(player.y));
+        // Engine glow
+        if (API.frame % 4 < 2) {
+          pix(flr(player.x) + 3, flr(player.y) + 7, 2);
+          pix(flr(player.x) + 3, flr(player.y) + 8, 3);
+        } else {
+          pix(flr(player.x) + 3, flr(player.y) + 7, 3);
+        }
+      }
+    }
+
+    // --- Explosions ---
+    for (const e of explosions) {
+      const sprId = e.ground ? (e.timer > 6 ? 16 : 17) : (e.timer > 6 ? 14 : 15);
+      sprT(sprId, flr(e.x), flr(e.y));
+    }
+
+    // --- Particles ---
+    for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+    // --- HUD ---
+    rectf(0, 0, W, 12, 0);
+    text("SCORE:" + score, 4, 3, 3);
+    // Lives
+    for (let i = 0; i < lives; i++) sprT(18, W - 40 + i * 10, 2);
+
+    // --- Title screen ---
+    if (state === "title") {
+      rectf(100, 50, 280, 220, 0);
+
+      const ty = 70 + sin(API.frame * 0.05) * 4;
+      text("XEVIOUS", W / 2 - 20, flr(ty), 3);
+      rectf(W / 2 - 40, flr(ty) + 10, 80, 1, 2);
+
+      // Show sample enemies
+      const bx = W / 2 - 50;
+      sprT(5, bx, flr(ty) + 22 + sin(API.frame * 0.08) * 3);
+      sprT(6, bx + 25, flr(ty) + 24 + sin(API.frame * 0.08 + 1) * 3);
+      sprT(7, bx + 50, flr(ty) + 22 + sin(API.frame * 0.08 + 2) * 3);
+      sprT(19, bx + 75, flr(ty) + 24 + sin(API.frame * 0.08 + 3) * 3);
+      sprT(5, bx + 100, flr(ty) + 22 + sin(API.frame * 0.08 + 4) * 3);
+
+      if (flr(API.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 28, 170, 3);
+
+      text("- AIR TARGETS -", W / 2 - 38, 190, 2);
+      sprT(5, W / 2 - 48, 202); text("TORKAN  100", W / 2 - 36, 204, 2);
+      sprT(6, W / 2 - 48, 214); text("TOROID  150", W / 2 - 36, 216, 2);
+      sprT(7, W / 2 - 48, 226); text("ZOSHI   200", W / 2 - 36, 228, 2);
+
+      text("- GROUND TARGETS -", W / 2 - 48, 242, 2);
+      sprT(8, W / 2 - 48, 254); text("TANK    200", W / 2 - 36, 256, 2);
+      sprT(9, W / 2 - 48, 266); text("BUNKER  300", W / 2 - 36, 268, 2);
+
+      text("Z=ZAPPER  X=BOMB", W / 2 - 42, 285, 1);
+      text("GRAYBOX DEMO V0.1", W / 2 - 43, 305, 1);
+      return;
+    }
+
+    // --- Game over ---
+    if (state === "gameover") {
+      rectf(W / 2 - 60, 100, 120, 80, 0);
+      text("GAME OVER", W / 2 - 24, 115, 3);
+      text("SCORE: " + score, W / 2 - 24, 135, 2);
+      if (flr(API.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 28, 160, 3);
+    }
+  };
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

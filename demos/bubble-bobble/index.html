@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Bubble Bobble</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>&#8592;&#8594;</span> MOVE &nbsp;&nbsp; <span>Z</span> JUMP &nbsp;&nbsp; <span>X</span> BUBBLE &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Bubble Bobble Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+
+  // 1: Bub the dragon (facing right)
+  defSprite(1,
+    "00333300" +
+    "03222230" +
+    "32302230" +
+    "03222230" +
+    "00333100" +
+    "03331330" +
+    "03303300" +
+    "03000300"
+  );
+
+  // 2: Platform block
+  defSprite(2,
+    "33333333" +
+    "21212121" +
+    "12121212" +
+    "21212121" +
+    "33333333" +
+    "12121212" +
+    "21212121" +
+    "12121212"
+  );
+
+  // 3: Bubble (small, just shot)
+  defSprite(3,
+    "00333000" +
+    "03000300" +
+    "30000030" +
+    "30030030" +
+    "30000030" +
+    "30000030" +
+    "03000300" +
+    "00333000"
+  );
+
+  // 4: Bubble with enemy trapped
+  defSprite(4,
+    "00333000" +
+    "03222300" +
+    "32313230" +
+    "32222230" +
+    "32133230" +
+    "32222230" +
+    "03222300" +
+    "00333000"
+  );
+
+  // 5: Enemy type A — blob monster
+  defSprite(5,
+    "00111100" +
+    "01222210" +
+    "12302310" +
+    "12222210" +
+    "12133210" +
+    "12222210" +
+    "01222210" +
+    "10100101"
+  );
+
+  // 6: Enemy type B — ghost
+  defSprite(6,
+    "00111100" +
+    "01333310" +
+    "13203210" +
+    "13333310" +
+    "13333310" +
+    "13131310" +
+    "13131310" +
+    "10101010"
+  );
+
+  // 7: Fruit — cherry
+  defSprite(7,
+    "00000300" +
+    "00003000" +
+    "00230200" +
+    "02332000" +
+    "03223000" +
+    "03332000" +
+    "02320000" +
+    "00200000"
+  );
+
+  // 8: Fruit — melon slice
+  defSprite(8,
+    "00000000" +
+    "03333300" +
+    "32222230" +
+    "32121230" +
+    "32222230" +
+    "03333300" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 9: Fruit — diamond
+  defSprite(9,
+    "00030000" +
+    "00323000" +
+    "03232300" +
+    "32323230" +
+    "03232300" +
+    "00323000" +
+    "00030000" +
+    "00000000"
+  );
+
+  // 10: Wall block (border)
+  defSprite(10,
+    "11111111" +
+    "10101010" +
+    "01010101" +
+    "10101010" +
+    "01010101" +
+    "10101010" +
+    "01010101" +
+    "11111111"
+  );
+
+  // 11: Life icon (mini dragon)
+  defSprite(11,
+    "00000000" +
+    "00333000" +
+    "03222300" +
+    "32302230" +
+    "03333300" +
+    "03303300" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 12: Explosion/pop frame
+  defSprite(12,
+    "20010020" +
+    "01000010" +
+    "00203200" +
+    "03033030" +
+    "00232000" +
+    "01000300" +
+    "20001001" +
+    "00200010"
+  );
+
+  // --- Constants ---
+  const TILE = 8;
+  const COLS = W / TILE;  // 60
+  const ROWS = H / TILE;  // 40
+  const GRAVITY = 0.35;
+  const JUMP_VEL = -5.5;
+  const MOVE_SPEED = 2.2;
+  const BUBBLE_SPEED = 4;
+  const BUBBLE_FLOAT_SPEED = -0.5;
+  const BUBBLE_LIFE = 300; // frames before bubble pops on its own
+  const MAX_BUBBLES = 8;
+
+  // --- Level data ---
+  // Each level is an array of strings, each char: ' '=empty, '#'=platform, '|'=wall
+  // Arena is 60 cols x 40 rows (480x320 at 8px tiles)
+  // The border walls are always present (left/right columns + bottom row)
+  // Top is OPEN for wrap-around
+
+  const LEVELS = [
+    // Level 1 — simple platforms
+    [
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "          ############                ############          ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                  ################                          ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "       ########                          ########           ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                  ################                          ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "          ############                ############          ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ##########          ####          ##########           ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "############################################################",
+    ],
+    // Level 2 — zigzag
+    [
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ################                                       ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                         ################                   ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ################                                       ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                         ################                   ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ################                                       ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                         ################                   ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ################                                       ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "############################################################",
+    ],
+    // Level 3 — pillars
+    [
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "        ####      ####      ####      ####      ####        ",
+      "        ####      ####      ####      ####      ####        ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "   ##########  ##########  ##########  ##########           ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "        ####      ####      ####      ####      ####        ",
+      "        ####      ####      ####      ####      ####        ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "   ##########  ##########  ##########  ##########           ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "        ####      ####      ####      ####      ####        ",
+      "        ####      ####      ####      ####      ####        ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ######################################################",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "############################################################",
+    ],
+    // Level 4 — diamond
+    [
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                          ####                              ",
+      "                                                            ",
+      "                                                            ",
+      "                     ############                           ",
+      "                                                            ",
+      "                                                            ",
+      "                ####            ####                        ",
+      "                                                            ",
+      "                                                            ",
+      "           ####                      ####                   ",
+      "                                                            ",
+      "                                                            ",
+      "      ####                                ####              ",
+      "                                                            ",
+      "                                                            ",
+      "           ####                      ####                   ",
+      "                                                            ",
+      "                                                            ",
+      "                ####            ####                        ",
+      "                                                            ",
+      "                                                            ",
+      "                     ############                           ",
+      "                                                            ",
+      "                                                            ",
+      "                          ####                              ",
+      "                                                            ",
+      "                                                            ",
+      "     ##########          ####          ##########           ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "############################################################",
+    ],
+    // Level 5 — castle
+    [
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "       ###    ###    ###    ###    ###    ###                ",
+      "       ###    ###    ###    ###    ###    ###                ",
+      "       ################################################    ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "            ##########          ##########                  ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                  ################                          ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "            ##########          ##########                  ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "       ################################################    ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "            ##########          ##########                  ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "       ################################################    ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "############################################################",
+    ],
+    // Level 6 — spiral
+    [
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ################################################      ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "        ##########################################          ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ####################################                   ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "        ############################                        ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ####################                                   ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "        ############                                        ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ######                                                 ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ##########          ####          ##########           ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "############################################################",
+    ],
+    // Level 7 — maze-like
+    [
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "     ########              ########              ########   ",
+      "                                                            ",
+      "                                                            ",
+      "              ########              ########                ",
+      "                                                            ",
+      "                                                            ",
+      "     ########              ########              ########   ",
+      "                                                            ",
+      "                                                            ",
+      "              ########              ########                ",
+      "                                                            ",
+      "                                                            ",
+      "     ########              ########              ########   ",
+      "                                                            ",
+      "                                                            ",
+      "              ########              ########                ",
+      "                                                            ",
+      "                                                            ",
+      "     ########              ########              ########   ",
+      "                                                            ",
+      "                                                            ",
+      "              ########              ########                ",
+      "                                                            ",
+      "                                                            ",
+      "     ########              ########              ########   ",
+      "                                                            ",
+      "                                                            ",
+      "              ########              ########                ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "                                                            ",
+      "############################################################",
+    ],
+  ];
+
+  // Enemy spawn positions per level (col, row in tile coords)
+  const LEVEL_ENEMIES = [
+    // Level 1
+    [{c:15,r:14,t:0},{c:44,r:14,t:0},{c:25,r:18,t:1},{c:35,r:18,t:0}],
+    // Level 2
+    [{c:10,r:7,t:0},{c:35,r:11,t:1},{c:10,r:15,t:0},{c:35,r:19,t:1},{c:10,r:23,t:0}],
+    // Level 3
+    [{c:12,r:12,t:0},{c:24,r:12,t:1},{c:36,r:12,t:0},{c:48,r:12,t:1},{c:20,r:6,t:0},{c:40,r:6,t:1}],
+    // Level 4
+    [{c:30,r:6,t:1},{c:20,r:15,t:0},{c:40,r:15,t:0},{c:15,r:21,t:1},{c:45,r:21,t:1},{c:30,r:27,t:0}],
+    // Level 5
+    [{c:20,r:10,t:0},{c:40,r:10,t:1},{c:30,r:14,t:0},{c:20,r:18,t:1},{c:40,r:18,t:0},{c:20,r:26,t:1},{c:40,r:26,t:0}],
+    // Level 6
+    [{c:30,r:5,t:0},{c:40,r:9,t:1},{c:25,r:13,t:0},{c:20,r:17,t:1},{c:15,r:21,t:0},{c:10,r:25,t:1}],
+    // Level 7
+    [{c:10,r:5,t:0},{c:25,r:8,t:1},{c:40,r:5,t:0},{c:55,r:8,t:1},{c:10,r:17,t:0},{c:25,r:14,t:1},{c:40,r:17,t:0},{c:55,r:14,t:1}],
+  ];
+
+  // --- Game state ---
+  let state = "title";
+  let player, bubbles, enemies, items, particles;
+  let score, lives, level, levelTimer, invincible;
+  let levelMap; // current level collision grid
+  let shootCooldown;
+  let hurryTimer; // enemies speed up after a while
+
+  function loadLevel(lvl) {
+    const idx = lvl % LEVELS.length;
+    const data = LEVELS[idx];
+    levelMap = [];
+    for (let r = 0; r < ROWS; r++) {
+      levelMap[r] = [];
+      for (let c = 0; c < COLS; c++) {
+        // Always add walls on left and right edges
+        if (c === 0 || c === COLS - 1) {
+          levelMap[r][c] = 1;
+        } else if (r < data.length && c < data[r].length) {
+          levelMap[r][c] = data[r][c] === '#' ? 1 : 0;
+        } else {
+          levelMap[r][c] = 0;
+        }
+      }
+    }
+    // Bottom row always solid
+    for (let c = 0; c < COLS; c++) levelMap[ROWS - 1][c] = 1;
+  }
+
+  function solidAt(px, py) {
+    const c = flr(px / TILE);
+    const r = flr(py / TILE);
+    if (c < 0 || c >= COLS) return true;
+    if (r < 0 || r >= ROWS) return false; // top is open
+    return levelMap[r] && levelMap[r][c] === 1;
+  }
+
+  function solidBelow(px, py, w) {
+    // Check if there's solid ground below the entity (feet level)
+    const r = flr(py / TILE);
+    if (r < 0 || r >= ROWS) return false;
+    const c1 = flr(px / TILE);
+    const c2 = flr((px + w - 1) / TILE);
+    for (let c = c1; c <= c2; c++) {
+      if (c >= 0 && c < COLS && levelMap[r] && levelMap[r][c] === 1) return true;
+    }
+    return false;
+  }
+
+  function resetGame() {
+    score = 0;
+    lives = 3;
+    level = 0;
+    startLevel();
+  }
+
+  function startLevel() {
+    loadLevel(level);
+    const idx = level % LEVELS.length;
+
+    player = {
+      x: 32, y: (ROWS - 3) * TILE,
+      vx: 0, vy: 0,
+      dir: 1, // 1=right, -1=left
+      onGround: false,
+      animTimer: 0,
+    };
+    bubbles = [];
+    enemies = [];
+    items = [];
+    particles = [];
+    shootCooldown = 0;
+    invincible = 60; // brief invincibility at level start
+    hurryTimer = 30 * 20; // 20 seconds until "HURRY"
+    levelTimer = 90; // show level text
+
+    // Spawn enemies
+    const spawns = LEVEL_ENEMIES[idx] || LEVEL_ENEMIES[0];
+    const speedMult = 1 + level * 0.1;
+    for (const sp of spawns) {
+      enemies.push({
+        x: sp.c * TILE, y: sp.r * TILE,
+        vx: (rnd(1) > 0.5 ? 1 : -1) * (0.8 + rnd(0.4)) * speedMult,
+        vy: 0,
+        type: sp.t, // 0=blob, 1=ghost
+        onGround: false,
+        alive: true,
+        angry: false, // gets angry when hurry
+        animTimer: flr(rnd(30)),
+        dirChangeTimer: 60 + flr(rnd(60)),
+      });
+    }
+  }
+
+  function spawnItem(x, y) {
+    const types = [7, 8, 9]; // cherry, melon, diamond
+    const pts = [100, 200, 500];
+    const idx = flr(rnd(3));
+    items.push({
+      x: x, y: y,
+      vy: 0,
+      type: types[idx],
+      pts: pts[idx],
+      life: 300, // disappears after 10 seconds
+      onGround: false,
+    });
+  }
+
+  function addPop(x, y) {
+    for (let i = 0; i < 6; i++) {
+      particles.push({
+        x: x + 4, y: y + 4,
+        vx: rnd(4) - 2, vy: rnd(3) - 2,
+        life: 8 + flr(rnd(8)),
+        color: flr(rnd(3)) + 1,
+      });
+    }
+  }
+
+  // --- Sound effects ---
+  function sfxJump() { note(0, "E5", 0.06); setTimeout(() => note(0, "G5", 0.04), 40); }
+  function sfxShoot() { note(0, "C5", 0.05); setTimeout(() => note(0, "E5", 0.03), 30); }
+  function sfxPop() { note(1, "G5", 0.04); setTimeout(() => note(1, "C6", 0.06), 30); }
+  function sfxDeath() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function sfxItem() { note(1, "E5", 0.05); setTimeout(() => note(1, "A5", 0.05), 50); }
+  function sfxLevelClear() {
+    note(0, "C5", 0.1);
+    setTimeout(() => note(0, "E5", 0.1), 100);
+    setTimeout(() => note(0, "G5", 0.1), 200);
+    setTimeout(() => note(0, "C6", 0.15), 300);
+  }
+
+  // --- Physics helpers ---
+  function moveEntity(e, w, h, isPlayer) {
+    // Horizontal movement
+    const nx = e.x + e.vx;
+    const left = nx;
+    const right = nx + w - 1;
+    const top = e.y;
+    const bot = e.y + h - 1;
+
+    // Check horizontal collision
+    let blockedH = false;
+    if (e.vx > 0) {
+      for (let py = flr(top / TILE); py <= flr(bot / TILE); py++) {
+        if (solidAt(right + 1, py * TILE)) { blockedH = true; break; }
+      }
+    } else if (e.vx < 0) {
+      for (let py = flr(top / TILE); py <= flr(bot / TILE); py++) {
+        if (solidAt(left, py * TILE)) { blockedH = true; break; }
+      }
+    }
+
+    if (!blockedH) {
+      e.x = nx;
+    } else {
+      if (e.vx > 0) e.x = flr((right + 1) / TILE) * TILE - w;
+      else if (e.vx < 0) e.x = (flr(left / TILE) + 1) * TILE;
+    }
+
+    // Gravity
+    e.vy += GRAVITY;
+    if (e.vy > 6) e.vy = 6;
+
+    const ny = e.y + e.vy;
+    e.onGround = false;
+
+    if (e.vy > 0) {
+      // Falling — check solid below
+      const feetY = ny + h;
+      const feetRow = flr(feetY / TILE);
+      const leftC = flr(e.x / TILE);
+      const rightC = flr((e.x + w - 1) / TILE);
+      let landed = false;
+      for (let c = leftC; c <= rightC; c++) {
+        if (c >= 0 && c < COLS && feetRow >= 0 && feetRow < ROWS && levelMap[feetRow] && levelMap[feetRow][c] === 1) {
+          // Only land if we were above this tile previously
+          if (e.y + h <= feetRow * TILE + 1) {
+            landed = true;
+            break;
+          }
+        }
+      }
+      if (landed) {
+        e.y = feetRow * TILE - h;
+        e.vy = 0;
+        e.onGround = true;
+      } else {
+        e.y = ny;
+      }
+    } else {
+      // Rising — pass through platforms (Bubble Bobble style)
+      e.y = ny;
+    }
+
+    // Wrap around: falling off bottom appears at top
+    if (e.y > H + 8) {
+      e.y = -h;
+    }
+    // If above screen and falling, let it come back
+    if (e.y < -h * 2) {
+      e.y = -h;
+    }
+  }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      if (btnp("a") || btnp("b") || btnp("start")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.1);
+        setTimeout(() => note(0, "E5", 0.1), 100);
+        setTimeout(() => note(0, "G5", 0.15), 200);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    if (state === "levelclear") {
+      levelTimer--;
+      // Float remaining items
+      for (let i = items.length - 1; i >= 0; i--) {
+        items[i].vy += GRAVITY;
+        items[i].y += items[i].vy;
+        if (items[i].y > H + 16) items.splice(i, 1);
+      }
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (levelTimer <= 0) {
+        level++;
+        state = "play";
+        startLevel();
+      }
+      return;
+    }
+
+    // --- Play state ---
+
+    if (levelTimer > 0) levelTimer--;
+    if (invincible > 0) invincible--;
+
+    // Hurry timer
+    hurryTimer--;
+    if (hurryTimer === 0) {
+      // Make all enemies angry (faster)
+      for (const e of enemies) {
+        if (e.alive) {
+          e.angry = true;
+          e.vx *= 1.8;
+        }
+      }
+    }
+
+    // Player movement
+    if (btn("left")) {
+      player.vx = -MOVE_SPEED;
+      player.dir = -1;
+    } else if (btn("right")) {
+      player.vx = MOVE_SPEED;
+      player.dir = 1;
+    } else {
+      player.vx = 0;
+    }
+
+    // Jump
+    if (btnp("a") && player.onGround) {
+      player.vy = JUMP_VEL;
+      player.onGround = false;
+      sfxJump();
+    }
+
+    // Shoot bubble
+    if (shootCooldown > 0) shootCooldown--;
+    if (btnp("b") && shootCooldown <= 0 && bubbles.length < MAX_BUBBLES) {
+      bubbles.push({
+        x: player.x + (player.dir > 0 ? 8 : -8),
+        y: player.y,
+        vx: player.dir * BUBBLE_SPEED,
+        vy: 0,
+        state: "shot", // shot -> floating -> trapped
+        life: BUBBLE_LIFE,
+        trappedEnemy: null,
+        floatTimer: 0,
+        shotTimer: 15, // frames before it starts floating
+      });
+      shootCooldown = 10;
+      sfxShoot();
+    }
+
+    player.animTimer++;
+    moveEntity(player, 7, 8, true);
+
+    // Clamp player to arena
+    if (player.x < TILE) player.x = TILE;
+    if (player.x > W - TILE - 7) player.x = W - TILE - 7;
+
+    // Update bubbles
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i];
+      b.life--;
+      if (b.life <= 0) {
+        // Pop!
+        addPop(b.x, b.y);
+        if (b.trappedEnemy) {
+          // Enemy escapes if bubble times out
+          enemies.push({
+            x: b.x, y: b.y, vx: (rnd(1) > 0.5 ? 1 : -1) * 1.2,
+            vy: 0, type: b.trappedEnemy.type, onGround: false,
+            alive: true, angry: true, animTimer: 0,
+            dirChangeTimer: 30 + flr(rnd(30)),
+          });
+        }
+        bubbles.splice(i, 1);
+        continue;
+      }
+
+      if (b.state === "shot") {
+        b.x += b.vx;
+        b.shotTimer--;
+        // Check if bubble hits a wall
+        if (solidAt(b.x, b.y + 3) || solidAt(b.x + 7, b.y + 3)) {
+          b.state = "floating";
+          b.vx = 0;
+        }
+        if (b.shotTimer <= 0) {
+          b.state = "floating";
+          b.vx = 0;
+        }
+
+        // Check if bubble traps an enemy
+        if (!b.trappedEnemy) {
+          for (let j = enemies.length - 1; j >= 0; j--) {
+            const e = enemies[j];
+            if (!e.alive) continue;
+            if (_abs(b.x - e.x) < 8 && _abs(b.y - e.y) < 8) {
+              b.trappedEnemy = { type: e.type };
+              b.state = "floating";
+              b.vx = 0;
+              enemies.splice(j, 1);
+              note(1, "A5", 0.04);
+              break;
+            }
+          }
+        }
+      }
+
+      if (b.state === "floating") {
+        // Float upward with slight wobble
+        b.floatTimer++;
+        b.vy = BUBBLE_FLOAT_SPEED;
+        b.vx = sin(b.floatTimer * 0.08) * 0.3;
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Clamp to arena
+        if (b.x < TILE) b.x = TILE;
+        if (b.x > W - TILE - 8) b.x = W - TILE - 8;
+        if (b.y < 4) { b.y = 4; b.vy = 0; } // stop at top
+
+        // Player can pop trapped bubbles by touching them
+        if (b.trappedEnemy) {
+          const dx = _abs((player.x + 3) - (b.x + 4));
+          const dy = _abs((player.y + 4) - (b.y + 4));
+          if (dx < 9 && dy < 9) {
+            // Pop! Defeat enemy
+            sfxPop();
+            addPop(b.x, b.y);
+            score += 100 * (level + 1);
+            spawnItem(b.x, b.y);
+            bubbles.splice(i, 1);
+            continue;
+          }
+        }
+      }
+    }
+
+    // Update enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      if (!e.alive) continue;
+
+      e.animTimer++;
+      e.dirChangeTimer--;
+
+      // Simple AI: walk back and forth, occasionally jump
+      if (e.dirChangeTimer <= 0) {
+        e.vx = -e.vx; // reverse direction
+        e.dirChangeTimer = 40 + flr(rnd(80));
+        // Occasionally jump
+        if (e.onGround && rnd(1) < 0.3) {
+          e.vy = -4;
+          e.onGround = false;
+        }
+      }
+
+      // Ghost type can jump more
+      if (e.type === 1 && e.onGround && rnd(1) < 0.02) {
+        e.vy = -4.5;
+        e.onGround = false;
+      }
+
+      moveEntity(e, 7, 8, false);
+
+      // Bounce off walls
+      if (e.x <= TILE) { e.x = TILE; e.vx = _abs(e.vx); }
+      if (e.x >= W - TILE - 7) { e.x = W - TILE - 7; e.vx = -_abs(e.vx); }
+
+      // Enemy-player collision
+      if (invincible <= 0) {
+        const dx = _abs((player.x + 3) - (e.x + 3));
+        const dy = _abs((player.y + 4) - (e.y + 4));
+        if (dx < 7 && dy < 7) {
+          // Player dies
+          lives--;
+          addPop(player.x, player.y);
+          sfxDeath();
+          if (lives <= 0) {
+            state = "gameover";
+            for (let k = 0; k < 20; k++) {
+              particles.push({
+                x: player.x + 4, y: player.y + 4,
+                vx: rnd(6) - 3, vy: rnd(6) - 4,
+                life: 15 + flr(rnd(15)), color: flr(rnd(3)) + 1,
+              });
+            }
+          } else {
+            // Respawn
+            player.x = 32;
+            player.y = (ROWS - 3) * TILE;
+            player.vx = 0;
+            player.vy = 0;
+            invincible = 90;
+          }
+          break;
+        }
+      }
+    }
+
+    // Update items
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      it.life--;
+      if (it.life <= 0) { items.splice(i, 1); continue; }
+
+      // Apply gravity to items
+      it.vy += GRAVITY;
+      if (it.vy > 4) it.vy = 4;
+      const ny = it.y + it.vy;
+      const feetRow = flr((ny + 8) / TILE);
+      const c1 = flr(it.x / TILE);
+      const c2 = flr((it.x + 7) / TILE);
+      let landed = false;
+      for (let c = c1; c <= c2; c++) {
+        if (c >= 0 && c < COLS && feetRow >= 0 && feetRow < ROWS && levelMap[feetRow] && levelMap[feetRow][c] === 1) {
+          if (it.y + 8 <= feetRow * TILE + 1) { landed = true; break; }
+        }
+      }
+      if (landed) {
+        it.y = feetRow * TILE - 8;
+        it.vy = 0;
+      } else {
+        it.y = ny;
+      }
+      if (it.y > H + 16) { items.splice(i, 1); continue; }
+
+      // Player picks up item
+      const dx = _abs((player.x + 3) - (it.x + 4));
+      const dy = _abs((player.y + 4) - (it.y + 4));
+      if (dx < 8 && dy < 8) {
+        score += it.pts;
+        sfxItem();
+        addPop(it.x, it.y);
+        // Score popup particle
+        particles.push({
+          x: it.x, y: it.y, vx: 0, vy: -0.8,
+          life: 30, color: 3, text: "" + it.pts,
+        });
+        items.splice(i, 1);
+      }
+    }
+
+    // Update particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      if (!p.text) p.vy += 0.05;
+      p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Check level clear
+    if (enemies.length === 0 && state === "play") {
+      state = "levelclear";
+      levelTimer = 90;
+      sfxLevelClear();
+    }
+  };
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    cls(0);
+
+    if (state === "title") {
+      // Title screen
+      const ty = 50 + sin(API.frame * 0.05) * 5;
+
+      text("BUBBLE BOBBLE", 170, flr(ty), 3);
+      text("BUBBLE BOBBLE", 171, flr(ty) + 1, 1);
+      rectf(150, flr(ty) + 12, 180, 1, 2);
+
+      // Animated dragon
+      const bx = W / 2 - 20;
+      spr(1, bx, flr(ty) + 24 + sin(API.frame * 0.1) * 3);
+      // Some floating bubbles
+      for (let i = 0; i < 5; i++) {
+        const bby = flr(ty) + 22 + sin(API.frame * 0.06 + i * 1.3) * 8;
+        const bbx = bx + 20 + i * 16;
+        spr(3, bbx, bby);
+      }
+
+      // Show enemies
+      spr(5, bx - 16, flr(ty) + 24 + sin(API.frame * 0.08 + 2) * 3, true);
+      spr(6, bx + 100, flr(ty) + 24 + sin(API.frame * 0.08 + 4) * 3);
+
+      if (flr(API.frame / 20) % 2 === 0)
+        text("PRESS START", 195, 180, 3);
+
+      // Instructions
+      text("-HOW TO PLAY-", 185, 210, 2);
+      text("Z  JUMP", 200, 224, 2);
+      text("X  SHOOT BUBBLE", 200, 234, 2);
+      text("POP BUBBLES TO", 188, 250, 2);
+      text("DEFEAT ENEMIES!", 185, 260, 2);
+
+      text("GRAYBOX DEMO V0.1", 168, 305, 1);
+      return;
+    }
+
+    if (state === "gameover") {
+      drawLevel();
+      for (const p of particles) {
+        if (p.text) {
+          text(p.text, flr(p.x), flr(p.y), p.color);
+        } else {
+          pix(flr(p.x), flr(p.y), p.color);
+        }
+      }
+      text("GAME OVER", 195, 120, 3);
+      text("SCORE: " + score, 190, 145, 2);
+      text("LEVEL: " + (level + 1), 200, 160, 2);
+      if (flr(API.frame / 20) % 2 === 0) text("PRESS START", 195, 210, 3);
+      return;
+    }
+
+    // --- Play / LevelClear state rendering ---
+    drawLevel();
+
+    // Items
+    for (const it of items) {
+      if (it.life < 60 && flr(API.frame / 4) % 2 === 0) continue; // blink when about to disappear
+      spr(it.type, flr(it.x), flr(it.y));
+    }
+
+    // Bubbles
+    for (const b of bubbles) {
+      if (b.trappedEnemy) {
+        // Draw trapped bubble
+        spr(4, flr(b.x), flr(b.y));
+      } else {
+        // Draw regular bubble, animate slightly
+        spr(3, flr(b.x), flr(b.y));
+      }
+    }
+
+    // Enemies
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const sprId = e.type === 0 ? 5 : 6;
+      const flipX = e.vx < 0;
+      // Flash when angry
+      if (e.angry && flr(API.frame / 4) % 2 === 0) {
+        spr(sprId, flr(e.x), flr(e.y), flipX);
+      } else {
+        spr(sprId, flr(e.x), flr(e.y), flipX);
+      }
+    }
+
+    // Player
+    if (state === "play" || state === "levelclear") {
+      // Blink when invincible
+      if (invincible <= 0 || flr(API.frame / 3) % 2 === 0) {
+        spr(1, flr(player.x), flr(player.y), player.dir < 0);
+      }
+    }
+
+    // Particles
+    for (const p of particles) {
+      if (p.text) {
+        text(p.text, flr(p.x), flr(p.y), p.color);
+      } else {
+        pix(flr(p.x), flr(p.y), p.color);
+      }
+    }
+
+    // HUD
+    rectf(0, 0, W, 10, 0);
+    text("SCORE:" + score, 4, 2, 3);
+    text("LV:" + (level + 1), W / 2 - 15, 2, 2);
+    for (let i = 0; i < lives; i++) spr(11, W - 40 + i * 10, 1);
+
+    // Level announcement
+    if (levelTimer > 60 && state === "play") {
+      const msgY = 140 + sin(levelTimer * 0.1) * 3;
+      text("LEVEL " + (level + 1), 205, flr(msgY), 3);
+      text("GET READY!", 200, flr(msgY) + 14, 2);
+    }
+
+    // Level clear message
+    if (state === "levelclear" && levelTimer > 30) {
+      text("LEVEL CLEAR!", 190, 140, 3);
+    }
+
+    // Hurry warning
+    if (hurryTimer < 150 && hurryTimer > 0 && flr(API.frame / 10) % 2 === 0) {
+      text("HURRY UP!", 200, 155, 3);
+    }
+    if (hurryTimer <= 0 && state === "play" && flr(API.frame / 15) % 2 === 0) {
+      text("HURRY!", 210, 155, 3);
+    }
+  };
+
+  function drawLevel() {
+    if (!levelMap) return;
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (levelMap[r][c] === 1) {
+          // Use wall sprite for edges, platform for interior
+          if (c === 0 || c === COLS - 1) {
+            spr(10, c * TILE, r * TILE);
+          } else {
+            spr(2, c * TILE, r * TILE);
+          }
+        }
+      }
+    }
+  }
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

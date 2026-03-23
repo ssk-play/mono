@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Balloon Fight</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>←→</span> MOVE &nbsp;&nbsp; <span>Z</span> FLAP &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  // Draw sprite with transparency (color 0 = transparent)
+  API.sprT = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx]; if(c===0) continue;
+      const dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Balloon Fight Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+
+  // 1: Player body (facing right) — little guy with helmet and arms out
+  defSprite(1,
+    "00222000" +
+    "02332200" +
+    "02222200" +
+    "00233000" +
+    "02233200" +
+    "00222000" +
+    "00200200" +
+    "00200200"
+  );
+
+  // 2: Balloon (round, tied at bottom)
+  defSprite(2,
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "33333330" +
+    "03333300" +
+    "00333000" +
+    "00030000" +
+    "00030000"
+  );
+
+  // 3: Enemy body (facing right) — bird-like enemy
+  defSprite(3,
+    "00111000" +
+    "01221100" +
+    "01111100" +
+    "00122000" +
+    "01122100" +
+    "00111000" +
+    "00100100" +
+    "00100100"
+  );
+
+  // 4: Enemy balloon
+  defSprite(4,
+    "00222000" +
+    "02222200" +
+    "22222220" +
+    "22222220" +
+    "02222200" +
+    "00222000" +
+    "00020000" +
+    "00020000"
+  );
+
+  // 5: Parachute
+  defSprite(5,
+    "02222200" +
+    "23333320" +
+    "33333330" +
+    "20000020" +
+    "02000200" +
+    "00202000" +
+    "00020000" +
+    "00000000"
+  );
+
+  // 6: Platform tile (grassy top, solid below)
+  defSprite(6,
+    "22222222" +
+    "33333333" +
+    "31313131" +
+    "11111111" +
+    "11111111" +
+    "11111111" +
+    "11111111" +
+    "11111111"
+  );
+
+  // 7: Water surface tile (wavy)
+  defSprite(7,
+    "00000000" +
+    "00000000" +
+    "00200020" +
+    "02020202" +
+    "20002000" +
+    "01010101" +
+    "10001000" +
+    "01010101"
+  );
+
+  // 8: Cloud tile
+  defSprite(8,
+    "00000000" +
+    "00222000" +
+    "02222200" +
+    "22222222" +
+    "22222222" +
+    "02222220" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 9: Lightning bolt
+  defSprite(9,
+    "00003300" +
+    "00033000" +
+    "00330000" +
+    "03333300" +
+    "00033000" +
+    "00330000" +
+    "03300000" +
+    "00000000"
+  );
+
+  // 10: Fish (in water, jumps up to eat)
+  defSprite(10,
+    "00000000" +
+    "00110000" +
+    "01111020" +
+    "11111120" +
+    "01111020" +
+    "00110000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 11: Life icon (small balloon)
+  defSprite(11,
+    "00000000" +
+    "00330000" +
+    "03333000" +
+    "03333000" +
+    "00330000" +
+    "00300000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 12: Bubble (for water)
+  defSprite(12,
+    "00000000" +
+    "00000000" +
+    "00220000" +
+    "02002000" +
+    "02002000" +
+    "00220000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 13: Flapping wing frame (arms up)
+  defSprite(13,
+    "00222000" +
+    "02332200" +
+    "02222200" +
+    "20233020" +
+    "02233200" +
+    "00222000" +
+    "00200200" +
+    "00200200"
+  );
+
+  // 14: Enemy flap frame
+  defSprite(14,
+    "00111000" +
+    "01221100" +
+    "01111100" +
+    "10122010" +
+    "01122100" +
+    "00111000" +
+    "00100100" +
+    "00100100"
+  );
+
+  // --- Constants ---
+  const GRAVITY = 0.12;
+  const FLAP_POWER = -1.8;
+  const MAX_FALL = 2.5;
+  const MAX_RISE = -3.0;
+  const MOVE_SPEED = 1.5;
+  const WATER_Y = 288;
+  const PLAT_H = 8;
+
+  // --- Platforms ---
+  // Each: {x, y, w} where w is in tiles (8px each)
+  const PLATFORMS = [
+    // Bottom row near water
+    { x: 0, y: 272, w: 8 },
+    { x: 416, y: 272, w: 8 },
+    // Middle platforms
+    { x: 80, y: 220, w: 10 },
+    { x: 296, y: 220, w: 10 },
+    // Upper middle
+    { x: 168, y: 168, w: 12 },
+    // Top platforms
+    { x: 40, y: 120, w: 8 },
+    { x: 336, y: 120, w: 8 },
+    // Very top
+    { x: 176, y: 76, w: 10 },
+  ];
+
+  // --- Clouds (spawn lightning) ---
+  const CLOUDS = [
+    { x: 60, y: 30, w: 3 },
+    { x: 200, y: 20, w: 4 },
+    { x: 360, y: 30, w: 3 },
+  ];
+
+  // --- Game State ---
+  let state = "title";
+  let player, enemies, particles, bubbles;
+  let score, lives, wave, waveTimer, waveMsg;
+  let lightnings, fishObj;
+  let invTimer;
+  let titleBlink;
+
+  function makePlayer() {
+    return {
+      x: 240, y: 200, vx: 0, vy: 0,
+      balloons: 2,
+      facing: 1, // 1=right, -1=left
+      flapAnim: 0,
+      dead: false,
+      respawnTimer: 0,
+    };
+  }
+
+  function resetGame() {
+    player = makePlayer();
+    enemies = [];
+    particles = [];
+    bubbles = [];
+    lightnings = [];
+    score = 0;
+    lives = 3;
+    wave = 0;
+    waveTimer = 0;
+    waveMsg = 0;
+    invTimer = 0;
+    fishObj = { x: 240, y: WATER_Y + 16, state: "hidden", timer: 0, targetX: 0, vy: 0 };
+    spawnWave();
+  }
+
+  function spawnWave() {
+    wave++;
+    waveMsg = 90;
+    const count = min(2 + wave, 8);
+    for (let i = 0; i < count; i++) {
+      const px = 60 + (i % 4) * 100 + rnd(40);
+      const py = 40 + flr(i / 4) * 60 + rnd(30);
+      enemies.push({
+        x: px, y: py, vx: (rnd(1) > 0.5 ? 1 : -1) * (0.5 + rnd(0.8)),
+        vy: -0.5 + rnd(1),
+        balloons: 1 + (wave > 2 && rnd(1) > 0.5 ? 1 : 0),
+        facing: 1,
+        flapAnim: 0,
+        flapTimer: flr(rnd(30)),
+        state: "flying", // "flying", "falling", "grounded"
+        parachuteTimer: 0,
+        reinflateTimer: 0,
+        pts: 500,
+        speed: 0.5 + wave * 0.08 + rnd(0.3),
+      });
+    }
+  }
+
+  function flapSound() { note(0, "E5", 0.03); }
+  function popSound() { note(1, "G5", 0.05); setTimeout(() => note(1, "C5", 0.05), 30); }
+  function bumpSound() { note(0, "C3", 0.06); }
+  function splashSound() { note(0, "D3", 0.1); note(1, "A2", 0.1); }
+  function deathSound() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function lightningSound() { note(1, "B5", 0.04); setTimeout(() => note(1, "D6", 0.03), 30); }
+  function waveClearSound() {
+    note(0, "C5", 0.1);
+    setTimeout(() => note(0, "E5", 0.1), 100);
+    setTimeout(() => note(0, "G5", 0.1), 200);
+    setTimeout(() => note(0, "C6", 0.15), 300);
+  }
+
+  function addParticles(x, y, count, col) {
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: x, y: y,
+        vx: rnd(4) - 2, vy: rnd(3) - 2,
+        life: 8 + flr(rnd(12)),
+        color: col || (flr(rnd(3)) + 1),
+      });
+    }
+  }
+
+  function platformCollision(x, y, w, h, vy) {
+    // Only collide when moving down
+    if (vy < 0) return null;
+    for (const p of PLATFORMS) {
+      const pw = p.w * 8;
+      if (x + w > p.x && x < p.x + pw && y + h >= p.y && y + h <= p.y + 6) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  function wrap(x) {
+    if (x < -12) return W;
+    if (x > W) return -12;
+    return x;
+  }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      if (btnp("a") || btnp("start")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.1);
+        setTimeout(() => note(0, "E5", 0.1), 100);
+        setTimeout(() => note(0, "G5", 0.15), 200);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    // --- Play State ---
+    if (waveMsg > 0) waveMsg--;
+    if (invTimer > 0) invTimer--;
+
+    // --- Player ---
+    if (!player.dead) {
+      // Horizontal movement
+      if (btn("left")) { player.vx -= 0.25; player.facing = -1; }
+      if (btn("right")) { player.vx += 0.25; player.facing = 1; }
+      player.vx *= 0.92; // friction
+      if (_abs(player.vx) > MOVE_SPEED) player.vx = player.vx > 0 ? MOVE_SPEED : -MOVE_SPEED;
+
+      // Flapping (A button)
+      if (btnp("a") && player.balloons > 0) {
+        player.vy = _max(MAX_RISE, player.vy + FLAP_POWER);
+        player.flapAnim = 8;
+        flapSound();
+      }
+
+      // Gravity
+      player.vy += GRAVITY;
+      if (player.vy > MAX_FALL) player.vy = MAX_FALL;
+      if (player.balloons <= 0) player.vy += 0.05; // fall faster with no balloons
+
+      // Flap animation countdown
+      if (player.flapAnim > 0) player.flapAnim--;
+
+      // Move
+      player.x += player.vx;
+      player.y += player.vy;
+
+      // Screen wrap horizontal
+      player.x = wrap(player.x);
+
+      // Platform collision
+      const plat = platformCollision(player.x + 1, player.y, 6, 16, player.vy);
+      if (plat) {
+        player.y = plat.y - 16;
+        player.vy = 0;
+      }
+
+      // Water death
+      if (player.y > WATER_Y - 4) {
+        killPlayer();
+      }
+
+      // Ceiling
+      if (player.y < -8) { player.y = -8; player.vy = 0.5; }
+
+    } else {
+      // Respawn timer
+      player.respawnTimer--;
+      if (player.respawnTimer <= 0) {
+        if (lives > 0) {
+          player = makePlayer();
+          player.x = 240; player.y = 100;
+          invTimer = 90; // brief invincibility
+        } else {
+          state = "gameover";
+        }
+      }
+    }
+
+    // --- Enemies ---
+    let aliveEnemies = 0;
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+
+      if (e.state === "flying") {
+        aliveEnemies++;
+        // AI movement - flap periodically, drift toward player
+        e.flapTimer--;
+        if (e.flapTimer <= 0) {
+          e.vy = _max(-2.5, e.vy - 1.2);
+          e.flapAnim = 6;
+          e.flapTimer = 15 + flr(rnd(25));
+        }
+
+        // Drift toward player somewhat
+        if (!player.dead) {
+          let dx = player.x - e.x;
+          // Handle screen wrap
+          if (_abs(dx) > W / 2) dx = dx > 0 ? dx - W : dx + W;
+          e.vx += (dx > 0 ? 0.03 : -0.03) * e.speed;
+        }
+
+        e.vy += GRAVITY;
+        if (e.vy > 2.0) e.vy = 2.0;
+        e.vx *= 0.96;
+        if (_abs(e.vx) > 1.5) e.vx = e.vx > 0 ? 1.5 : -1.5;
+
+        e.facing = e.vx > 0 ? 1 : -1;
+        if (e.flapAnim > 0) e.flapAnim--;
+
+        e.x += e.vx;
+        e.y += e.vy;
+        e.x = wrap(e.x);
+
+        // Platform collision for enemies
+        const ePlat = platformCollision(e.x + 1, e.y, 6, 16, e.vy);
+        if (ePlat) {
+          e.y = ePlat.y - 16;
+          e.vy = 0;
+        }
+
+        // Ceiling bounce
+        if (e.y < 0) { e.y = 0; e.vy = 0.5; }
+
+        // Water — enemy dies
+        if (e.y > WATER_Y - 4) {
+          addParticles(e.x, WATER_Y - 4, 6, 2);
+          splashSound();
+          score += e.pts;
+          enemies.splice(i, 1);
+          continue;
+        }
+
+        // Collision with player
+        if (!player.dead && invTimer <= 0) {
+          const px = player.x, py = player.y;
+          const ex = e.x, ey = e.y;
+          // Check if player is hitting enemy from above (player feet above enemy balloon top)
+          if (_abs(px - ex) < 10) {
+            if (py + 8 < ey + 4 && py + 16 > ey - 8 && player.vy >= 0) {
+              // Player lands on enemy — pop a balloon
+              e.balloons--;
+              popSound();
+              addParticles(e.x + 4, e.y - 4, 5, 3);
+              player.vy = -2.5; // bounce up
+              score += 200;
+              if (e.balloons <= 0) {
+                e.state = "falling";
+                e.vy = -1;
+                e.parachuteTimer = 20;
+              }
+            } else if (ey + 8 < py + 4 && ey + 16 > py - 8 && e.vy >= 0) {
+              // Enemy lands on player — pop player balloon
+              player.balloons--;
+              popSound();
+              addParticles(player.x + 4, player.y - 4, 5, 3);
+              e.vy = -2.5;
+              if (player.balloons <= 0) {
+                killPlayer();
+              }
+            }
+          }
+        }
+      }
+
+      if (e.state === "falling") {
+        // Parachute descent
+        e.parachuteTimer--;
+        if (e.parachuteTimer <= 0) {
+          e.vy = 0.5; // slow fall with parachute
+        } else {
+          e.vy = _max(-1, e.vy);
+        }
+        e.vy += 0.02;
+        if (e.vy > 0.8) e.vy = 0.8;
+        e.x += e.vx * 0.3;
+        e.y += e.vy;
+        e.x = wrap(e.x);
+
+        // Land on platform
+        const ePlat2 = platformCollision(e.x + 1, e.y, 6, 16, e.vy);
+        if (ePlat2) {
+          e.y = ePlat2.y - 16;
+          e.vy = 0;
+          e.state = "grounded";
+          e.reinflateTimer = 150 + flr(rnd(100)); // time before re-inflating
+        }
+
+        // Water
+        if (e.y > WATER_Y - 4) {
+          addParticles(e.x, WATER_Y - 4, 6, 2);
+          splashSound();
+          score += e.pts;
+          enemies.splice(i, 1);
+          continue;
+        }
+
+        // Player can bump grounded/falling enemies
+        if (!player.dead && invTimer <= 0) {
+          if (_abs(player.x - e.x) < 10 && _abs(player.y - e.y) < 14) {
+            // Bump enemy — launch them
+            e.vx = player.vx * 2 + (player.x < e.x ? 2 : -2);
+            e.vy = -2;
+            bumpSound();
+            score += 100;
+          }
+        }
+      }
+
+      if (e.state === "grounded") {
+        aliveEnemies++;
+        e.reinflateTimer--;
+        if (e.reinflateTimer <= 0) {
+          // Re-inflate and start flying again
+          e.balloons = 1;
+          e.state = "flying";
+          e.vy = -1.5;
+          e.flapTimer = 10;
+          e.speed = _max(e.speed, 0.6 + wave * 0.1); // gets faster
+        }
+
+        // Player can bump
+        if (!player.dead && invTimer <= 0) {
+          if (_abs(player.x - e.x) < 10 && _abs(player.y - e.y) < 14) {
+            e.vx = player.vx * 2 + (player.x < e.x ? 3 : -3);
+            e.vy = -2.5;
+            e.state = "falling";
+            e.parachuteTimer = 0;
+            bumpSound();
+            score += 100;
+          }
+        }
+      }
+    }
+
+    // Check for wave clear
+    if (aliveEnemies === 0 && enemies.length === 0) {
+      waveTimer++;
+      if (waveTimer > 60) {
+        waveTimer = 0;
+        waveClearSound();
+        spawnWave();
+      }
+    } else {
+      waveTimer = 0;
+    }
+
+    // --- Lightning ---
+    // Random lightning from clouds
+    if (flr(rnd(180)) === 0 && lightnings.length < 2) {
+      const cloud = CLOUDS[flr(rnd(CLOUDS.length))];
+      const lx = cloud.x + flr(rnd(cloud.w * 8));
+      lightnings.push({
+        x: lx, y: cloud.y + 16,
+        timer: 20,
+        segments: generateLightning(lx, cloud.y + 16, lx + rnd(30) - 15, cloud.y + 80),
+      });
+      lightningSound();
+    }
+
+    for (let i = lightnings.length - 1; i >= 0; i--) {
+      lightnings[i].timer--;
+      if (lightnings[i].timer <= 0) {
+        lightnings.splice(i, 1);
+        continue;
+      }
+      const l = lightnings[i];
+      // Check if lightning hits player
+      if (!player.dead && invTimer <= 0 && l.timer > 10) {
+        for (const seg of l.segments) {
+          if (_abs(player.x + 4 - seg.x) < 8 && _abs(player.y + 8 - seg.y) < 10) {
+            killPlayer();
+            break;
+          }
+        }
+      }
+      // Check if lightning hits enemies
+      for (let j = enemies.length - 1; j >= 0; j--) {
+        const e = enemies[j];
+        if (e.state !== "flying") continue;
+        for (const seg of l.segments) {
+          if (_abs(e.x + 4 - seg.x) < 8 && _abs(e.y + 8 - seg.y) < 10) {
+            e.balloons = 0;
+            e.state = "falling";
+            e.vy = -1;
+            e.parachuteTimer = 20;
+            addParticles(e.x, e.y, 5, 3);
+            break;
+          }
+        }
+      }
+    }
+
+    // --- Fish ---
+    fishObj.timer--;
+    if (fishObj.state === "hidden" && fishObj.timer <= 0) {
+      // Check if anyone is near the water
+      let target = null;
+      if (!player.dead && player.y > WATER_Y - 40) {
+        target = player;
+      }
+      if (!target) {
+        for (const e of enemies) {
+          if (e.y > WATER_Y - 40) { target = e; break; }
+        }
+      }
+      if (target) {
+        fishObj.state = "jumping";
+        fishObj.x = target.x;
+        fishObj.targetX = target.x;
+        fishObj.y = WATER_Y + 8;
+        fishObj.vy = -4.5;
+        splashSound();
+      }
+      fishObj.timer = 60 + flr(rnd(120));
+    }
+    if (fishObj.state === "jumping") {
+      fishObj.vy += 0.2;
+      fishObj.y += fishObj.vy;
+      if (fishObj.y > WATER_Y + 8) {
+        fishObj.state = "hidden";
+        fishObj.timer = 90 + flr(rnd(120));
+        addParticles(fishObj.x, WATER_Y - 2, 4, 2);
+      }
+      // Eat player
+      if (!player.dead && _abs(player.x - fishObj.x) < 12 && _abs(player.y - fishObj.y) < 12) {
+        killPlayer();
+      }
+      // Eat enemies
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (_abs(e.x - fishObj.x) < 12 && _abs(e.y - fishObj.y) < 12) {
+          score += e.pts;
+          enemies.splice(i, 1);
+        }
+      }
+    }
+
+    // --- Particles ---
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // --- Bubbles (decorative, from water) ---
+    if (flr(rnd(15)) === 0) {
+      bubbles.push({ x: flr(rnd(W)), y: WATER_Y, vy: -0.3 - rnd(0.5), life: 30 + flr(rnd(30)) });
+    }
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]; b.y += b.vy; b.x += sin(API.frame * 0.1 + i) * 0.3; b.life--;
+      if (b.life <= 0) bubbles.splice(i, 1);
+    }
+  };
+
+  function killPlayer() {
+    if (player.dead) return;
+    player.dead = true;
+    player.respawnTimer = 60;
+    lives--;
+    addParticles(player.x, player.y, 10, 3);
+    deathSound();
+    if (lives <= 0) {
+      setTimeout(() => { state = "gameover"; }, 1000);
+    }
+  }
+
+  function generateLightning(x1, y1, x2, y2) {
+    const segs = [];
+    const steps = 6;
+    let cx = x1, cy = y1;
+    const dx = (x2 - x1) / steps, dy = (y2 - y1) / steps;
+    for (let i = 0; i < steps; i++) {
+      const nx = cx + dx + rnd(12) - 6;
+      const ny = cy + dy;
+      segs.push({ x: cx, y: cy, x2: nx, y2: ny });
+      cx = nx; cy = ny;
+    }
+    return segs;
+  }
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    cls(0);
+
+    if (state === "title") {
+      drawBackground();
+
+      // Title
+      const blink = (API.frame % 40) < 30;
+      text("BALLOON FIGHT", 160, 80, 3);
+      text("GRAYBOX EDITION", 155, 96, 2);
+
+      // Animated balloons on title
+      const by = 130 + sin(API.frame * 0.08) * 8;
+      drawBalloons(190, by, 2, 3);
+      sprT(1, 194, by + 16, false, false);
+      drawBalloons(270, by + 5, 1, 2);
+      sprT(3, 274, by + 21, true, false);
+
+      if (blink) text("PRESS START", 190, 200, 3);
+      text("Z TO FLAP  ARROWS TO MOVE", 128, 230, 1);
+      text("POP ENEMY BALLOONS!", 153, 250, 2);
+      return;
+    }
+
+    if (state === "gameover") {
+      drawBackground();
+      drawPlatforms();
+      drawWater();
+      // Particles
+      for (const p of particles) pix(p.x, p.y, p.color);
+      text("GAME OVER", 193, 120, 3);
+      text("SCORE  " + score, 190, 150, 2);
+      const blink = (API.frame % 40) < 30;
+      if (blink) text("PRESS START", 190, 180, 3);
+      return;
+    }
+
+    // --- Play state drawing ---
+    drawBackground();
+
+    // Draw clouds
+    for (const c of CLOUDS) {
+      for (let t = 0; t < c.w; t++) {
+        sprT(8, c.x + t * 8, c.y, false, false);
+      }
+    }
+
+    // Draw lightning
+    for (const l of lightnings) {
+      const bright = l.timer > 10 ? 3 : 2;
+      for (const seg of l.segments) {
+        line(seg.x, seg.y, seg.x2, seg.y2, bright);
+      }
+    }
+
+    // Draw platforms
+    drawPlatforms();
+
+    // Draw enemies
+    for (const e of enemies) {
+      if (e.state === "flying") {
+        // Draw balloons above enemy
+        drawBalloons(e.x - 2, e.y - 10, e.balloons, 2);
+        // Draw enemy body
+        const bodySprite = e.flapAnim > 0 ? 14 : 3;
+        sprT(bodySprite, e.x, e.y + 4, e.facing < 0, false);
+      } else if (e.state === "falling") {
+        // Draw parachute above, enemy below
+        sprT(5, e.x - 2, e.y - 4, false, false);
+        sprT(3, e.x, e.y + 6, e.facing < 0, false);
+      } else if (e.state === "grounded") {
+        // Pumping up (blink when close to reinflating)
+        const blink = e.reinflateTimer < 40 && (API.frame % 6 < 3);
+        sprT(3, e.x, e.y + 4, e.facing < 0, false);
+        if (blink) {
+          // Show small balloon re-forming
+          circf(e.x + 4, e.y, 2, 2);
+        }
+      }
+    }
+
+    // Draw player
+    if (!player.dead) {
+      const vis = invTimer > 0 ? (API.frame % 4 < 2) : true;
+      if (vis) {
+        // Draw balloons
+        drawBalloons(player.x - 2, player.y - 10, player.balloons, 3);
+        // Draw player body
+        const bodySprite = player.flapAnim > 0 ? 13 : 1;
+        sprT(bodySprite, player.x, player.y + 4, player.facing < 0, false);
+      }
+    }
+
+    // Draw fish
+    if (fishObj.state === "jumping") {
+      sprT(10, fishObj.x, fishObj.y, false, false);
+    }
+
+    // Draw water
+    drawWater();
+
+    // Draw bubbles
+    for (const b of bubbles) {
+      sprT(12, b.x, b.y, false, false);
+    }
+
+    // Draw particles
+    for (const p of particles) pix(p.x, p.y, p.color);
+
+    // HUD
+    rectf(0, 0, W, 12, 0);
+    text("SCORE " + score, 4, 3, 3);
+    text("WAVE " + wave, 220, 3, 2);
+    // Lives
+    for (let i = 0; i < lives; i++) {
+      sprT(11, 400 + i * 12, 2, false, false);
+    }
+
+    // Wave message
+    if (waveMsg > 0) {
+      text("WAVE " + wave, 210, 150, 3);
+    }
+  };
+
+  function drawBalloons(x, y, count, col) {
+    if (count >= 2) {
+      // Two balloons side by side
+      circf(x + 2, y + 3, 4, col);
+      circf(x + 10, y + 3, 4, col);
+      // Strings
+      line(x + 2, y + 7, x + 5, y + 14, col > 1 ? col - 1 : 1);
+      line(x + 10, y + 7, x + 7, y + 14, col > 1 ? col - 1 : 1);
+    } else if (count === 1) {
+      // One balloon centered
+      circf(x + 6, y + 3, 4, col);
+      line(x + 6, y + 7, x + 6, y + 14, col > 1 ? col - 1 : 1);
+    }
+  }
+
+  function drawBackground() {
+    // Stars in sky
+    const starSeed = [23,67,112,189,234,301,378,410,456,45,99,150,267,340,390,440,10,80,175,290,360,425];
+    for (let i = 0; i < starSeed.length; i++) {
+      const sx = starSeed[i] % W;
+      const sy = (starSeed[i] * 7 + i * 23) % (WATER_Y - 30);
+      const bright = (i % 3 === 0) ? 2 : 1;
+      const twinkle = ((API.frame + i * 11) % 60) < 50;
+      if (twinkle) pix(sx, sy, bright);
+    }
+  }
+
+  function drawPlatforms() {
+    for (const p of PLATFORMS) {
+      for (let t = 0; t < p.w; t++) {
+        sprT(6, p.x + t * 8, p.y, false, false);
+      }
+    }
+  }
+
+  function drawWater() {
+    // Water surface
+    for (let tx = 0; tx < 60; tx++) {
+      sprT(7, tx * 8, WATER_Y, (tx % 2 === 0), false);
+    }
+    // Deep water fill
+    rectf(0, WATER_Y + 8, W, H - WATER_Y - 8, 0);
+    // Water pattern lines
+    for (let y = WATER_Y + 10; y < H; y += 6) {
+      for (let x = 0; x < W; x += 12) {
+        const off = sin((API.frame * 0.05) + x * 0.02 + y * 0.1) * 4;
+        line(x + off, y, x + 6 + off, y, 1);
+      }
+    }
+  }
+
+  // ============================================================
+  // Start
+  // ============================================================
+  setInterval(tick, 1000 / FPS);
+})();
+</script>
+</body>
+</html>

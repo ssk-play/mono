@@ -1,0 +1,1546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Kung-Fu Master</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>←→</span> MOVE &nbsp;&nbsp; <span>↑↓</span> JUMP/CROUCH &nbsp;&nbsp; <span>Z</span> PUNCH &nbsp;&nbsp; <span>X</span> KICK &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  // transparent sprite draw - skip color 0 pixels
+  API.sprT = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx]; if(c===0) continue;
+      const dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Kung-Fu Master Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+  // Player head (standing)
+  defSprite(1,
+    "00333000" +
+    "03333300" +
+    "03122100" +
+    "03111100" +
+    "00333000" +
+    "00030000" +
+    "00333000" +
+    "00333000"
+  );
+  // Player body (standing)
+  defSprite(2,
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "00333000" +
+    "00313000" +
+    "00303000" +
+    "00303000" +
+    "03300330"
+  );
+  // Player punch arm
+  defSprite(3,
+    "00000000" +
+    "00000000" +
+    "33333300" +
+    "00000330" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+  // Player kick leg
+  defSprite(4,
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "33333330" +
+    "00000330" +
+    "00000000"
+  );
+  // Grunt head
+  defSprite(10,
+    "00111000" +
+    "01111100" +
+    "01233200" +
+    "01222200" +
+    "00111000" +
+    "00010000" +
+    "00111000" +
+    "00111000"
+  );
+  // Grunt body
+  defSprite(11,
+    "00111000" +
+    "01111100" +
+    "11111110" +
+    "00111000" +
+    "00121000" +
+    "00101000" +
+    "00101000" +
+    "01100110"
+  );
+  // Knife thrower head
+  defSprite(12,
+    "00222000" +
+    "02222200" +
+    "02133100" +
+    "02111100" +
+    "00222000" +
+    "00020000" +
+    "00222000" +
+    "00222000"
+  );
+  // Knife thrower body
+  defSprite(13,
+    "00222000" +
+    "02222200" +
+    "22222220" +
+    "00222000" +
+    "00232000" +
+    "00202000" +
+    "00202000" +
+    "02200220"
+  );
+  // Knife projectile
+  defSprite(14,
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00333300" +
+    "03322000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+  // Jumper head
+  defSprite(15,
+    "00333000" +
+    "03333300" +
+    "03122100" +
+    "03111100" +
+    "00333000" +
+    "00030000" +
+    "00333000" +
+    "00333000"
+  );
+  // Jumper body (in air)
+  defSprite(16,
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "00333000" +
+    "03030300" +
+    "30303030" +
+    "30000030" +
+    "00000000"
+  );
+  // Boss head
+  defSprite(20,
+    "03333300" +
+    "33333330" +
+    "31233210" +
+    "31222210" +
+    "33333330" +
+    "03333300" +
+    "00330000" +
+    "03333300"
+  );
+  // Boss body
+  defSprite(21,
+    "03333300" +
+    "33333330" +
+    "33333330" +
+    "33333330" +
+    "03333300" +
+    "03313300" +
+    "03303300" +
+    "33300330"
+  );
+  // Boss attack arm
+  defSprite(22,
+    "00000000" +
+    "33333330" +
+    "33333330" +
+    "00000330" +
+    "00000330" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+  // Explosion 1
+  defSprite(30,
+    "00000000" +
+    "00200100" +
+    "01002000" +
+    "00031000" +
+    "00130200" +
+    "01000010" +
+    "00100000" +
+    "00000000"
+  );
+  // Explosion 2
+  defSprite(31,
+    "20010020" +
+    "01000010" +
+    "00203200" +
+    "03033030" +
+    "00232000" +
+    "01000300" +
+    "20001001" +
+    "00200010"
+  );
+  // Heart/life icon
+  defSprite(32,
+    "00000000" +
+    "03303300" +
+    "33333330" +
+    "33333330" +
+    "03333300" +
+    "00333000" +
+    "00030000" +
+    "00000000"
+  );
+  // Floor pillar tile
+  defSprite(40,
+    "01111110" +
+    "11222211" +
+    "12222221" +
+    "12222221" +
+    "12222221" +
+    "12222221" +
+    "11222211" +
+    "01111110"
+  );
+  // Floor brick tile
+  defSprite(41,
+    "33333333" +
+    "32222223" +
+    "32222223" +
+    "33333333" +
+    "22333333" +
+    "22322222" +
+    "22322222" +
+    "33333333"
+  );
+  // Floor plain
+  defSprite(42,
+    "11111111" +
+    "12121212" +
+    "21212121" +
+    "11111111" +
+    "12121212" +
+    "21212121" +
+    "11111111" +
+    "11111111"
+  );
+  // Player crouch body
+  defSprite(5,
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "00333000" +
+    "00333000" +
+    "03300330" +
+    "03300330" +
+    "00000000"
+  );
+  // Player jump body
+  defSprite(6,
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "00333000" +
+    "03030300" +
+    "30303030" +
+    "00000000" +
+    "00000000"
+  );
+  // Grab effect overlay
+  defSprite(33,
+    "00000000" +
+    "00300300" +
+    "03030300" +
+    "30303030" +
+    "03030300" +
+    "00300300" +
+    "00000000" +
+    "00000000"
+  );
+  // Staircase tile
+  defSprite(43,
+    "00000033" +
+    "00000033" +
+    "00003333" +
+    "00003333" +
+    "00333333" +
+    "00333333" +
+    "33333333" +
+    "33333333"
+  );
+
+  // --- Constants ---
+  const FLOOR_Y = 250;         // ground Y for player feet
+  const FLOOR_W = 960;         // total floor width in pixels
+  const PLAYER_W = 12;
+  const PLAYER_H = 16;
+  const GRAVITY = 0.6;
+  const JUMP_VEL = -6;
+  const PLAYER_SPEED = 2.2;
+  const ATTACK_DUR = 10;       // frames an attack is active
+  const HIT_INVULN = 30;       // invulnerability frames after being hit
+  const GRAB_ESCAPE = 8;       // button presses needed to escape grab
+  const MAX_HP = 40;
+  const TIMER_MAX = 60 * 30;   // 60 seconds at 30fps
+
+  // Floor themes: [wall color, floor tile, enemy types, boss type, bg detail]
+  const FLOORS = [
+    { name: "1F", enemies: ["grunt","grunt","grunt"], spawnRate: 45, bossHp: 12 },
+    { name: "2F", enemies: ["grunt","knife"], spawnRate: 40, bossHp: 16 },
+    { name: "3F", enemies: ["grunt","knife","jumper"], spawnRate: 35, bossHp: 20 },
+    { name: "4F", enemies: ["knife","jumper","jumper"], spawnRate: 30, bossHp: 24 },
+    { name: "5F", enemies: ["grunt","knife","jumper"], spawnRate: 25, bossHp: 30 },
+  ];
+
+  // --- Game State ---
+  let state = "title";
+  let player, enemies, projectiles, effects, particles;
+  let score, lives, floor, timer, camX;
+  let spawnTimer, bossSpawned, bossDefeated, floorComplete;
+  let titleBlink, gameOverTimer;
+  let hiScore = 0;
+  let floorTransition, floorTransTimer;
+  let shakeTimer = 0;
+
+  function resetGame() {
+    score = 0;
+    lives = 3;
+    floor = 0;
+    initFloor();
+  }
+
+  function initFloor() {
+    player = {
+      x: 40, y: FLOOR_Y, vx: 0, vy: 0,
+      facingR: true, hp: MAX_HP,
+      state: "idle",     // idle, walk, jump, crouch, attack, hurt, grabbed, dead
+      attackType: "",    // punch, kick, jumpkick, crouchpunch
+      attackTimer: 0,
+      hurtTimer: 0,
+      invuln: 0,
+      grabCount: 0,
+      grabber: null,
+      jumpHeld: false,
+      onGround: true,
+      animFrame: 0,
+    };
+    enemies = [];
+    projectiles = [];
+    effects = [];
+    particles = [];
+    camX = 0;
+    spawnTimer = 60;
+    bossSpawned = false;
+    bossDefeated = false;
+    floorComplete = false;
+    floorTransition = false;
+    floorTransTimer = 0;
+    timer = TIMER_MAX;
+    shakeTimer = 0;
+  }
+
+  function spawnEnemy(type, fromRight) {
+    const ex = fromRight ? (camX + W + 20) : (camX - 20);
+    const ey = FLOOR_Y;
+    let e = {
+      type: type, x: ex, y: ey, vx: 0, vy: 0,
+      hp: 1, facingR: !fromRight,
+      state: "walk",   // walk, attack, hurt, dead, grab, jump
+      animFrame: 0, attackTimer: 0, hurtTimer: 0,
+      jumpTimer: 0, shootTimer: 0,
+      deathTimer: 0,
+    };
+    if (type === "grunt") { e.hp = 1; e.speed = 0.8 + rnd(0.4); e.score = 100; }
+    else if (type === "knife") { e.hp = 1; e.speed = 0.6 + rnd(0.3); e.score = 200; e.shootTimer = 30 + flr(rnd(60)); }
+    else if (type === "jumper") { e.hp = 1; e.speed = 1.0 + rnd(0.4); e.score = 300; e.jumpTimer = 20 + flr(rnd(40)); }
+    else if (type === "boss") {
+      e.hp = FLOORS[floor].bossHp;
+      e.speed = 0.6;
+      e.score = 2000;
+      e.attackTimer = 30 + flr(rnd(30));
+      e.x = FLOOR_W - 60;
+      e.facingR = false;
+    }
+    enemies.push(e);
+  }
+
+  function spawnBoss() {
+    if (bossSpawned) return;
+    bossSpawned = true;
+    spawnEnemy("boss", true);
+  }
+
+  // --- Sound ---
+  function sndPunch() { note(0, "G4", 0.03); setTimeout(() => note(0, "C4", 0.04), 30); }
+  function sndKick() { note(0, "E3", 0.05); setTimeout(() => note(0, "G3", 0.03), 30); }
+  function sndHit() { note(1, "C3", 0.06); setTimeout(() => note(1, "E3", 0.04), 40); }
+  function sndPlayerHit() { note(0, "A2", 0.08); note(1, "D3", 0.06); }
+  function sndDeath() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function sndBossDie() {
+    note(0, "C5", 0.1);
+    setTimeout(() => note(0, "E5", 0.1), 100);
+    setTimeout(() => note(0, "G5", 0.1), 200);
+    setTimeout(() => note(0, "C6", 0.2), 300);
+  }
+  function sndFloorClear() {
+    note(0, "E5", 0.08);
+    setTimeout(() => note(0, "G5", 0.08), 80);
+    setTimeout(() => note(0, "C6", 0.08), 160);
+    setTimeout(() => note(0, "E6", 0.15), 240);
+    setTimeout(() => note(1, "C5", 0.15), 240);
+  }
+
+  // --- Collision ---
+  function boxOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
+  function getAttackBox() {
+    const p = player;
+    const dir = p.facingR ? 1 : -1;
+    if (p.attackType === "punch" || p.attackType === "crouchpunch") {
+      const px = p.facingR ? p.x + PLAYER_W : p.x - 14;
+      const py = p.attackType === "crouchpunch" ? p.y - 4 : p.y - 10;
+      return { x: px, y: py, w: 14, h: 6 };
+    }
+    if (p.attackType === "kick") {
+      const px = p.facingR ? p.x + PLAYER_W : p.x - 16;
+      return { x: px, y: p.y - 4, w: 16, h: 6 };
+    }
+    if (p.attackType === "jumpkick") {
+      const px = p.facingR ? p.x + PLAYER_W : p.x - 18;
+      return { x: px, y: p.y - 8, w: 18, h: 8 };
+    }
+    return null;
+  }
+
+  function getEnemyBox(e) {
+    if (e.type === "boss") return { x: e.x - 8, y: e.y - 16, w: 16, h: 16 };
+    return { x: e.x - 5, y: e.y - 16, w: 10, h: 16 };
+  }
+
+  function getPlayerBox() {
+    const p = player;
+    if (p.state === "crouch") return { x: p.x, y: p.y - 8, w: PLAYER_W, h: 8 };
+    return { x: p.x, y: p.y - PLAYER_H, w: PLAYER_W, h: PLAYER_H };
+  }
+
+  // --- Particles ---
+  function addHitEffect(x, y) {
+    for (let i = 0; i < 6; i++) {
+      particles.push({
+        x: x, y: y, vx: rnd(4) - 2, vy: rnd(3) - 2,
+        life: 5 + flr(rnd(8)), color: flr(rnd(2)) + 2
+      });
+    }
+    effects.push({ x: x - 4, y: y - 4, timer: 8 });
+  }
+
+  // --- Update ---
+  function updateGame() {
+    if (floorTransition) {
+      floorTransTimer--;
+      if (floorTransTimer <= 0) {
+        floor++;
+        if (floor >= 5) {
+          // Game complete!
+          state = "win";
+          gameOverTimer = 180;
+          return;
+        }
+        initFloor();
+      }
+      return;
+    }
+
+    timer--;
+    if (timer <= 0) {
+      // Time out - lose a life
+      player.hp = 0;
+    }
+
+    const p = player;
+
+    // --- Player update ---
+    if (p.state !== "dead") {
+      if (p.invuln > 0) p.invuln--;
+      if (p.hurtTimer > 0) {
+        p.hurtTimer--;
+        if (p.hurtTimer <= 0) p.state = "idle";
+      }
+
+      // Grabbed state
+      if (p.state === "grabbed") {
+        p.hp -= 0.15;
+        if (btnp("a") || btnp("b")) {
+          p.grabCount++;
+          sndPunch();
+        }
+        if (p.grabCount >= GRAB_ESCAPE) {
+          // Break free
+          p.state = "idle";
+          p.invuln = HIT_INVULN;
+          if (p.grabber) {
+            p.grabber.state = "hurt";
+            p.grabber.hurtTimer = 15;
+            p.grabber.hp--;
+            if (p.grabber.hp <= 0) {
+              p.grabber.state = "dead";
+              p.grabber.deathTimer = 20;
+              score += p.grabber.score;
+            }
+            addHitEffect(p.grabber.x, p.grabber.y - 8);
+            sndHit();
+          }
+          p.grabber = null;
+        }
+      }
+      // Normal input
+      else if (p.state !== "hurt" && p.attackTimer <= 0) {
+        // Movement
+        let moving = false;
+        if (btn("left") && p.state !== "crouch") {
+          p.x -= PLAYER_SPEED;
+          p.facingR = false;
+          moving = true;
+        }
+        if (btn("right") && p.state !== "crouch") {
+          p.x += PLAYER_SPEED;
+          p.facingR = true;
+          moving = true;
+        }
+
+        // Crouch
+        if (btn("down") && p.onGround && p.state !== "jump") {
+          p.state = "crouch";
+          moving = false;
+        } else if (p.state === "crouch" && !btn("down")) {
+          p.state = "idle";
+        }
+
+        // Jump
+        if (btn("up") && p.onGround && p.state !== "crouch") {
+          p.vy = JUMP_VEL;
+          p.onGround = false;
+          p.state = "jump";
+        }
+
+        // Walking state
+        if (moving && p.onGround && p.state !== "crouch" && p.state !== "jump") {
+          p.state = "walk";
+        } else if (!moving && p.onGround && p.state === "walk") {
+          p.state = "idle";
+        }
+
+        // Attacks
+        if (btnp("a")) {
+          if (p.state === "jump") {
+            p.attackType = "jumpkick";
+            p.attackTimer = ATTACK_DUR;
+            sndKick();
+          } else if (p.state === "crouch") {
+            p.attackType = "crouchpunch";
+            p.attackTimer = ATTACK_DUR;
+            p.state = "attack";
+            sndPunch();
+          } else {
+            p.attackType = "punch";
+            p.attackTimer = ATTACK_DUR;
+            p.state = "attack";
+            sndPunch();
+          }
+        }
+        if (btnp("b")) {
+          if (p.state === "jump") {
+            p.attackType = "jumpkick";
+            p.attackTimer = ATTACK_DUR;
+            sndKick();
+          } else if (p.state !== "crouch") {
+            p.attackType = "kick";
+            p.attackTimer = ATTACK_DUR;
+            p.state = "attack";
+            sndKick();
+          }
+        }
+      }
+
+      // Attack timer
+      if (p.attackTimer > 0) {
+        p.attackTimer--;
+        if (p.attackTimer <= 0 && p.state === "attack") {
+          p.state = p.onGround ? "idle" : "jump";
+        }
+      }
+
+      // Gravity
+      if (!p.onGround) {
+        p.vy += GRAVITY;
+        p.y += p.vy;
+        if (p.y >= FLOOR_Y) {
+          p.y = FLOOR_Y;
+          p.vy = 0;
+          p.onGround = true;
+          if (p.state === "jump") p.state = "idle";
+          if (p.attackTimer > 0 && p.attackType === "jumpkick") {
+            p.attackTimer = 0;
+            p.state = "idle";
+          }
+        }
+      }
+
+      // Clamp player position
+      p.x = _max(8, min(FLOOR_W - 16, p.x));
+
+      // HP check
+      if (p.hp <= 0) {
+        p.state = "dead";
+        p.hurtTimer = 60;
+        sndDeath();
+        shakeTimer = 15;
+      }
+
+      // Animation counter
+      p.animFrame++;
+    } else {
+      // Dead state
+      p.hurtTimer--;
+      if (p.hurtTimer <= 0) {
+        lives--;
+        if (lives <= 0) {
+          if (score > hiScore) hiScore = score;
+          state = "gameover";
+          gameOverTimer = 120;
+        } else {
+          // Respawn
+          p.x = camX + 40;
+          p.y = FLOOR_Y;
+          p.hp = MAX_HP;
+          p.state = "idle";
+          p.invuln = 60;
+          p.onGround = true;
+          p.vy = 0;
+          p.attackTimer = 0;
+        }
+      }
+    }
+
+    // --- Camera ---
+    const targetCamX = p.x - W / 3;
+    camX += (targetCamX - camX) * 0.08;
+    camX = _max(0, min(FLOOR_W - W, camX));
+
+    // --- Spawn enemies ---
+    if (!bossSpawned && p.state !== "dead") {
+      spawnTimer--;
+      if (spawnTimer <= 0) {
+        const fl = FLOORS[floor];
+        const type = fl.enemies[flr(rnd(fl.enemies.length))];
+        const fromRight = rnd(1) > 0.4;
+        spawnEnemy(type, fromRight);
+        spawnTimer = fl.spawnRate + flr(rnd(20));
+      }
+
+      // Spawn boss when player reaches end of floor
+      if (p.x > FLOOR_W - 200) {
+        spawnBoss();
+      }
+    }
+
+    // --- Update enemies ---
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+
+      if (e.state === "dead") {
+        e.deathTimer--;
+        if (e.deathTimer <= 0) {
+          enemies.splice(i, 1);
+          // Check if boss defeated
+          if (e.type === "boss") {
+            bossDefeated = true;
+            floorComplete = true;
+            floorTransition = true;
+            floorTransTimer = 90;
+            sndFloorClear();
+          }
+        }
+        continue;
+      }
+
+      if (e.state === "hurt") {
+        e.hurtTimer--;
+        if (e.hurtTimer <= 0) {
+          if (e.hp <= 0) {
+            e.state = "dead";
+            e.deathTimer = 20;
+            score += e.score;
+            addHitEffect(e.x, e.y - 8);
+          } else {
+            e.state = "walk";
+          }
+        }
+        continue;
+      }
+
+      if (e.state === "grab") continue; // held by player logic
+
+      // Face player
+      e.facingR = p.x > e.x;
+      const dx = p.x - e.x;
+      const dist = _abs(dx);
+
+      if (e.type === "grunt") {
+        // Walk toward player
+        if (dist > 10) {
+          e.x += (e.facingR ? 1 : -1) * e.speed;
+          e.state = "walk";
+        } else if (dist <= 10 && p.state !== "dead") {
+          // Try to grab
+          if (p.state !== "grabbed" && p.invuln <= 0) {
+            p.state = "grabbed";
+            p.grabCount = 0;
+            p.grabber = e;
+            e.state = "grab";
+            sndPlayerHit();
+          }
+        }
+      }
+
+      if (e.type === "knife") {
+        // Keep distance and throw
+        if (dist > 80) {
+          e.x += (e.facingR ? 1 : -1) * e.speed;
+          e.state = "walk";
+        } else if (dist > 40) {
+          e.shootTimer--;
+          if (e.shootTimer <= 0) {
+            // Throw knife
+            projectiles.push({
+              x: e.x, y: e.y - 6,
+              vx: e.facingR ? 3.5 : -3.5, vy: 0,
+              type: "knife", life: 120
+            });
+            e.shootTimer = 50 + flr(rnd(40));
+            note(1, "F#5", 0.03);
+          }
+          e.state = "walk";
+        } else {
+          // Back away
+          e.x += (e.facingR ? -1 : 1) * e.speed * 0.5;
+          e.state = "walk";
+        }
+      }
+
+      if (e.type === "jumper") {
+        if (dist > 50) {
+          e.x += (e.facingR ? 1 : -1) * e.speed;
+          e.state = "walk";
+        } else {
+          e.jumpTimer--;
+          if (e.jumpTimer <= 0 && e.onGround !== false) {
+            // Jump attack
+            e.vy = -5;
+            e.vx = (e.facingR ? 2 : -2);
+            e.onGround = false;
+            e.state = "jump";
+            e.jumpTimer = 40 + flr(rnd(30));
+          }
+        }
+        // Gravity for jumper
+        if (e.onGround === false) {
+          e.vy = (e.vy || 0) + GRAVITY;
+          e.y += e.vy;
+          e.x += e.vx || 0;
+          if (e.y >= FLOOR_Y) {
+            e.y = FLOOR_Y;
+            e.vy = 0;
+            e.vx = 0;
+            e.onGround = true;
+            e.state = "walk";
+          }
+        }
+      }
+
+      if (e.type === "boss") {
+        // Boss AI
+        if (dist > 40) {
+          e.x += (e.facingR ? 1 : -1) * e.speed;
+          e.state = "walk";
+        } else {
+          e.attackTimer--;
+          if (e.attackTimer <= 0) {
+            // Boss punch
+            e.state = "attack";
+            e.attackTimer = 40 + flr(rnd(30));
+            // Check if hitting player
+            if (dist < 30 && p.invuln <= 0 && p.state !== "dead" && p.state !== "grabbed") {
+              p.hp -= 4;
+              p.state = "hurt";
+              p.hurtTimer = 12;
+              p.invuln = HIT_INVULN;
+              sndPlayerHit();
+              shakeTimer = 5;
+              addHitEffect(p.x + 6, p.y - 8);
+            }
+            note(0, "D3", 0.06);
+            setTimeout(() => { if (e.state !== "dead") e.state = "walk"; }, 300);
+          }
+        }
+      }
+
+      // Enemy attack collision with player (non-grab enemies on contact)
+      if (e.type !== "grunt" && e.type !== "boss" && e.state !== "dead" && e.state !== "hurt") {
+        const eb = getEnemyBox(e);
+        const pb = getPlayerBox();
+        if (p.state !== "dead" && p.state !== "grabbed" && p.invuln <= 0) {
+          if (boxOverlap(eb.x, eb.y, eb.w, eb.h, pb.x, pb.y, pb.w, pb.h)) {
+            if (e.type === "jumper" && e.state === "jump") {
+              p.hp -= 3;
+              p.state = "hurt";
+              p.hurtTimer = 10;
+              p.invuln = HIT_INVULN;
+              sndPlayerHit();
+              shakeTimer = 4;
+              addHitEffect(p.x + 6, p.y - 8);
+            }
+          }
+        }
+      }
+
+      // Remove enemies that are too far off-screen
+      if (e.type !== "boss" && _abs(e.x - p.x) > W + 100) {
+        enemies.splice(i, 1);
+      }
+
+      e.animFrame = (e.animFrame || 0) + 1;
+    }
+
+    // --- Player attack vs enemies ---
+    if (p.attackTimer > 0 && p.attackTimer > ATTACK_DUR - 5) {
+      const atk = getAttackBox();
+      if (atk) {
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          const e = enemies[i];
+          if (e.state === "dead" || e.state === "hurt") continue;
+          const eb = getEnemyBox(e);
+          if (boxOverlap(atk.x, atk.y, atk.w, atk.h, eb.x, eb.y, eb.w, eb.h)) {
+            let dmg = 1;
+            if (p.attackType === "jumpkick") dmg = 2;
+            if (p.attackType === "kick") dmg = 1;
+            e.hp -= dmg;
+            e.state = "hurt";
+            e.hurtTimer = 10;
+            // Knockback
+            e.x += (p.facingR ? 8 : -8);
+            if (e.state === "grab") {
+              // Release grab
+              p.state = "idle";
+              p.grabber = null;
+            }
+            addHitEffect(e.x, e.y - 8);
+            sndHit();
+            if (e.type === "boss") shakeTimer = 3;
+          }
+        }
+      }
+    }
+
+    // --- Projectiles ---
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const pr = projectiles[i];
+      pr.x += pr.vx;
+      pr.y += pr.vy;
+      pr.life--;
+      if (pr.life <= 0 || pr.x < camX - 20 || pr.x > camX + W + 20) {
+        projectiles.splice(i, 1);
+        continue;
+      }
+      // Hit player
+      const pb = getPlayerBox();
+      if (p.state !== "dead" && p.state !== "grabbed" && p.invuln <= 0) {
+        if (boxOverlap(pr.x - 3, pr.y - 2, 6, 4, pb.x, pb.y, pb.w, pb.h)) {
+          p.hp -= 3;
+          p.state = "hurt";
+          p.hurtTimer = 8;
+          p.invuln = HIT_INVULN;
+          sndPlayerHit();
+          shakeTimer = 3;
+          addHitEffect(p.x + 6, p.y - 8);
+          projectiles.splice(i, 1);
+        }
+      }
+    }
+
+    // --- Effects & Particles ---
+    for (let i = effects.length - 1; i >= 0; i--) {
+      effects[i].timer--;
+      if (effects[i].timer <= 0) effects.splice(i, 1);
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const pt = particles[i];
+      pt.x += pt.vx;
+      pt.y += pt.vy;
+      pt.vy += 0.1;
+      pt.life--;
+      if (pt.life <= 0) particles.splice(i, 1);
+    }
+
+    // Shake
+    if (shakeTimer > 0) shakeTimer--;
+  }
+
+  // --- Draw ---
+  function drawGame() {
+    cls(0);
+
+    const shakeX = shakeTimer > 0 ? flr(rnd(4)) - 2 : 0;
+    const shakeY = shakeTimer > 0 ? flr(rnd(4)) - 2 : 0;
+    const ox = -flr(camX) + shakeX;
+    const oy = shakeY;
+
+    // --- Background ---
+    // Wall / background pattern
+    const wallC = floor < 2 ? 1 : (floor < 4 ? 0 : 1);
+    const bgC = 0;
+    rectf(0, 0, W, H, bgC);
+
+    // Draw background pillars
+    for (let px = flr(camX / 64) * 64; px < camX + W + 64; px += 64) {
+      const sx = px + ox;
+      // Pillar
+      rectf(sx + 28, 40 + oy, 8, FLOOR_Y - 40 + oy, 1);
+      rectf(sx + 26, 38 + oy, 12, 4, 1);
+      rectf(sx + 26, FLOOR_Y - 2 + oy, 12, 4, 1);
+    }
+
+    // Draw wall lines
+    for (let wy = 50; wy < FLOOR_Y; wy += 24) {
+      const screenWy = wy + oy;
+      if (screenWy >= 0 && screenWy < H) {
+        line(0, screenWy, W, screenWy, 1);
+      }
+    }
+
+    // Draw floor
+    const floorTile = 42;
+    for (let fx = flr(camX / 8) * 8; fx < camX + W + 8; fx += 8) {
+      const sx = fx + ox;
+      spr(floorTile, sx, FLOOR_Y + oy);
+      spr(41, sx, FLOOR_Y + 8 + oy);
+      spr(41, sx, FLOOR_Y + 16 + oy);
+    }
+
+    // --- Draw enemies ---
+    for (const e of enemies) {
+      const sx = e.x + ox;
+      const sy = e.y + oy;
+      if (sx < -20 || sx > W + 20) continue;
+
+      const flip = !e.facingR;
+
+      if (e.state === "dead") {
+        // Flash
+        if (e.deathTimer % 4 < 2) {
+          sprT(30 + (e.deathTimer % 8 < 4 ? 0 : 1), sx - 4, sy - 16, false, false);
+        }
+        continue;
+      }
+
+      if (e.state === "hurt" && e.hurtTimer % 3 === 0) continue; // blink
+
+      if (e.type === "grunt") {
+        sprT(10, sx - 4, sy - 16, flip, false);
+        sprT(11, sx - 4, sy - 8, flip, false);
+        if (e.state === "grab") {
+          // Arms extended
+          sprT(3, flip ? sx - 12 : sx + 4, sy - 10, !flip, false);
+        }
+      } else if (e.type === "knife") {
+        sprT(12, sx - 4, sy - 16, flip, false);
+        sprT(13, sx - 4, sy - 8, flip, false);
+      } else if (e.type === "jumper") {
+        sprT(15, sx - 4, sy - 16, flip, false);
+        if (e.state === "jump") {
+          sprT(16, sx - 4, sy - 8, flip, false);
+        } else {
+          sprT(11, sx - 4, sy - 8, flip, false);
+        }
+      } else if (e.type === "boss") {
+        // Boss is bigger - draw larger
+        sprT(20, sx - 8, sy - 20, flip, false);
+        sprT(21, sx - 8, sy - 12, flip, false);
+        // Also mirror side for width
+        sprT(20, sx, sy - 20, flip, false);
+        sprT(21, sx, sy - 12, flip, false);
+        if (e.state === "attack") {
+          sprT(22, flip ? sx - 16 : sx + 8, sy - 14, flip, false);
+        }
+        // Boss HP bar
+        const bossHpW = 40;
+        const bossHpFill = flr((e.hp / FLOORS[floor].bossHp) * bossHpW);
+        rectf(sx - 8, sy - 28, bossHpW, 3, 0);
+        rectf(sx - 8, sy - 28, bossHpFill, 3, 3);
+        rect(sx - 9, sy - 29, bossHpW + 2, 5, 2);
+      }
+    }
+
+    // --- Draw projectiles ---
+    for (const pr of projectiles) {
+      const sx = pr.x + ox;
+      const sy = pr.y + oy;
+      if (pr.type === "knife") {
+        sprT(14, sx - 4, sy - 4, pr.vx < 0, false);
+      }
+    }
+
+    // --- Draw player ---
+    const p = player;
+    const psx = p.x + ox;
+    const psy = p.y + oy;
+    const pFlip = !p.facingR;
+
+    if (p.state !== "dead" || (p.hurtTimer % 6 < 3)) {
+      // Invulnerability blink
+      if (p.invuln > 0 && p.invuln % 4 < 2 && p.state !== "dead") {
+        // skip draw - blink
+      } else {
+        if (p.state === "crouch" || p.attackType === "crouchpunch") {
+          // Crouching
+          sprT(1, psx, psy - 12, pFlip, false);
+          sprT(5, psx, psy - 4, pFlip, false);
+          if (p.attackTimer > 0 && p.attackType === "crouchpunch") {
+            sprT(3, pFlip ? psx - 10 : psx + 8, psy - 6, pFlip, false);
+          }
+        } else if (p.state === "jump" || (!p.onGround && p.state !== "hurt")) {
+          // Jumping
+          sprT(1, psx, psy - 16, pFlip, false);
+          sprT(6, psx, psy - 8, pFlip, false);
+          if (p.attackTimer > 0 && p.attackType === "jumpkick") {
+            sprT(4, pFlip ? psx - 12 : psx + 8, psy - 6, pFlip, false);
+          }
+        } else if (p.state === "grabbed") {
+          // Grabbed - shake
+          const gx = psx + flr(rnd(3)) - 1;
+          sprT(1, gx, psy - 16, pFlip, false);
+          sprT(2, gx, psy - 8, pFlip, false);
+          // Struggle effect
+          if (API.frame % 4 < 2) sprT(33, gx - 2, psy - 12, false, false);
+        } else if (p.state === "hurt") {
+          // Hurt - knocked back slightly
+          sprT(1, psx, psy - 16, pFlip, false);
+          sprT(2, psx, psy - 8, pFlip, false);
+        } else if (p.state === "dead") {
+          // Dead - lying down (draw sideways-ish)
+          sprT(1, psx, psy - 8, pFlip, false);
+          sprT(2, psx + (pFlip ? -8 : 8), psy - 8, pFlip, false);
+        } else {
+          // Normal standing/walking
+          sprT(1, psx, psy - 16, pFlip, false);
+          sprT(2, psx, psy - 8, pFlip, false);
+          // Attack arms/legs
+          if (p.attackTimer > 0) {
+            if (p.attackType === "punch") {
+              sprT(3, pFlip ? psx - 10 : psx + 8, psy - 12, pFlip, false);
+            } else if (p.attackType === "kick") {
+              sprT(4, pFlip ? psx - 12 : psx + 8, psy - 4, pFlip, false);
+            }
+          }
+          // Walk animation - slight bob
+          if (p.state === "walk" && p.animFrame % 8 < 4) {
+            // Offset already handled via sprite
+          }
+        }
+      }
+    }
+
+    // --- Draw effects ---
+    for (const ef of effects) {
+      const sx = ef.x + ox;
+      const sy = ef.y + oy;
+      if (ef.timer > 4) {
+        sprT(30, sx, sy, false, false);
+      } else {
+        sprT(31, sx, sy, false, false);
+      }
+    }
+
+    // --- Draw particles ---
+    for (const pt of particles) {
+      pix(pt.x + ox, pt.y + oy, pt.color);
+    }
+
+    // --- HUD ---
+    // Health bar background
+    rectf(8, 4, 82, 10, 0);
+    rect(8, 4, 82, 10, 2);
+    text("HP", 10, 6, 3);
+    const hpW = flr((p.hp / MAX_HP) * 64);
+    rectf(18, 6, hpW, 6, 3);
+    rectf(18 + hpW, 6, 64 - hpW, 6, 1);
+
+    // Lives
+    for (let i = 0; i < lives; i++) {
+      sprT(32, 96 + i * 10, 2, false, false);
+    }
+
+    // Score
+    text("SCORE " + String(score).padStart(7, "0"), W - 110, 4, 3);
+
+    // Floor indicator
+    text("FLOOR " + FLOORS[min(floor, 4)].name, 8, 18, 2);
+
+    // Timer
+    const timerSec = _max(0, Math.ceil(timer / 30));
+    const timerColor = timerSec <= 10 ? (API.frame % 10 < 5 ? 3 : 2) : 3;
+    text("TIME " + String(timerSec).padStart(3, "0"), W / 2 - 25, 4, timerColor);
+
+    // Hi-Score
+    text("HI " + String(hiScore).padStart(7, "0"), W - 110, 14, 2);
+
+    // Grabbed indicator
+    if (p.state === "grabbed") {
+      const mashText = "MASH Z/X!";
+      text(mashText, W / 2 - 22, 30, API.frame % 6 < 3 ? 3 : 2);
+    }
+
+    // Floor transition
+    if (floorTransition) {
+      const msg = bossDefeated ? "FLOOR CLEAR!" : "";
+      text(msg, W / 2 - 30, H / 2 - 10, 3);
+      if (floor < 4) {
+        text("NEXT: FLOOR " + FLOORS[min(floor + 1, 4)].name, W / 2 - 40, H / 2 + 4, 2);
+      } else {
+        text("FINAL FLOOR COMPLETE!", W / 2 - 52, H / 2 + 4, 3);
+      }
+    }
+  }
+
+  // --- Title screen ---
+  function drawTitle() {
+    cls(0);
+
+    // Title art border
+    rect(40, 20, W - 80, 60, 2);
+    rect(42, 22, W - 84, 56, 1);
+
+    // Title text
+    text("KUNG-FU MASTER", W / 2 - 36, 34, 3);
+    text("SPARTAN X", W / 2 - 24, 48, 2);
+
+    // Decorative martial arts figure
+    sprT(1, W / 2 - 50, 100, false, false);
+    sprT(2, W / 2 - 50, 108, false, false);
+    sprT(3, W / 2 - 42, 98, false, false); // punch
+
+    // VS enemies
+    sprT(10, W / 2 + 20, 100, true, false);
+    sprT(11, W / 2 + 20, 108, true, false);
+    sprT(10, W / 2 + 40, 96, true, false);
+    sprT(11, W / 2 + 40, 104, true, false);
+
+    // Floor display
+    text("5 FLOORS OF FURY!", W / 2 - 44, 130, 2);
+
+    // Controls
+    text("CONTROLS:", W / 2 - 24, 160, 3);
+    text("ARROWS  MOVE/JUMP/CROUCH", W / 2 - 60, 175, 2);
+    text("Z  PUNCH    X  KICK", W / 2 - 50, 190, 2);
+    text("UP+Z  JUMP KICK", W / 2 - 40, 205, 2);
+    text("DOWN+Z  CROUCH PUNCH", W / 2 - 52, 220, 2);
+
+    // Blink "PRESS START"
+    titleBlink = (titleBlink || 0) + 1;
+    if (titleBlink % 40 < 25) {
+      text("PRESS ENTER TO START", W / 2 - 50, 260, 3);
+    }
+
+    // Hi-Score
+    if (hiScore > 0) {
+      text("HI-SCORE " + String(hiScore).padStart(7, "0"), W / 2 - 40, 290, 2);
+    }
+
+    // Copyright line
+    text("GRAYBOX DEMO 2024", W / 2 - 44, 306, 1);
+  }
+
+  function drawGameOver() {
+    // Draw game in background
+    drawGame();
+
+    // Overlay
+    rectf(W / 2 - 70, H / 2 - 30, 140, 60, 0);
+    rect(W / 2 - 70, H / 2 - 30, 140, 60, 2);
+    rect(W / 2 - 68, H / 2 - 28, 136, 56, 1);
+
+    text("GAME OVER", W / 2 - 24, H / 2 - 16, 3);
+    text("SCORE " + String(score).padStart(7, "0"), W / 2 - 30, H / 2, 2);
+
+    if (gameOverTimer <= 60 && API.frame % 30 < 20) {
+      text("PRESS ENTER", W / 2 - 28, H / 2 + 16, 3);
+    }
+  }
+
+  function drawWin() {
+    cls(0);
+
+    rect(60, 40, W - 120, 100, 3);
+    rect(62, 42, W - 124, 96, 2);
+
+    text("CONGRATULATIONS!", W / 2 - 42, 60, 3);
+    text("YOU HAVE RESCUED", W / 2 - 42, 80, 2);
+    text("THE PRINCESS!", W / 2 - 34, 96, 2);
+    text("SCORE " + String(score).padStart(7, "0"), W / 2 - 30, 116, 3);
+
+    // Player celebration
+    sprT(1, W / 2 - 4, 180, false, false);
+    sprT(6, W / 2 - 4, 188, false, false);
+
+    if (gameOverTimer <= 60 && API.frame % 30 < 20) {
+      text("PRESS ENTER", W / 2 - 28, 220, 3);
+    }
+  }
+
+  // --- Main update ---
+  API._update = function() {
+    if (state === "title") {
+      if (btnp("start")) {
+        state = "play";
+        resetGame();
+        ensureAudio();
+      }
+    } else if (state === "play") {
+      updateGame();
+    } else if (state === "gameover") {
+      gameOverTimer--;
+      if (gameOverTimer <= 0 && btnp("start")) {
+        state = "title";
+      }
+    } else if (state === "win") {
+      gameOverTimer--;
+      if (gameOverTimer <= 0 && btnp("start")) {
+        if (score > hiScore) hiScore = score;
+        state = "title";
+      }
+    }
+  };
+
+  // --- Main draw ---
+  API._draw = function() {
+    if (state === "title") {
+      drawTitle();
+    } else if (state === "play") {
+      drawGame();
+    } else if (state === "gameover") {
+      drawGameOver();
+    } else if (state === "win") {
+      drawWin();
+    }
+  };
+
+  // --- Boot ---
+  titleBlink = 0;
+  gameOverTimer = 0;
+  setInterval(tick, 1000 / FPS);
+})();
+</script>
+</body>
+</html>

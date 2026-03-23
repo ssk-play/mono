@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Moon Patrol</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>←→</span> SPEED &nbsp;&nbsp; <span>Z</span> JUMP &nbsp;&nbsp; <span>X</span> SHOOT &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.sprTrans = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx]; if(c===0) continue;
+      const dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Moon Patrol Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, sprTrans, text: drawText, btn, btnp, note, stop, rnd, flr,
+          abs: _abs, min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+
+  // 1: Moon buggy body
+  defSprite(1,
+    "00000000" +
+    "00033000" +
+    "00333300" +
+    "03333330" +
+    "33322330" +
+    "33322330" +
+    "03333300" +
+    "00000000"
+  );
+
+  // 2: Moon buggy wheel
+  defSprite(2,
+    "00000000" +
+    "00000000" +
+    "00033000" +
+    "00322300" +
+    "03211230" +
+    "00322300" +
+    "00033000" +
+    "00000000"
+  );
+
+  // 3: Buggy turret/antenna
+  defSprite(3,
+    "00000000" +
+    "00030000" +
+    "00030000" +
+    "00330000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 4: UFO
+  defSprite(4,
+    "00000000" +
+    "00333300" +
+    "03222230" +
+    "33333333" +
+    "32323232" +
+    "03333330" +
+    "00011000" +
+    "00000000"
+  );
+
+  // 5: Forward bullet
+  defSprite(5,
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00033300" +
+    "00033300" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 6: Upward bullet
+  defSprite(6,
+    "00030000" +
+    "00030000" +
+    "00020000" +
+    "00020000" +
+    "00010000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 7: Enemy bomb
+  defSprite(7,
+    "00000000" +
+    "00010000" +
+    "00020000" +
+    "00232000" +
+    "00232000" +
+    "00020000" +
+    "00030000" +
+    "00000000"
+  );
+
+  // 8: Rock obstacle
+  defSprite(8,
+    "00000000" +
+    "00000000" +
+    "00022000" +
+    "00233200" +
+    "02333320" +
+    "23333332" +
+    "33222233" +
+    "32111123"
+  );
+
+  // 9: Mine obstacle
+  defSprite(9,
+    "00000000" +
+    "00030000" +
+    "00303000" +
+    "00333000" +
+    "03232300" +
+    "03333300" +
+    "00333000" +
+    "00000000"
+  );
+
+  // 10: Explosion frame 1
+  defSprite(10,
+    "00000000" +
+    "00200100" +
+    "01002000" +
+    "00031000" +
+    "00130200" +
+    "01000010" +
+    "00100000" +
+    "00000000"
+  );
+
+  // 11: Explosion frame 2
+  defSprite(11,
+    "20010020" +
+    "01000010" +
+    "00203200" +
+    "03033030" +
+    "00232000" +
+    "01000300" +
+    "20001001" +
+    "00200010"
+  );
+
+  // 12: Life icon (small buggy)
+  defSprite(12,
+    "00000000" +
+    "00000000" +
+    "00330000" +
+    "03333300" +
+    "33322330" +
+    "03030300" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 13: Checkpoint flag
+  defSprite(13,
+    "00000000" +
+    "03333000" +
+    "03223000" +
+    "03333000" +
+    "03000000" +
+    "03000000" +
+    "03000000" +
+    "03000000"
+  );
+
+  // --- Game Constants ---
+  const GROUND_Y = 260;
+  const BUGGY_Y = GROUND_Y - 16;
+  const SCROLL_SPEED = 2;
+  const JUMP_POWER = -7;
+  const GRAVITY = 0.4;
+  const CHECKPOINT_DIST = 800;
+
+  // --- Game State ---
+  let state = "title";
+  let scrollX, scrollSpeed, distance;
+  let buggy, bullets, bombs, ufos, explosions, particles;
+  let terrain, obstacles, checkpoints;
+  let score, lives, checkpoint;
+  let shootCooldown, invincible;
+  let titleBounce;
+
+  // Parallax layers: far mountains, mid hills
+  let mountainSeed, hillSeed;
+
+  function seededRandom(seed) {
+    let s = seed;
+    return function() {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      return (s >> 16) / 32768;
+    };
+  }
+
+  // Generate terrain: array of ground heights indexed by world X tile
+  // Also generate craters (gaps in the ground)
+  let craters = [];  // {x, w} in world coords
+  let groundRocks = []; // {x} in world coords
+
+  function generateTerrain(startTile, count) {
+    const rng = seededRandom(startTile * 7 + 42);
+    for (let i = 0; i < count; i++) {
+      const tx = startTile + i;
+      const wx = tx * 8;
+      // Random craters
+      if (rng() < 0.03 && wx > 200) {
+        const cw = flr(rng() * 3 + 2) * 8;
+        craters.push({ x: wx, w: cw });
+      }
+      // Random rocks
+      if (rng() < 0.02 && wx > 150) {
+        groundRocks.push({ x: wx, alive: true });
+      }
+    }
+  }
+
+  function resetGame() {
+    scrollX = 0;
+    scrollSpeed = SCROLL_SPEED;
+    distance = 0;
+    buggy = {
+      x: 80, y: BUGGY_Y,
+      vy: 0, onGround: true, jumping: false,
+      wheelAnim: 0
+    };
+    bullets = [];
+    bombs = [];
+    ufos = [];
+    explosions = [];
+    particles = [];
+    craters = [];
+    groundRocks = [];
+    score = 0;
+    lives = 3;
+    checkpoint = 0;
+    shootCooldown = 0;
+    invincible = 0;
+    mountainSeed = flr(rnd(10000));
+    hillSeed = flr(rnd(10000));
+
+    // Pre-generate terrain ahead
+    generateTerrain(0, 200);
+  }
+
+  function addExplosion(x, y) {
+    explosions.push({ x, y, timer: 12 });
+    for (let i = 0; i < 6; i++)
+      particles.push({
+        x: x + 4, y: y + 4,
+        vx: rnd(4) - 2, vy: rnd(4) - 2,
+        life: 6 + flr(rnd(10)),
+        color: flr(rnd(3)) + 1
+      });
+  }
+
+  function shootSound() { note(0, "E5", 0.03); setTimeout(() => note(0, "G5", 0.02), 30); }
+  function jumpSound() { note(1, "C5", 0.05); setTimeout(() => note(1, "E5", 0.04), 40); }
+  function hitSound() { note(1, "C3", 0.06); setTimeout(() => note(1, "E3", 0.05), 40); }
+  function deathSound() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function checkpointSound() {
+    note(0, "C5", 0.08);
+    setTimeout(() => note(0, "E5", 0.08), 80);
+    setTimeout(() => note(0, "G5", 0.08), 160);
+    setTimeout(() => note(0, "C6", 0.12), 240);
+  }
+
+  function isCrater(wx) {
+    for (const c of craters) {
+      if (wx >= c.x && wx < c.x + c.w) return true;
+    }
+    return false;
+  }
+
+  function spawnUFO() {
+    const dir = rnd(1) < 0.5 ? 1 : -1;
+    ufos.push({
+      x: dir === 1 ? scrollX - 20 : scrollX + W + 20,
+      y: 40 + rnd(60),
+      vx: dir * (1.5 + rnd(1.5)),
+      vy: 0,
+      sinOffset: rnd(6.28),
+      alive: true,
+      shootTimer: 30 + flr(rnd(60)),
+      type: rnd(1) < 0.3 ? "bomber" : "normal"
+    });
+  }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      if (btnp("a") || btnp("start")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.1);
+        setTimeout(() => note(0, "E5", 0.1), 100);
+        setTimeout(() => note(0, "G5", 0.15), 200);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        explosions[i].timer--;
+        if (explosions[i].timer <= 0) explosions.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    // --- Play state ---
+
+    // Scrolling
+    if (btn("right")) scrollSpeed = SCROLL_SPEED + 1.5;
+    else if (btn("left")) scrollSpeed = _max(0.5, SCROLL_SPEED - 1);
+    else scrollSpeed = SCROLL_SPEED;
+
+    scrollX += scrollSpeed;
+    distance += scrollSpeed;
+
+    // Buggy wheel animation
+    buggy.wheelAnim += scrollSpeed * 0.5;
+
+    // Jump
+    if (btnp("a") && buggy.onGround) {
+      buggy.vy = JUMP_POWER;
+      buggy.onGround = false;
+      buggy.jumping = true;
+      jumpSound();
+    }
+
+    // Apply gravity
+    if (!buggy.onGround) {
+      buggy.vy += GRAVITY;
+      buggy.y += buggy.vy;
+      // Land on ground
+      if (buggy.y >= BUGGY_Y) {
+        // Check if landing in a crater
+        const buggyWorldX = scrollX + buggy.x;
+        const inCrater = isCrater(buggyWorldX) && isCrater(buggyWorldX + 14);
+        if (inCrater) {
+          // Fall into crater
+          killBuggy();
+          return;
+        }
+        buggy.y = BUGGY_Y;
+        buggy.vy = 0;
+        buggy.onGround = true;
+        buggy.jumping = false;
+      }
+    } else {
+      // Check if walking into a crater
+      const buggyWorldX = scrollX + buggy.x;
+      if (isCrater(buggyWorldX + 4) && isCrater(buggyWorldX + 12)) {
+        killBuggy();
+        return;
+      }
+    }
+
+    // Shoot
+    if (shootCooldown > 0) shootCooldown--;
+    if (btnp("b") && shootCooldown <= 0) {
+      // Fire forward bullet
+      bullets.push({
+        x: scrollX + buggy.x + 16, y: buggy.y + 4,
+        vx: 5, vy: 0, type: "fwd"
+      });
+      // Fire upward bullet
+      bullets.push({
+        x: scrollX + buggy.x + 8, y: buggy.y - 4,
+        vx: 0, vy: -5, type: "up"
+      });
+      shootCooldown = 6;
+      shootSound();
+    }
+
+    // Update bullets (world coords)
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.x += b.vx;
+      b.y += b.vy;
+      const sx = b.x - scrollX;
+      if (sx < -20 || sx > W + 20 || b.y < -20) {
+        bullets.splice(i, 1);
+      }
+    }
+
+    // Invincibility timer
+    if (invincible > 0) invincible--;
+
+    // Generate more terrain as we scroll
+    const currentTile = flr(scrollX / 8);
+    const furthestGenerated = flr((scrollX + W + 400) / 8);
+    if (furthestGenerated > (craters.length > 0 ? flr((craters[craters.length - 1].x + 100) / 8) : 200)) {
+      generateTerrain(furthestGenerated - 50, 100);
+    }
+
+    // Clean up old craters and rocks behind us
+    while (craters.length > 0 && craters[0].x + craters[0].w < scrollX - 50) craters.shift();
+    while (groundRocks.length > 0 && groundRocks[0].x < scrollX - 50) groundRocks.shift();
+
+    // Spawn UFOs
+    if (API.frame % 60 === 0 && rnd(1) < 0.4 + distance * 0.00005) {
+      spawnUFO();
+    }
+
+    // Update UFOs
+    for (let i = ufos.length - 1; i >= 0; i--) {
+      const u = ufos[i];
+      u.x += u.vx;
+      u.y += sin(API.frame * 0.08 + u.sinOffset) * 0.5;
+      u.shootTimer--;
+
+      // UFO drops bomb
+      if (u.shootTimer <= 0 && u.alive) {
+        const sx = u.x - scrollX;
+        if (sx > 20 && sx < W - 20) {
+          bombs.push({ x: u.x + 4, y: u.y + 8, vy: 1.5 + rnd(1) });
+          u.shootTimer = 40 + flr(rnd(60));
+        }
+      }
+
+      // Remove off-screen UFOs
+      const sx = u.x - scrollX;
+      if (sx < -40 || sx > W + 40) {
+        ufos.splice(i, 1);
+        continue;
+      }
+
+      // Bullet-UFO collision
+      if (u.alive) {
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if (b.x > u.x - 2 && b.x < u.x + 10 && b.y > u.y - 2 && b.y < u.y + 10) {
+            bullets.splice(j, 1);
+            u.alive = false;
+            addExplosion(u.x - scrollX, u.y);
+            score += 100;
+            hitSound();
+            ufos.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
+
+    // Update bombs
+    for (let i = bombs.length - 1; i >= 0; i--) {
+      const b = bombs[i];
+      b.vy += 0.05;
+      b.y += b.vy;
+      const sx = b.x - scrollX;
+
+      // Bomb hits ground
+      if (b.y >= GROUND_Y - 4) {
+        addExplosion(sx, b.y - 4);
+        bombs.splice(i, 1);
+        // Check if near buggy
+        if (_abs(sx - buggy.x) < 16 && invincible <= 0) {
+          killBuggy();
+        }
+        continue;
+      }
+
+      // Bomb hits buggy
+      if (invincible <= 0 &&
+          sx > buggy.x - 4 && sx < buggy.x + 18 &&
+          b.y > buggy.y - 2 && b.y < buggy.y + 14) {
+        bombs.splice(i, 1);
+        killBuggy();
+        continue;
+      }
+
+      // Bullet-bomb collision
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const bl = bullets[j];
+        if (bl.x > b.x - 4 && bl.x < b.x + 4 && bl.y > b.y - 4 && bl.y < b.y + 4) {
+          bullets.splice(j, 1);
+          addExplosion(sx, b.y);
+          score += 50;
+          bombs.splice(i, 1);
+          hitSound();
+          break;
+        }
+      }
+    }
+
+    // Check rock collisions
+    for (let i = groundRocks.length - 1; i >= 0; i--) {
+      const r = groundRocks[i];
+      if (!r.alive) continue;
+      const sx = r.x - scrollX;
+
+      // Bullet-rock collision
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (b.type === "fwd" && b.x > r.x - 2 && b.x < r.x + 10 && b.y > GROUND_Y - 12 && b.y < GROUND_Y + 4) {
+          bullets.splice(j, 1);
+          r.alive = false;
+          addExplosion(sx, GROUND_Y - 10);
+          score += 30;
+          hitSound();
+          break;
+        }
+      }
+
+      // Buggy-rock collision
+      if (r.alive && invincible <= 0) {
+        if (sx > buggy.x - 6 && sx < buggy.x + 14 && buggy.onGround) {
+          killBuggy();
+          r.alive = false;
+          addExplosion(sx, GROUND_Y - 10);
+        }
+      }
+    }
+
+    // Checkpoint system
+    const currentCheckpoint = flr(distance / CHECKPOINT_DIST);
+    if (currentCheckpoint > checkpoint && currentCheckpoint <= 26) {
+      checkpoint = currentCheckpoint;
+      score += 500;
+      checkpointSound();
+    }
+
+    // Explosions
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].timer--;
+      if (explosions[i].timer <= 0) explosions.splice(i, 1);
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  };
+
+  function killBuggy() {
+    if (invincible > 0) return;
+    lives--;
+    addExplosion(buggy.x, buggy.y);
+    deathSound();
+    if (lives <= 0) {
+      state = "gameover";
+    } else {
+      // Respawn
+      buggy.y = BUGGY_Y;
+      buggy.vy = 0;
+      buggy.onGround = true;
+      buggy.jumping = false;
+      invincible = 90;
+    }
+  }
+
+  // ============================================================
+  // Draw
+  // ============================================================
+
+  // Mountain height generator (seeded by X position)
+  function getMountainH(wx, seed) {
+    const s1 = sin(wx * 0.003 + seed) * 30;
+    const s2 = sin(wx * 0.007 + seed * 2.1) * 15;
+    const s3 = sin(wx * 0.015 + seed * 0.7) * 8;
+    return s1 + s2 + s3;
+  }
+
+  function getHillH(wx, seed) {
+    const s1 = sin(wx * 0.005 + seed) * 20;
+    const s2 = sin(wx * 0.012 + seed * 1.3) * 10;
+    return s1 + s2;
+  }
+
+  API._draw = function() {
+    cls(0);
+
+    // --- Stars ---
+    const starSeed = seededRandom(123);
+    for (let i = 0; i < 60; i++) {
+      const sx = flr(starSeed() * W);
+      const sy = flr(starSeed() * 120);
+      const bright = starSeed() < 0.3 ? 2 : 1;
+      // Twinkle
+      if (bright === 2 && (API.frame + i * 7) % 40 < 5) continue;
+      pix(sx, sy, bright);
+    }
+
+    if (state === "title") {
+      // Title screen
+
+      // Draw some mountains for atmosphere
+      for (let x = 0; x < W; x++) {
+        const mh = getMountainH(x * 3, 42);
+        const baseY = 180 + mh;
+        for (let y = flr(baseY); y < 220; y++) {
+          if (y >= 0 && y < H) pix(x, y, 1);
+        }
+      }
+
+      // Ground
+      rectf(0, 220, W, 100, 1);
+      line(0, 220, W, 220, 2);
+
+      // Title text
+      const ty = 60 + sin(API.frame * 0.05) * 4;
+      drawText("MOON PATROL", 170, flr(ty), 3);
+      drawText("MOON PATROL", 171, flr(ty) + 1, 1);
+      rectf(155, flr(ty) + 12, 170, 1, 2);
+
+      // Korean subtitle
+      drawText("- LUNAR PATROL -", 163, flr(ty) + 18, 2);
+
+      // Draw buggy on title
+      const bx = 200;
+      const by = 212;
+      spr(1, bx, by);
+      spr(1, bx + 8, by);
+      spr(3, bx + 6, by - 6);
+      spr(2, bx - 2, by + 6);
+      spr(2, bx + 10, by + 6);
+
+      // UFOs flying overhead
+      const u1x = (API.frame * 2) % (W + 40) - 20;
+      const u1y = 100 + sin(API.frame * 0.07) * 8;
+      spr(4, flr(u1x), flr(u1y));
+      const u2x = ((API.frame * 2) + 180) % (W + 40) - 20;
+      const u2y = 120 + sin(API.frame * 0.09 + 2) * 6;
+      spr(4, flr(u2x), flr(u2y));
+
+      if (flr(API.frame / 20) % 2 === 0) drawText("PRESS START", 195, 260, 3);
+
+      // Score table
+      drawText("-HOW TO PLAY-", 183, 280, 2);
+      drawText("Z:JUMP  X:SHOOT  LR:SPEED", 142, 292, 2);
+
+      drawText("GRAYBOX DEMO V0.1", 168, 310, 1);
+      return;
+    }
+
+    if (state === "gameover") {
+      for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+      for (const e of explosions) {
+        const sprId = e.timer > 6 ? 10 : 11;
+        sprTrans(sprId, flr(e.x), flr(e.y));
+      }
+
+      drawText("GAME OVER", 195, 100, 3);
+      drawText("SCORE: " + score, 195, 125, 2);
+      drawText("CHECKPOINT: " + String.fromCharCode(65 + min(checkpoint, 25)), 175, 140, 2);
+      drawText("DISTANCE: " + flr(distance), 175, 155, 1);
+      if (flr(API.frame / 20) % 2 === 0) drawText("PRESS START", 193, 200, 3);
+      return;
+    }
+
+    // --- Play state rendering ---
+
+    // Parallax background: far mountains (scroll at 0.15x)
+    const mScrollX = scrollX * 0.15;
+    for (let x = 0; x < W; x++) {
+      const wx = x + mScrollX;
+      const mh = getMountainH(wx, mountainSeed);
+      const baseY = 160 + mh;
+      for (let y = flr(baseY); y < 200; y++) {
+        if (y >= 0 && y < H) pix(x, y, 1);
+      }
+    }
+
+    // Parallax: mid hills (scroll at 0.4x)
+    const hScrollX = scrollX * 0.4;
+    for (let x = 0; x < W; x++) {
+      const wx = x + hScrollX;
+      const hh = getHillH(wx, hillSeed);
+      const baseY = 200 + hh;
+      for (let y = flr(baseY); y < 230; y++) {
+        if (y >= 0 && y < H) pix(x, y, 1);
+      }
+    }
+
+    // Ground surface
+    rectf(0, GROUND_Y, W, H - GROUND_Y, 1);
+
+    // Ground surface line
+    for (let x = 0; x < W; x++) {
+      const wx = x + scrollX;
+      if (!isCrater(wx)) {
+        pix(x, GROUND_Y, 2);
+        // Ground texture
+        if ((wx + flr(sin(wx * 0.3) * 2)) % 7 === 0) pix(x, GROUND_Y + 1, 2);
+        if (wx % 13 === 0) pix(x, GROUND_Y + 3, 0);
+        if (wx % 19 === 0) pix(x, GROUND_Y + 5, 0);
+      } else {
+        // Draw crater as a gap (black)
+        for (let y = GROUND_Y; y < H; y++) pix(x, y, 0);
+        // Crater edge walls
+        const craterObj = craters.find(c => wx >= c.x && wx < c.x + c.w);
+        if (craterObj) {
+          if (wx === craterObj.x || wx === craterObj.x + craterObj.w - 1) {
+            for (let y = GROUND_Y; y < GROUND_Y + 30; y++) pix(x, y, 1);
+          }
+          // Crater bottom
+          if (GROUND_Y + 28 < H) pix(x, GROUND_Y + 28, 1);
+        }
+      }
+    }
+
+    // Draw rocks on ground
+    for (const r of groundRocks) {
+      if (!r.alive) continue;
+      const sx = r.x - scrollX;
+      if (sx > -10 && sx < W + 10) {
+        sprTrans(8, flr(sx), GROUND_Y - 7);
+      }
+    }
+
+    // Draw checkpoint markers
+    for (let cp = 1; cp <= 26; cp++) {
+      const cpx = cp * CHECKPOINT_DIST - scrollX;
+      if (cpx > -10 && cpx < W + 10) {
+        // Flag pole
+        line(flr(cpx), GROUND_Y - 20, flr(cpx), GROUND_Y, 2);
+        sprTrans(13, flr(cpx), GROUND_Y - 20);
+        // Letter
+        const letter = String.fromCharCode(64 + cp);
+        drawText(letter, flr(cpx) - 2, GROUND_Y + 3, 3);
+      }
+    }
+
+    // Draw checkpoint progress bar at top
+    const progressY = 14;
+    rectf(40, progressY, 400, 5, 0);
+    rect(40, progressY, 400, 5, 1);
+    // Mark checkpoints A-Z on bar
+    for (let i = 0; i < 26; i++) {
+      const px = 40 + flr(i * 400 / 26);
+      pix(px, progressY + 4, 2);
+      if (i <= checkpoint) {
+        rectf(40, progressY + 1, flr(min(checkpoint, 25) * 400 / 26), 3, 2);
+      }
+    }
+    // Current position marker
+    const posMarker = 40 + flr((distance % (26 * CHECKPOINT_DIST)) / (26 * CHECKPOINT_DIST) * 400);
+    rectf(posMarker - 1, progressY - 1, 3, 7, 3);
+
+    // Progress letters
+    if (checkpoint > 0) {
+      drawText(String.fromCharCode(64 + min(checkpoint, 26)), 30, progressY - 1, 3);
+    }
+    const nextCp = min(checkpoint + 1, 26);
+    drawText(String.fromCharCode(64 + nextCp), 445, progressY - 1, 2);
+
+    // Draw UFOs
+    for (const u of ufos) {
+      if (!u.alive) continue;
+      const sx = u.x - scrollX;
+      if (sx > -10 && sx < W + 10) {
+        sprTrans(4, flr(sx), flr(u.y));
+      }
+    }
+
+    // Draw bombs
+    for (const b of bombs) {
+      const sx = b.x - scrollX;
+      if (sx > -10 && sx < W + 10) {
+        sprTrans(7, flr(sx), flr(b.y));
+      }
+    }
+
+    // Draw bullets
+    for (const b of bullets) {
+      const sx = b.x - scrollX;
+      if (sx > -10 && sx < W + 10) {
+        const sprId = b.type === "fwd" ? 5 : 6;
+        sprTrans(sprId, flr(sx), flr(b.y));
+      }
+    }
+
+    // Draw buggy (blink when invincible)
+    if (invincible <= 0 || flr(API.frame / 3) % 2 === 0) {
+      // Turret/antenna
+      sprTrans(3, flr(buggy.x + 4), flr(buggy.y - 6));
+      // Body (two 8x8 sprites side by side for a 16-wide buggy)
+      spr(1, flr(buggy.x), flr(buggy.y));
+      spr(1, flr(buggy.x + 8), flr(buggy.y), true);
+
+      // Wheels (animated rotation via alternating sprites)
+      if (buggy.onGround) {
+        const wheelFrame = flr(buggy.wheelAnim) % 2;
+        spr(2, flr(buggy.x - 1), flr(buggy.y + 6));
+        spr(2, flr(buggy.x + 9), flr(buggy.y + 6));
+        // Dust particles when moving on ground
+        if (scrollSpeed > 1 && API.frame % 3 === 0) {
+          particles.push({
+            x: buggy.x - 2, y: GROUND_Y - 2,
+            vx: -rnd(2), vy: -rnd(1.5),
+            life: 5 + flr(rnd(5)),
+            color: 1
+          });
+        }
+      } else {
+        spr(2, flr(buggy.x - 1), flr(buggy.y + 6));
+        spr(2, flr(buggy.x + 9), flr(buggy.y + 6));
+      }
+    }
+
+    // Explosions
+    for (const e of explosions) {
+      const sprId = e.timer > 6 ? 10 : 11;
+      sprTrans(sprId, flr(e.x), flr(e.y));
+    }
+
+    // Particles
+    for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+    // HUD
+    rectf(0, 0, W, 12, 0);
+    drawText("SCORE:" + score, 4, 3, 3);
+    drawText("PT:" + String.fromCharCode(65 + min(checkpoint, 25)), W / 2 - 15, 3, 2);
+    // Lives
+    for (let i = 0; i < lives; i++) sprTrans(12, W - 40 + i * 12, 1);
+
+    // Distance display
+    drawText(flr(distance) + "M", W - 60, 3, 1);
+
+    // Checkpoint announcement
+    if (checkpoint > 0 && distance - checkpoint * CHECKPOINT_DIST < 100) {
+      const alpha = 1 - (distance - checkpoint * CHECKPOINT_DIST) / 100;
+      if (alpha > 0) {
+        drawText("CHECKPOINT " + String.fromCharCode(64 + min(checkpoint, 26)), 168, 40, 3);
+      }
+    }
+  };
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

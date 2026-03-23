@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Time Pilot</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>←→</span> ROTATE &nbsp;&nbsp; <span>↑</span> THRUST &nbsp;&nbsp; <span>Z</span> SHOOT &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  // Rotated sprite drawing - draws 8x8 sprite rotated by angle (radians)
+  API.sprRot = function(id, cx, cy, angle) {
+    const s = sprites[id]; if (!s) return;
+    const cosA = Math.cos(angle), sinA = Math.sin(angle);
+    for (let py = -5; py <= 5; py++) {
+      for (let px = -5; px <= 5; px++) {
+        const srcX = Math.floor(cosA * px + sinA * py + 3.5);
+        const srcY = Math.floor(-sinA * px + cosA * py + 3.5);
+        if (srcX < 0 || srcX >= 8 || srcY < 0 || srcY >= 8) continue;
+        const c = s[srcY * 8 + srcX];
+        const dx = Math.floor(cx + px), dy = Math.floor(cy + py);
+        if (dx >= 0 && dx < W && dy >= 0 && dy < H) buf32[dy * W + dx] = COLOR_U32[c];
+      }
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+  API.atan2 = Math.atan2;
+  API.PI = Math.PI;
+  API.sqrt = Math.sqrt;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Time Pilot Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, sprRot, text, btn, btnp, note, stop, rnd, flr,
+          abs: _abs, min, max: _max, sin, cos, atan2, PI, sqrt } = API;
+
+  // --- Sprites ---
+
+  // 1: Player plane (facing right) - sleek fighter
+  defSprite(1,
+    "00033000" +
+    "00333300" +
+    "03333330" +
+    "33333332" +
+    "33333332" +
+    "03333330" +
+    "00333300" +
+    "00033000"
+  );
+
+  // 2: 1910 Biplane - boxy with struts
+  defSprite(2,
+    "00011000" +
+    "01111110" +
+    "00011000" +
+    "00111100" +
+    "01111110" +
+    "00011000" +
+    "00010000" +
+    "00000000"
+  );
+
+  // 3: 1940 Prop fighter - WW2 style
+  defSprite(3,
+    "00010000" +
+    "00111000" +
+    "01111100" +
+    "11111112" +
+    "11111112" +
+    "01111100" +
+    "00111000" +
+    "00010000"
+  );
+
+  // 4: 1970 Jet - delta wing
+  defSprite(4,
+    "00001000" +
+    "00011100" +
+    "00111110" +
+    "01111111" +
+    "01111111" +
+    "00111110" +
+    "00011100" +
+    "00001000"
+  );
+
+  // 5: 1982 Helicopter
+  defSprite(5,
+    "33333330" +
+    "00130000" +
+    "01133100" +
+    "01133100" +
+    "01111100" +
+    "00111000" +
+    "00020000" +
+    "00222000"
+  );
+
+  // 6: 2001 UFO - flying saucer
+  defSprite(6,
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "32323230" +
+    "33333330" +
+    "03333300" +
+    "00333000" +
+    "00010100"
+  );
+
+  // 7: Player bullet
+  defSprite(7,
+    "00000000" +
+    "00000000" +
+    "00030000" +
+    "00333000" +
+    "00333000" +
+    "00030000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 8: Enemy bullet
+  defSprite(8,
+    "00000000" +
+    "00000000" +
+    "00010000" +
+    "00121000" +
+    "00121000" +
+    "00010000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 9: Explosion frame 1
+  defSprite(9,
+    "00000000" +
+    "00200100" +
+    "01003000" +
+    "00031000" +
+    "00130200" +
+    "01000010" +
+    "00100000" +
+    "00000000"
+  );
+
+  // 10: Explosion frame 2
+  defSprite(10,
+    "20010020" +
+    "01000010" +
+    "00203200" +
+    "03033030" +
+    "00232000" +
+    "01000300" +
+    "20001001" +
+    "00200010"
+  );
+
+  // 11: Parachutist
+  defSprite(11,
+    "03333300" +
+    "33333330" +
+    "03333300" +
+    "00100000" +
+    "01310000" +
+    "00100000" +
+    "01010000" +
+    "01010000"
+  );
+
+  // 12: Life icon
+  defSprite(12,
+    "00000000" +
+    "00033000" +
+    "00333300" +
+    "03333330" +
+    "03333330" +
+    "00333300" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 13: Cloud small
+  defSprite(13,
+    "00000000" +
+    "00110000" +
+    "01111000" +
+    "11111100" +
+    "11111110" +
+    "01111100" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 14: Cloud big part
+  defSprite(14,
+    "00011000" +
+    "01111100" +
+    "11111110" +
+    "11111111" +
+    "11111111" +
+    "11111110" +
+    "01111100" +
+    "00000000"
+  );
+
+  // 15: Boss indicator arrow
+  defSprite(15,
+    "00030000" +
+    "00330000" +
+    "03330000" +
+    "33330000" +
+    "33330000" +
+    "03330000" +
+    "00330000" +
+    "00030000"
+  );
+
+  // --- ERA config ---
+  const ERAS = [
+    { name: "1910", label: "1910 BIPLANES",   enemySpr: 2, bgCol: 1, killReq: 20, eSpeed: 1.2, eShootRate: 90, bossHP: 8  },
+    { name: "1940", label: "1940 FIGHTERS",   enemySpr: 3, bgCol: 1, killReq: 25, eSpeed: 1.6, eShootRate: 70, bossHP: 10 },
+    { name: "1970", label: "1970 JETS",       enemySpr: 4, bgCol: 1, killReq: 30, eSpeed: 2.0, eShootRate: 55, bossHP: 12 },
+    { name: "1982", label: "1982 HELICOPTERS",enemySpr: 5, bgCol: 1, killReq: 30, eSpeed: 1.8, eShootRate: 45, bossHP: 14 },
+    { name: "2001", label: "2001 UFOS",       enemySpr: 6, bgCol: 0, killReq: 35, eSpeed: 2.4, eShootRate: 35, bossHP: 16 },
+  ];
+
+  // --- Game state ---
+  let state = "title";
+  let player, bullets, eBullets, enemies, explosions, particles, clouds, parachutists;
+  let score, lives, era, killCount, bossActive, boss;
+  let shootCooldown, invTimer, camX, camY;
+  let spawnTimer, eraTransition, eraTransTimer;
+  let titleAngle;
+
+  function resetGame() {
+    player = { x: 0, y: 0, angle: -PI/2, speed: 0 };
+    bullets = [];
+    eBullets = [];
+    enemies = [];
+    explosions = [];
+    particles = [];
+    parachutists = [];
+    score = 0;
+    lives = 3;
+    era = 0;
+    killCount = 0;
+    bossActive = false;
+    boss = null;
+    shootCooldown = 0;
+    invTimer = 0;
+    camX = 0;
+    camY = 0;
+    spawnTimer = 0;
+    eraTransition = false;
+    eraTransTimer = 0;
+    titleAngle = 0;
+    clouds = [];
+    for (let i = 0; i < 20; i++) {
+      clouds.push({
+        x: rnd(1200) - 600,
+        y: rnd(1000) - 500,
+        size: flr(rnd(3)),  // 0=small, 1=med, 2=large
+        shade: flr(rnd(2)) + 1  // 1 or 2
+      });
+    }
+  }
+
+  function wrapAngle(a) {
+    while (a > PI) a -= 2 * PI;
+    while (a < -PI) a += 2 * PI;
+    return a;
+  }
+
+  function dist(x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    return sqrt(dx * dx + dy * dy);
+  }
+
+  function spawnEnemy() {
+    const e = ERAS[era];
+    // Spawn from edge of screen (in world coords)
+    const side = flr(rnd(4));
+    let ex, ey, ea;
+    const margin = 40;
+    if (side === 0) { ex = camX - margin; ey = camY + rnd(H); ea = rnd(PI) - PI/2; } // left
+    else if (side === 1) { ex = camX + W + margin; ey = camY + rnd(H); ea = PI/2 + rnd(PI); } // right
+    else if (side === 2) { ex = camX + rnd(W); ey = camY - margin; ea = rnd(PI); } // top
+    else { ex = camX + rnd(W); ey = camY + H + margin; ea = -rnd(PI); } // bottom
+
+    enemies.push({
+      x: ex, y: ey,
+      angle: ea,
+      speed: e.eSpeed + rnd(0.6),
+      turnRate: 0.02 + rnd(0.02),
+      type: e.enemySpr,
+      hp: 1,
+      pts: 100 + era * 100,
+      shootTimer: flr(rnd(e.eShootRate)) + 30,
+      behavior: flr(rnd(3)), // 0=chase, 1=circle, 2=straight
+      lifeTime: 0,
+    });
+  }
+
+  function spawnBoss() {
+    const e = ERAS[era];
+    bossActive = true;
+    // Spawn boss from right side
+    boss = {
+      x: camX + W + 60,
+      y: camY + H / 2,
+      angle: PI,
+      speed: e.eSpeed * 0.8,
+      turnRate: 0.015,
+      type: e.enemySpr,
+      hp: e.bossHP,
+      maxHP: e.bossHP,
+      pts: 2000 + era * 1000,
+      shootTimer: 20,
+      isBoss: true,
+      flashTimer: 0,
+      phaseTimer: 0,
+    };
+  }
+
+  function spawnParachutist(x, y) {
+    parachutists.push({
+      x: x, y: y,
+      vy: 0.5 + rnd(0.3),
+      vx: rnd(1) - 0.5,
+      alive: true,
+      timer: 300,
+    });
+  }
+
+  function addExplosion(x, y, big) {
+    explosions.push({ x: x, y: y, timer: big ? 20 : 12 });
+    const count = big ? 16 : 8;
+    for (let i = 0; i < count; i++) {
+      const spd = big ? 3 : 2;
+      particles.push({
+        x: x + 4, y: y + 4,
+        vx: rnd(spd * 2) - spd, vy: rnd(spd * 2) - spd,
+        life: 8 + flr(rnd(12)),
+        color: flr(rnd(3)) + 1
+      });
+    }
+  }
+
+  // --- Sound effects ---
+  function sfxShoot() { note(0, "E6", 0.03); }
+  function sfxHit() { note(1, "C3", 0.05); setTimeout(() => note(1, "E3", 0.04), 30); }
+  function sfxBossHit() { note(1, "A3", 0.03); }
+  function sfxDeath() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function sfxBossDead() {
+    note(0, "C5", 0.08);
+    setTimeout(() => note(0, "E5", 0.08), 80);
+    setTimeout(() => note(0, "G5", 0.08), 160);
+    setTimeout(() => note(0, "C6", 0.15), 240);
+    setTimeout(() => note(1, "C6", 0.15), 320);
+  }
+  function sfxRescue() {
+    note(0, "G5", 0.06);
+    setTimeout(() => note(0, "B5", 0.06), 60);
+    setTimeout(() => note(0, "D6", 0.1), 120);
+  }
+  function sfxEraChange() {
+    note(0, "C5", 0.1); note(1, "E5", 0.1);
+    setTimeout(() => { note(0, "G5", 0.1); note(1, "B5", 0.1); }, 150);
+    setTimeout(() => { note(0, "C6", 0.2); note(1, "E6", 0.2); }, 300);
+  }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      titleAngle += 0.02;
+      if (btnp("a") || btnp("start")) {
+        state = "play";
+        resetGame();
+        invTimer = 60;
+        note(0, "C5", 0.1);
+        setTimeout(() => note(0, "E5", 0.1), 100);
+        setTimeout(() => note(0, "G5", 0.15), 200);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    // --- Era transition ---
+    if (eraTransition) {
+      eraTransTimer--;
+      if (eraTransTimer <= 0) {
+        eraTransition = false;
+        era = min(era + 1, ERAS.length - 1);
+        killCount = 0;
+        bossActive = false;
+        boss = null;
+        enemies = [];
+        eBullets = [];
+      }
+      return;
+    }
+
+    // --- Player rotation ---
+    const rotSpeed = 0.08;
+    if (btn("left")) player.angle -= rotSpeed;
+    if (btn("right")) player.angle += rotSpeed;
+    player.angle = wrapAngle(player.angle);
+
+    // --- Player thrust ---
+    const maxSpeed = 3.5;
+    const accel = 0.15;
+    const drag = 0.97;
+    if (btn("up")) {
+      player.speed = min(player.speed + accel, maxSpeed);
+    } else {
+      player.speed *= drag;
+      if (player.speed < 0.1) player.speed = 0;
+    }
+
+    // Always move slightly forward (min drift)
+    const effSpeed = _max(player.speed, 1.0);
+    player.x += cos(player.angle) * effSpeed;
+    player.y += sin(player.angle) * effSpeed;
+
+    // Camera follows player (player stays centered)
+    camX = player.x - W / 2;
+    camY = player.y - H / 2;
+
+    // Invincibility timer
+    if (invTimer > 0) invTimer--;
+
+    // --- Player shoot ---
+    if (shootCooldown > 0) shootCooldown--;
+    if (btn("a") && shootCooldown <= 0) {
+      const bx = player.x + cos(player.angle) * 6;
+      const by = player.y + sin(player.angle) * 6;
+      bullets.push({
+        x: bx, y: by,
+        vx: cos(player.angle) * 6 + cos(player.angle) * player.speed * 0.3,
+        vy: sin(player.angle) * 6 + sin(player.angle) * player.speed * 0.3,
+        life: 40,
+      });
+      shootCooldown = 6;
+      sfxShoot();
+    }
+
+    // --- Update bullets ---
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.x += b.vx; b.y += b.vy; b.life--;
+      if (b.life <= 0) { bullets.splice(i, 1); continue; }
+    }
+
+    // --- Spawn enemies ---
+    if (!bossActive) {
+      spawnTimer--;
+      if (spawnTimer <= 0) {
+        const maxE = 6 + era * 2;
+        if (enemies.length < maxE) spawnEnemy();
+        spawnTimer = _max(10, 30 - era * 3) + flr(rnd(20));
+      }
+    }
+
+    // --- Update enemies ---
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      e.lifeTime++;
+
+      // Behavior
+      const dx = player.x - e.x;
+      const dy = player.y - e.y;
+      const targetAngle = atan2(dy, dx);
+      let angleDiff = wrapAngle(targetAngle - e.angle);
+
+      if (e.behavior === 0) {
+        // Chase player
+        if (angleDiff > 0) e.angle += e.turnRate;
+        else e.angle -= e.turnRate;
+      } else if (e.behavior === 1) {
+        // Circle around
+        const circTarget = wrapAngle(targetAngle + PI / 2);
+        const cd = wrapAngle(circTarget - e.angle);
+        if (cd > 0) e.angle += e.turnRate;
+        else e.angle -= e.turnRate;
+      }
+      // behavior 2 = fly straight
+
+      e.angle = wrapAngle(e.angle);
+      e.x += cos(e.angle) * e.speed;
+      e.y += sin(e.angle) * e.speed;
+
+      // Remove if too far from player
+      if (dist(e.x, e.y, player.x, player.y) > 400) {
+        enemies.splice(i, 1);
+        continue;
+      }
+
+      // Shooting
+      e.shootTimer--;
+      if (e.shootTimer <= 0) {
+        const shootAngle = atan2(player.y - e.y, player.x - e.x);
+        eBullets.push({
+          x: e.x, y: e.y,
+          vx: cos(shootAngle) * 3,
+          vy: sin(shootAngle) * 3,
+          life: 60,
+        });
+        e.shootTimer = ERAS[era].eShootRate + flr(rnd(40));
+      }
+
+      // Bullet-enemy collision
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (dist(b.x, b.y, e.x, e.y) < 7) {
+          bullets.splice(j, 1);
+          e.hp--;
+          if (e.hp <= 0) {
+            addExplosion(e.x - 4, e.y - 4, false);
+            score += e.pts;
+            killCount++;
+            sfxHit();
+            // Chance to spawn parachutist
+            if (rnd(1) < 0.15) spawnParachutist(e.x, e.y);
+            enemies.splice(i, 1);
+
+            // Check boss spawn
+            if (!bossActive && killCount >= ERAS[era].killReq) {
+              spawnBoss();
+            }
+          } else {
+            sfxBossHit();
+          }
+          break;
+        }
+      }
+    }
+
+    // --- Update boss ---
+    if (bossActive && boss) {
+      boss.phaseTimer++;
+      boss.flashTimer = _max(0, boss.flashTimer - 1);
+
+      // Boss AI: circle and strafe
+      const dx = player.x - boss.x;
+      const dy = player.y - boss.y;
+      const targetAngle = atan2(dy, dx);
+      const d = dist(boss.x, boss.y, player.x, player.y);
+
+      let desiredAngle;
+      if (d > 150) {
+        desiredAngle = targetAngle;
+      } else if (d < 80) {
+        desiredAngle = wrapAngle(targetAngle + PI); // flee
+      } else {
+        desiredAngle = wrapAngle(targetAngle + PI / 2); // circle
+      }
+
+      const ad = wrapAngle(desiredAngle - boss.angle);
+      if (ad > 0) boss.angle += boss.turnRate;
+      else boss.angle -= boss.turnRate;
+      boss.angle = wrapAngle(boss.angle);
+
+      boss.x += cos(boss.angle) * boss.speed;
+      boss.y += sin(boss.angle) * boss.speed;
+
+      // Boss shoots more aggressively
+      boss.shootTimer--;
+      if (boss.shootTimer <= 0) {
+        const sa = atan2(player.y - boss.y, player.x - boss.x);
+        for (let s = -1; s <= 1; s++) {
+          eBullets.push({
+            x: boss.x, y: boss.y,
+            vx: cos(sa + s * 0.3) * 3.5,
+            vy: sin(sa + s * 0.3) * 3.5,
+            life: 80,
+          });
+        }
+        boss.shootTimer = 25 + flr(rnd(15));
+      }
+
+      // Bullet-boss collision
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (dist(b.x, b.y, boss.x, boss.y) < 10) {
+          bullets.splice(j, 1);
+          boss.hp--;
+          boss.flashTimer = 4;
+          score += 50;
+          sfxBossHit();
+          if (boss.hp <= 0) {
+            addExplosion(boss.x - 4, boss.y - 4, true);
+            addExplosion(boss.x + 4, boss.y + 2, true);
+            addExplosion(boss.x - 2, boss.y + 6, true);
+            score += boss.pts;
+            sfxBossDead();
+            // Era transition
+            eraTransition = true;
+            eraTransTimer = 120;
+            sfxEraChange();
+            boss = null;
+            bossActive = false;
+            enemies = [];
+            eBullets = [];
+          }
+          break;
+        }
+      }
+    }
+
+    // --- Update enemy bullets ---
+    for (let i = eBullets.length - 1; i >= 0; i--) {
+      const b = eBullets[i];
+      b.x += b.vx; b.y += b.vy; b.life--;
+      if (b.life <= 0) { eBullets.splice(i, 1); continue; }
+
+      // Hit player
+      if (invTimer <= 0 && dist(b.x, b.y, player.x, player.y) < 5) {
+        eBullets.splice(i, 1);
+        playerDeath();
+      }
+    }
+
+    // --- Enemy-player collision ---
+    if (invTimer <= 0) {
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (dist(e.x, e.y, player.x, player.y) < 6) {
+          addExplosion(e.x - 4, e.y - 4, false);
+          enemies.splice(i, 1);
+          playerDeath();
+          break;
+        }
+      }
+      // Boss collision
+      if (boss && dist(boss.x, boss.y, player.x, player.y) < 10) {
+        playerDeath();
+      }
+    }
+
+    // --- Update parachutists ---
+    for (let i = parachutists.length - 1; i >= 0; i--) {
+      const p = parachutists[i];
+      p.y += p.vy;
+      p.x += p.vx;
+      p.timer--;
+      if (p.timer <= 0) { parachutists.splice(i, 1); continue; }
+
+      // Rescue check
+      if (dist(p.x, p.y, player.x, player.y) < 12) {
+        score += 500;
+        sfxRescue();
+        // Small particle burst
+        for (let k = 0; k < 6; k++) {
+          particles.push({
+            x: p.x, y: p.y,
+            vx: rnd(2) - 1, vy: rnd(2) - 1,
+            life: 10 + flr(rnd(6)), color: 3
+          });
+        }
+        parachutists.splice(i, 1);
+      }
+    }
+
+    // --- Update explosions and particles ---
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].timer--;
+      if (explosions[i].timer <= 0) explosions.splice(i, 1);
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  };
+
+  function playerDeath() {
+    addExplosion(player.x - 4, player.y - 4, true);
+    sfxDeath();
+    lives--;
+    invTimer = 90;
+    player.speed = 0;
+    if (lives <= 0) {
+      state = "gameover";
+    }
+  }
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    // Background color based on era
+    const bgCol = era === 4 ? 0 : 0;
+    cls(bgCol);
+
+    if (state === "title") {
+      drawTitle();
+      return;
+    }
+
+    if (state === "gameover") {
+      drawGameOver();
+      return;
+    }
+
+    // --- Draw clouds (parallax) ---
+    for (const c of clouds) {
+      // World to screen
+      const sx = c.x - camX * 0.6;
+      const sy = c.y - camY * 0.6;
+      // Wrap clouds
+      const wx = ((sx % (W + 100)) + W + 100) % (W + 100) - 50;
+      const wy = ((sy % (H + 80)) + H + 80) % (H + 80) - 40;
+
+      if (c.size === 0) {
+        spr(13, flr(wx), flr(wy));
+      } else if (c.size === 1) {
+        spr(14, flr(wx), flr(wy));
+        spr(13, flr(wx) + 7, flr(wy) + 1);
+      } else {
+        spr(14, flr(wx), flr(wy));
+        spr(14, flr(wx) + 7, flr(wy) - 1);
+        spr(13, flr(wx) + 14, flr(wy) + 1);
+      }
+    }
+
+    // --- Draw parachutists ---
+    for (const p of parachutists) {
+      const sx = p.x - camX, sy = p.y - camY;
+      if (sx > -8 && sx < W + 8 && sy > -8 && sy < H + 8) {
+        spr(11, flr(sx) - 4, flr(sy) - 4);
+      }
+    }
+
+    // --- Draw enemy bullets ---
+    for (const b of eBullets) {
+      const sx = b.x - camX, sy = b.y - camY;
+      if (sx > -4 && sx < W + 4 && sy > -4 && sy < H + 4) {
+        spr(8, flr(sx) - 4, flr(sy) - 4);
+      }
+    }
+
+    // --- Draw enemies ---
+    for (const e of enemies) {
+      const sx = e.x - camX, sy = e.y - camY;
+      if (sx > -12 && sx < W + 12 && sy > -12 && sy < H + 12) {
+        sprRot(e.type, flr(sx), flr(sy), e.angle);
+      }
+    }
+
+    // --- Draw boss ---
+    if (boss) {
+      const sx = boss.x - camX, sy = boss.y - camY;
+      if (sx > -20 && sx < W + 20 && sy > -20 && sy < H + 20) {
+        if (boss.flashTimer > 0 && flr(API.frame / 2) % 2) {
+          // Draw bigger for boss (2x)
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              sprRot(boss.type, flr(sx) + dx, flr(sy) + dy, boss.angle);
+            }
+          }
+        } else {
+          // Draw boss larger: 3 overlapping sprites
+          sprRot(boss.type, flr(sx), flr(sy), boss.angle);
+          sprRot(boss.type, flr(sx) + 1, flr(sy), boss.angle);
+          sprRot(boss.type, flr(sx), flr(sy) + 1, boss.angle);
+        }
+        // Boss HP bar
+        const barW = 30;
+        const hpRatio = boss.hp / boss.maxHP;
+        rectf(flr(sx) - barW/2 + 4, flr(sy) - 10, barW, 3, 1);
+        rectf(flr(sx) - barW/2 + 4, flr(sy) - 10, flr(barW * hpRatio), 3, 3);
+      } else {
+        // Boss off screen - draw arrow indicator
+        const ax = _max(8, min(W - 8, sx));
+        const ay = _max(16, min(H - 8, sy));
+        circf(flr(ax), flr(ay), 3, 3);
+      }
+    }
+
+    // --- Draw player bullets ---
+    for (const b of bullets) {
+      const sx = b.x - camX, sy = b.y - camY;
+      if (sx > -4 && sx < W + 4 && sy > -4 && sy < H + 4) {
+        spr(7, flr(sx) - 4, flr(sy) - 4);
+      }
+    }
+
+    // --- Draw player ---
+    if (invTimer <= 0 || flr(API.frame / 3) % 2 === 0) {
+      const px = W / 2, py = H / 2;
+      sprRot(1, px, py, player.angle);
+      // Thrust flame
+      if (btn("up")) {
+        const fx = px - cos(player.angle) * 7;
+        const fy = py - sin(player.angle) * 7;
+        const fc = (API.frame % 4 < 2) ? 2 : 3;
+        pix(flr(fx), flr(fy), fc);
+        pix(flr(fx) - cos(player.angle) * 1, flr(fy) - sin(player.angle) * 1, 1);
+      }
+    }
+
+    // --- Draw explosions ---
+    for (const e of explosions) {
+      const sx = e.x - camX, sy = e.y - camY;
+      if (sx > -16 && sx < W + 16 && sy > -16 && sy < H + 16) {
+        const sprId = e.timer > 6 ? 9 : 10;
+        spr(sprId, flr(sx), flr(sy));
+      }
+    }
+
+    // --- Draw particles ---
+    for (const p of particles) {
+      const sx = p.x - camX, sy = p.y - camY;
+      pix(flr(sx), flr(sy), p.color);
+    }
+
+    // --- HUD ---
+    drawHUD();
+
+    // --- Era transition overlay ---
+    if (eraTransition) {
+      const nextEra = min(era + 1, ERAS.length - 1);
+      rectf(0, H/2 - 30, W, 60, 0);
+      rect(0, H/2 - 30, W, 60, 2);
+      text("TIME WARP!", W/2 - 25, H/2 - 20, 3);
+      text(ERAS[nextEra].label, W/2 - flr(ERAS[nextEra].label.length * 2.5), H/2 - 5, 3);
+      if (eraTransTimer < 80) {
+        const barW = flr((80 - eraTransTimer) / 80 * (W - 40));
+        rectf(20, H/2 + 12, barW, 4, 2);
+      }
+    }
+  };
+
+  function drawHUD() {
+    // Top bar
+    rectf(0, 0, W, 14, 0);
+    line(0, 14, W, 14, 1);
+
+    text("SCORE:" + score, 4, 4, 3);
+    text(ERAS[era].name, W/2 - 10, 4, 2);
+
+    // Lives
+    for (let i = 0; i < lives; i++) spr(12, W - 40 + i * 10, 3);
+
+    // Kill counter / boss bar
+    const e = ERAS[era];
+    if (!bossActive) {
+      const progress = min(killCount, e.killReq);
+      text("KILLS:" + progress + "/" + e.killReq, 4, H - 10, 2);
+    } else {
+      text("BOSS!", 4, H - 10, 3);
+    }
+
+    // Era name bottom right
+    text(ERAS[era].label, W - ERAS[era].label.length * 5 - 4, H - 10, 1);
+
+    // Compass / direction indicator
+    const cx = W - 20, cy = 30;
+    circ(cx, cy, 10, 1);
+    const nx = cx + cos(player.angle) * 8;
+    const ny = cy + sin(player.angle) * 8;
+    line(cx, cy, flr(nx), flr(ny), 3);
+    pix(cx, cy, 2);
+  }
+
+  function drawTitle() {
+    cls(0);
+
+    // Animated clouds in background
+    for (let i = 0; i < 8; i++) {
+      const cx = ((API.frame * 0.5 + i * 70) % (W + 40)) - 20;
+      const cy = 60 + i * 30 + sin(API.frame * 0.02 + i) * 10;
+      spr(13, flr(cx), flr(cy));
+    }
+
+    const ty = 50 + sin(API.frame * 0.04) * 4;
+
+    // Title text with shadow
+    text("TIME PILOT", W/2 - 27, flr(ty), 1);
+    text("TIME PILOT", W/2 - 28, flr(ty) - 1, 3);
+
+    rectf(W/2 - 40, flr(ty) + 10, 80, 1, 2);
+
+    // Rotating plane display
+    const showAngle = API.frame * 0.05;
+    sprRot(1, W/2, flr(ty) + 40, showAngle);
+
+    // Show era enemies
+    const ey = flr(ty) + 65;
+    for (let i = 0; i < 5; i++) {
+      const ex = W/2 - 50 + i * 25;
+      const bob = sin(API.frame * 0.06 + i * 1.2) * 3;
+      sprRot(ERAS[i].enemySpr, ex, ey + flr(bob), -PI/2 + sin(API.frame * 0.03 + i) * 0.3);
+    }
+
+    // Blink prompt
+    if (flr(API.frame / 20) % 2 === 0) {
+      text("PRESS Z TO START", W/2 - 42, 180, 3);
+    }
+
+    // Era list
+    text("-TIME ERAS-", W/2 - 30, 200, 2);
+    for (let i = 0; i < ERAS.length; i++) {
+      const col = (i === flr(API.frame / 40) % 5) ? 3 : 2;
+      text(ERAS[i].label, W/2 - flr(ERAS[i].label.length * 2.5), 215 + i * 12, col);
+    }
+
+    // Controls info
+    text("ARROWS:ROTATE/THRUST  Z:FIRE", W/2 - 73, 290, 1);
+    text("GRAYBOX DEMO V0.1", W/2 - 43, 308, 1);
+  }
+
+  function drawGameOver() {
+    cls(0);
+
+    // Drifting particles from last death
+    for (const p of particles) {
+      pix(flr(p.x - camX), flr(p.y - camY), p.color);
+    }
+
+    text("GAME OVER", W/2 - 25, 100, 3);
+    text("FINAL SCORE: " + score, W/2 - 35, 130, 2);
+    text("ERA: " + ERAS[era].name, W/2 - 18, 150, 2);
+
+    if (flr(API.frame / 20) % 2 === 0) {
+      text("PRESS Z TO CONTINUE", W/2 - 50, 200, 3);
+    }
+  }
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Frogger</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>ARROWS</span> HOP &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.sprT = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx]; if(c===0) continue;
+      const dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Frogger Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+  // 1: Frog facing up
+  defSprite(1,
+    "02000020" +
+    "23200232" +
+    "02333320" +
+    "00333300" +
+    "02333320" +
+    "23322332" +
+    "20022002" +
+    "00000000"
+  );
+  // 2: Frog facing left
+  defSprite(2,
+    "00200000" +
+    "22320000" +
+    "00233300" +
+    "00233320" +
+    "00233320" +
+    "00233300" +
+    "22320000" +
+    "00200000"
+  );
+  // 3: Frog facing right
+  defSprite(3,
+    "00000200" +
+    "00002322" +
+    "00333200" +
+    "02333200" +
+    "02333200" +
+    "00333200" +
+    "00002322" +
+    "00000200"
+  );
+  // 4: Frog facing down
+  defSprite(4,
+    "00000000" +
+    "20022002" +
+    "23322332" +
+    "02333320" +
+    "00333300" +
+    "02333320" +
+    "23200232" +
+    "02000020"
+  );
+
+  // 10: Car body (facing right, 16px wide = 2 sprites)
+  defSprite(10,
+    "00000000" +
+    "00011110" +
+    "01122221" +
+    "12222222" +
+    "12232232" +
+    "01222221" +
+    "00211200" +
+    "00000000"
+  );
+  defSprite(11,
+    "00000000" +
+    "11100000" +
+    "22221100" +
+    "22222210" +
+    "22222210" +
+    "22221100" +
+    "01120000" +
+    "00000000"
+  );
+
+  // 12: Truck cab (left side)
+  defSprite(12,
+    "00000000" +
+    "00001111" +
+    "00013333" +
+    "01133333" +
+    "01133333" +
+    "00013333" +
+    "00012112" +
+    "00000000"
+  );
+  // 13: Truck body
+  defSprite(13,
+    "00000000" +
+    "11111111" +
+    "31111113" +
+    "31111113" +
+    "31111113" +
+    "31111113" +
+    "21121112" +
+    "00000000"
+  );
+  // 14: Truck tail
+  defSprite(14,
+    "00000000" +
+    "11110000" +
+    "33310000" +
+    "33331100" +
+    "33331100" +
+    "33310000" +
+    "11210000" +
+    "00000000"
+  );
+
+  // 15: Race car (fast, small)
+  defSprite(15,
+    "00000000" +
+    "00003300" +
+    "00333330" +
+    "03333333" +
+    "33233233" +
+    "03333333" +
+    "00122100" +
+    "00000000"
+  );
+
+  // 20: Log left end
+  defSprite(20,
+    "00000001" +
+    "00001122" +
+    "00012222" +
+    "01222221" +
+    "01222212" +
+    "00012222" +
+    "00001122" +
+    "00000001"
+  );
+  // 21: Log middle
+  defSprite(21,
+    "11111111" +
+    "22222222" +
+    "22212222" +
+    "12222122" +
+    "22221222" +
+    "22222221" +
+    "22222222" +
+    "11111111"
+  );
+  // 22: Log right end
+  defSprite(22,
+    "10000000" +
+    "22110000" +
+    "22221000" +
+    "12222210" +
+    "22222210" +
+    "22221000" +
+    "22110000" +
+    "10000000"
+  );
+
+  // 25: Turtle (swimming)
+  defSprite(25,
+    "00000000" +
+    "00122100" +
+    "01222210" +
+    "12212210" +
+    "12222210" +
+    "01222210" +
+    "00122100" +
+    "00000000"
+  );
+  // 26: Turtle diving (submerging)
+  defSprite(26,
+    "00000000" +
+    "00000000" +
+    "00111100" +
+    "01111110" +
+    "01111110" +
+    "00111100" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 30: Home slot empty marker
+  defSprite(30,
+    "00333300" +
+    "03000030" +
+    "30000003" +
+    "30000003" +
+    "30000003" +
+    "30000003" +
+    "03000030" +
+    "00333300"
+  );
+  // 31: Frog in home
+  defSprite(31,
+    "00333300" +
+    "03323030" +
+    "30233303" +
+    "30033003" +
+    "30233303" +
+    "33300333" +
+    "03000030" +
+    "00333300"
+  );
+
+  // 35: Bonus fly
+  defSprite(35,
+    "00000000" +
+    "03000300" +
+    "00303000" +
+    "00333300" +
+    "03333300" +
+    "00333000" +
+    "03000300" +
+    "00000000"
+  );
+
+  // 40: Water splash 1
+  defSprite(40,
+    "00000000" +
+    "00200200" +
+    "02000020" +
+    "00033000" +
+    "00033000" +
+    "02000020" +
+    "00200200" +
+    "00000000"
+  );
+  // 41: Water splash 2
+  defSprite(41,
+    "20000002" +
+    "01000010" +
+    "00200200" +
+    "00022000" +
+    "00022000" +
+    "00200200" +
+    "01000010" +
+    "20000002"
+  );
+  // 42: Squished
+  defSprite(42,
+    "00000000" +
+    "00000000" +
+    "32200223" +
+    "03333330" +
+    "03333330" +
+    "32200223" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 50: Life icon frog
+  defSprite(50,
+    "00000000" +
+    "02000020" +
+    "02322320" +
+    "00333300" +
+    "02322320" +
+    "20000002" +
+    "00000000" +
+    "00000000"
+  );
+
+  // --- Layout constants ---
+  // Using 16px rows. 320 / 16 = 20 rows.
+  // Row 0:      Score HUD
+  // Row 1:      Home slots
+  // Row 2-6:    River (5 lanes)
+  // Row 7:      Safe median
+  // Row 8-12:   Road (5 lanes)
+  // Row 13:     Start zone
+  // Row 14:     Timer bar
+  // Rows 15-19: Below screen / unused
+
+  const CELL = 16;
+  const COLS = W / CELL;  // 30
+  const HUD_Y = 0;
+  const HOME_ROW = 1;
+  const RIVER_TOP = 2;
+  const RIVER_BOT = 6;
+  const MEDIAN_ROW = 7;
+  const ROAD_TOP = 8;
+  const ROAD_BOT = 12;
+  const START_ROW = 13;
+  const TIMER_ROW = 14;
+
+  const HOME_COUNT = 5;
+  // Home slot X positions (in pixels, center of each slot)
+  const HOME_XS = [];
+  for (let i = 0; i < HOME_COUNT; i++) {
+    HOME_XS.push(48 + i * 96); // evenly across 480px
+  }
+
+  const TIMER_MAX = 30 * FPS;
+
+  // --- Lane definitions per level ---
+  function buildLanes(lvl) {
+    const s = 0.5 + lvl * 0.12;
+    return {
+      road: [
+        { row: ROAD_TOP,     spd: s * 0.7,  dir:-1, kind:"car",   n:4, gap:120 },
+        { row: ROAD_TOP + 1, spd: s * 1.2,  dir: 1, kind:"race",  n:3, gap:160 },
+        { row: ROAD_TOP + 2, spd: s * 0.5,  dir:-1, kind:"truck", n:3, gap:160 },
+        { row: ROAD_TOP + 3, spd: s * 1.0,  dir: 1, kind:"car",   n:4, gap:120 },
+        { row: ROAD_TOP + 4, spd: s * 0.9,  dir:-1, kind:"race",  n:3, gap:140 },
+      ],
+      river: [
+        { row: RIVER_TOP,     spd: s * 0.6, dir: 1, kind:"log3",   n:3, gap:160 },
+        { row: RIVER_TOP + 1, spd: s * 0.9, dir:-1, kind:"turtle", n:4, gap:100 },
+        { row: RIVER_TOP + 2, spd: s * 0.4, dir: 1, kind:"log5",   n:2, gap:240 },
+        { row: RIVER_TOP + 3, spd: s * 0.8, dir:-1, kind:"turtle", n:3, gap:130 },
+        { row: RIVER_TOP + 4, spd: s * 0.7, dir: 1, kind:"log4",   n:3, gap:160 },
+      ]
+    };
+  }
+
+  // Object pixel widths
+  function objWidth(kind) {
+    switch(kind) {
+      case "car": return 16;
+      case "race": return 12;
+      case "truck": return 24;
+      case "log3": return 24;
+      case "log4": return 32;
+      case "log5": return 40;
+      case "turtle": return 24;
+      default: return 16;
+    }
+  }
+
+  // --- State ---
+  let state = "title";
+  let frogX, frogY;       // pixel position of frog (top-left of 8x8 sprite area within cell)
+  let frogDir;             // 0=up,1=left,2=right,3=down
+  let frogRow;             // current grid row
+  let score, lives, level;
+  let timer;
+  let homeFilled;
+  let roadObjs, riverObjs;
+  let bonusFly;
+  let deathTimer, deathType;
+  let levelComplete;
+  let hiScore = 0;
+  let gameOverTimer;
+  let hopAnim; // frames of hop animation remaining
+
+  function snapToGrid(px) { return Math.round(px / CELL) * CELL; }
+
+  function resetFrog() {
+    frogRow = START_ROW;
+    frogX = Math.floor(COLS / 2) * CELL;
+    frogY = frogRow * CELL;
+    frogDir = 0;
+    timer = TIMER_MAX;
+    deathTimer = 0;
+    hopAnim = 0;
+  }
+
+  function initLevel() {
+    const cfg = buildLanes(level);
+    roadObjs = [];
+    riverObjs = [];
+    bonusFly = null;
+
+    for (const lane of cfg.road) {
+      const w = objWidth(lane.kind);
+      for (let i = 0; i < lane.n; i++) {
+        roadObjs.push({
+          x: i * lane.gap,
+          y: lane.row * CELL,
+          row: lane.row,
+          spd: lane.spd,
+          dir: lane.dir,
+          kind: lane.kind,
+          w: w
+        });
+      }
+    }
+    for (const lane of cfg.river) {
+      const w = objWidth(lane.kind);
+      for (let i = 0; i < lane.n; i++) {
+        riverObjs.push({
+          x: i * lane.gap,
+          y: lane.row * CELL,
+          row: lane.row,
+          spd: lane.spd,
+          dir: lane.dir,
+          kind: lane.kind,
+          w: w,
+          diving: false,
+          diveTimer: 120 + flr(rnd(200))
+        });
+      }
+    }
+  }
+
+  function resetGame() {
+    score = 0;
+    lives = 3;
+    level = 1;
+    homeFilled = new Array(HOME_COUNT).fill(false);
+    levelComplete = 0;
+    initLevel();
+    resetFrog();
+  }
+
+  // --- Collision ---
+  function overlap(ax, aw, bx, bw) {
+    return ax < bx + bw && ax + aw > bx;
+  }
+
+  function killFrog(type) {
+    deathTimer = 40;
+    deathType = type;
+    if (type === "water") {
+      note(0, "E2", 0.2);
+    } else {
+      note(0, "C2", 0.15);
+      note(1, "D#2", 0.1);
+    }
+  }
+
+  // --- Update ---
+  function updatePlay() {
+    if (deathTimer > 0) {
+      deathTimer--;
+      if (deathTimer === 0) {
+        lives--;
+        if (lives <= 0) {
+          if (score > hiScore) hiScore = score;
+          state = "gameover";
+          gameOverTimer = 0;
+          return;
+        }
+        resetFrog();
+      }
+      return;
+    }
+
+    if (levelComplete > 0) {
+      levelComplete--;
+      if (levelComplete === 0) {
+        level++;
+        homeFilled = new Array(HOME_COUNT).fill(false);
+        initLevel();
+        resetFrog();
+      }
+      return;
+    }
+
+    // Timer countdown
+    timer--;
+    if (timer <= 0) {
+      killFrog("time");
+      return;
+    }
+
+    // Move road objects
+    for (const o of roadObjs) {
+      o.x += o.spd * o.dir;
+      if (o.dir > 0 && o.x > W + 16) o.x = -o.w - 16;
+      if (o.dir < 0 && o.x < -o.w - 16) o.x = W + 16;
+    }
+
+    // Move river objects
+    for (const o of riverObjs) {
+      o.x += o.spd * o.dir;
+      if (o.dir > 0 && o.x > W + 16) o.x = -o.w - 16;
+      if (o.dir < 0 && o.x < -o.w - 16) o.x = W + 16;
+      // Turtle diving cycle
+      if (o.kind === "turtle") {
+        o.diveTimer--;
+        if (o.diveTimer <= 0) {
+          o.diving = !o.diving;
+          o.diveTimer = o.diving ? (50 + flr(rnd(30))) : (150 + flr(rnd(100)));
+        }
+      }
+    }
+
+    // Bonus fly spawning
+    if (!bonusFly && Math.random() < 0.003) {
+      const logs = riverObjs.filter(o => o.kind.startsWith("log"));
+      if (logs.length > 0) {
+        const lo = logs[flr(rnd(logs.length))];
+        bonusFly = { ref: lo, offX: flr(rnd(lo.w - 8)), timer: 250 };
+      }
+    }
+    if (bonusFly) {
+      bonusFly.timer--;
+      if (bonusFly.timer <= 0) bonusFly = null;
+    }
+
+    // Hop animation
+    if (hopAnim > 0) hopAnim--;
+
+    // Frog input (one cell per press)
+    if (hopAnim === 0) {
+      let moved = false;
+      if (btnp("up") && frogRow > HOME_ROW) {
+        frogRow--; frogY -= CELL; frogDir = 0; moved = true;
+      } else if (btnp("down") && frogRow < START_ROW) {
+        frogRow++; frogY += CELL; frogDir = 3; moved = true;
+      } else if (btnp("left")) {
+        frogX -= CELL; frogDir = 1; moved = true;
+      } else if (btnp("right")) {
+        frogX += CELL; frogDir = 2; moved = true;
+      }
+      if (moved) {
+        hopAnim = 4;
+        note(0, "G4", 0.04);
+        // Forward progress bonus
+        if (frogDir === 0) score += 10;
+      }
+    }
+
+    // Clamp X to screen
+    if (frogX < 0) frogX = 0;
+    if (frogX > W - CELL) frogX = W - CELL;
+
+    // Frog hitbox: 10px wide centered in CELL (frogX+3 to frogX+13)
+    const fhx = frogX + 3;
+    const fhw = 10;
+
+    // --- Road collision ---
+    if (frogRow >= ROAD_TOP && frogRow <= ROAD_BOT) {
+      for (const o of roadObjs) {
+        if (o.row !== frogRow) continue;
+        if (overlap(fhx, fhw, o.x, o.w)) {
+          killFrog("car");
+          return;
+        }
+      }
+    }
+
+    // --- River logic ---
+    if (frogRow >= RIVER_TOP && frogRow <= RIVER_BOT) {
+      let onPlatform = false;
+      let rideSpd = 0;
+      for (const o of riverObjs) {
+        if (o.row !== frogRow) continue;
+        if (o.kind === "turtle" && o.diving) continue;
+        if (overlap(fhx, fhw, o.x, o.w)) {
+          onPlatform = true;
+          rideSpd = o.spd * o.dir;
+          break;
+        }
+      }
+      if (!onPlatform) {
+        killFrog("water");
+        return;
+      }
+      frogX += rideSpd;
+      // Off screen while riding = death
+      if (frogX < -CELL || frogX > W) {
+        killFrog("water");
+        return;
+      }
+    }
+
+    // --- Bonus fly pickup ---
+    if (bonusFly) {
+      const fo = bonusFly.ref;
+      const flyPx = fo.x + bonusFly.offX;
+      if (frogRow === fo.row && _abs(frogX - flyPx) < 12) {
+        score += 200;
+        note(0, "E5", 0.08);
+        note(1, "G5", 0.08);
+        bonusFly = null;
+      }
+    }
+
+    // --- Home row ---
+    if (frogRow === HOME_ROW) {
+      let landed = false;
+      for (let i = 0; i < HOME_COUNT; i++) {
+        if (homeFilled[i]) continue;
+        if (_abs(frogX + 8 - HOME_XS[i]) < 14) {
+          homeFilled[i] = true;
+          score += 50 + flr(timer / FPS) * 10;
+          note(0, "C5", 0.06);
+          setTimeout(() => { try { note(0, "E5", 0.06); } catch(e){} }, 80);
+          setTimeout(() => { try { note(0, "G5", 0.12); } catch(e){} }, 160);
+          landed = true;
+          break;
+        }
+      }
+      if (!landed) {
+        killFrog("wall");
+        return;
+      }
+      // All filled?
+      if (homeFilled.every(Boolean)) {
+        score += 1000;
+        levelComplete = 90;
+        note(1, "C5", 0.08);
+        setTimeout(() => { try { note(1, "E5", 0.08); } catch(e){} }, 100);
+        setTimeout(() => { try { note(1, "G5", 0.08); } catch(e){} }, 200);
+        setTimeout(() => { try { note(1, "C6", 0.2); } catch(e){} }, 300);
+      } else {
+        resetFrog();
+      }
+    }
+  }
+
+  // --- Drawing ---
+  function drawRoad() {
+    const y0 = ROAD_TOP * CELL;
+    const h = (ROAD_BOT - ROAD_TOP + 1) * CELL;
+    rectf(0, y0, W, h, 1);
+    // Lane dashes
+    for (let r = ROAD_TOP; r < ROAD_BOT; r++) {
+      const ly = (r + 1) * CELL - 1;
+      for (let x = 0; x < W; x += 16) {
+        line(x, ly, x + 8, ly, 2);
+      }
+    }
+    // Top and bottom curb
+    rectf(0, y0, W, 2, 2);
+    rectf(0, y0 + h - 2, W, 2, 2);
+  }
+
+  function drawRiver() {
+    const y0 = RIVER_TOP * CELL;
+    const h = (RIVER_BOT - RIVER_TOP + 1) * CELL;
+    rectf(0, y0, W, h, 0);
+    // Water texture
+    for (let ry = y0; ry < y0 + h; ry += 2) {
+      for (let rx = (ry + flr(API.frame * 0.5)) % 8; rx < W; rx += 8) {
+        pix(rx, ry, 1);
+      }
+    }
+  }
+
+  function drawMedian() {
+    const y = MEDIAN_ROW * CELL;
+    rectf(0, y, W, CELL, 1);
+    // Bushes / safe zone pattern
+    for (let x = 0; x < W; x += 10) {
+      rectf(x + 1, y + 3, 6, 10, 0);
+      rectf(x + 2, y + 4, 4, 8, 1);
+    }
+    // Label
+    text("SAFE", W / 2 - 10, y + 5, 2);
+  }
+
+  function drawStartZone() {
+    const y = START_ROW * CELL;
+    rectf(0, y, W, CELL, 0);
+    rectf(0, y, W, 2, 1);
+    for (let x = 0; x < W; x += 10) {
+      rectf(x + 1, y + 4, 6, 8, 1);
+    }
+  }
+
+  function drawHomes() {
+    const y = HOME_ROW * CELL;
+    // Hedge background
+    rectf(0, y, W, CELL, 0);
+    for (let x = 0; x < W; x++) {
+      let inSlot = false;
+      for (let i = 0; i < HOME_COUNT; i++) {
+        if (_abs(x - HOME_XS[i]) < 10) { inSlot = true; break; }
+      }
+      if (!inSlot) {
+        for (let dy = 0; dy < CELL; dy++) {
+          if ((x + dy) % 3 === 0) pix(x, y + dy, 1);
+          if ((x + dy + 1) % 5 === 0) pix(x, y + dy, 2);
+        }
+      }
+    }
+    // Slots
+    for (let i = 0; i < HOME_COUNT; i++) {
+      const sx = HOME_XS[i] - 8;
+      if (homeFilled[i]) {
+        sprT(31, sx, y + 4);
+      } else {
+        rectf(sx + 1, y + 2, 14, 12, 0);
+        rect(sx + 1, y + 2, 14, 12, 1);
+      }
+    }
+  }
+
+  function drawRiverObjs() {
+    for (const o of riverObjs) {
+      const py = o.y + 4;
+      if (o.kind === "turtle") {
+        const sid = o.diving ? 26 : 25;
+        for (let i = 0; i < 3; i++) sprT(sid, o.x + i * 8, py);
+      } else {
+        // Log
+        const segs = Math.round(o.w / 8);
+        sprT(20, o.x, py);
+        for (let i = 1; i < segs - 1; i++) sprT(21, o.x + i * 8, py);
+        sprT(22, o.x + (segs - 1) * 8, py);
+      }
+    }
+  }
+
+  function drawRoadObjs() {
+    for (const o of roadObjs) {
+      const py = o.y + 4;
+      const flip = o.dir < 0;
+      if (o.kind === "car") {
+        if (flip) { sprT(11, o.x, py, true); sprT(10, o.x + 8, py, true); }
+        else { sprT(10, o.x, py); sprT(11, o.x + 8, py); }
+      } else if (o.kind === "race") {
+        sprT(15, o.x + 2, py, flip);
+      } else if (o.kind === "truck") {
+        if (flip) { sprT(14, o.x, py, true); sprT(13, o.x + 8, py, true); sprT(12, o.x + 16, py, true); }
+        else { sprT(12, o.x, py); sprT(13, o.x + 8, py); sprT(14, o.x + 16, py); }
+      }
+    }
+  }
+
+  function drawFrog() {
+    if (deathTimer > 0) {
+      const dx = flr(frogX) + 4;
+      const dy = flr(frogY) + 4;
+      if (deathType === "water") {
+        sprT(deathTimer > 25 ? 40 : 41, dx, dy);
+      } else {
+        sprT(deathTimer > 25 ? 42 : 41, dx, dy);
+      }
+      return;
+    }
+    if (levelComplete > 0) return;
+
+    const dx = flr(frogX) + 4;
+    let dy = flr(frogY) + 4;
+    // Little hop animation
+    if (hopAnim > 0) dy -= hopAnim;
+    sprT([1, 2, 3, 4][frogDir], dx, dy);
+  }
+
+  function drawBonusFly() {
+    if (!bonusFly) return;
+    if (bonusFly.timer < 60 && API.frame % 8 < 4) return; // blink when about to vanish
+    const fo = bonusFly.ref;
+    sprT(35, fo.x + bonusFly.offX, fo.y + 4);
+  }
+
+  function drawHUD() {
+    rectf(0, 0, W, CELL, 0);
+    text("SCORE", 4, 2, 2);
+    text(String(score).padStart(6, "0"), 34, 2, 3);
+    text("HI", 170, 2, 2);
+    text(String(hiScore).padStart(6, "0"), 185, 2, 3);
+    text("LV " + level, 300, 2, 3);
+    // Lives
+    for (let i = 0; i < lives; i++) {
+      sprT(50, 400 + i * 12, 1);
+    }
+  }
+
+  function drawTimerBar() {
+    const y = TIMER_ROW * CELL;
+    rectf(0, y, W, CELL, 0);
+    text("TIME", 4, y + 5, 2);
+    const bx = 32;
+    const bw = W - 42;
+    rect(bx, y + 3, bw, 8, 1);
+    const fill = flr((timer / TIMER_MAX) * (bw - 2));
+    const col = timer < TIMER_MAX * 0.2 ? (API.frame % 8 < 4 ? 3 : 2) : 3;
+    if (fill > 0) rectf(bx + 1, y + 4, fill, 6, col);
+  }
+
+  function drawPlay() {
+    cls(0);
+    drawRiver();
+    drawRiverObjs();
+    drawBonusFly();
+    drawHomes();
+    drawMedian();
+    drawRoad();
+    drawRoadObjs();
+    drawStartZone();
+    drawFrog();
+    drawHUD();
+    drawTimerBar();
+
+    if (levelComplete > 0) {
+      const bx = W / 2 - 80;
+      const by = H / 2 - 20;
+      rectf(bx, by, 160, 40, 0);
+      rect(bx, by, 160, 40, 3);
+      text("LEVEL COMPLETE!", bx + 16, by + 8, 3);
+      text("BONUS +1000", bx + 28, by + 20, 2);
+    }
+  }
+
+  // --- Title screen ---
+  function drawTitle() {
+    cls(0);
+
+    // Animated river band
+    const ry = 90;
+    rectf(0, ry, W, 24, 0);
+    for (let y = ry; y < ry + 24; y += 2)
+      for (let x = (y + flr(API.frame * 0.5)) % 8; x < W; x += 8) pix(x, y, 1);
+    // Animated log
+    const logX = ((API.frame * 1.2) % (W + 40)) - 40;
+    sprT(20, logX, ry + 8); sprT(21, logX + 8, ry + 8); sprT(22, logX + 16, ry + 8);
+    // Frog on log
+    sprT(1, logX + 8, ry + 4);
+
+    // Animated road band
+    const roadY = 120;
+    rectf(0, roadY, W, 24, 1);
+    for (let x = 0; x < W; x += 16) line(x, roadY + 12, x + 8, roadY + 12, 2);
+    // Car
+    const carX = W - ((API.frame * 2) % (W + 32));
+    sprT(10, carX, roadY + 8); sprT(11, carX + 8, roadY + 8);
+
+    // Title
+    text("F R O G G E R", W / 2 - 48, 30, 3);
+
+    // Decorative frogs
+    const bob = flr(sin(API.frame * 0.1) * 2);
+    sprT(1, W / 2 - 4, 50 + bob);
+    sprT(2, W / 2 - 30, 56);
+    sprT(3, W / 2 + 22, 56);
+
+    text("HELP THE FROG CROSS", W / 2 - 50, 160, 2);
+    text("THE ROAD AND RIVER!", W / 2 - 48, 170, 2);
+
+    // Controls
+    text("ARROWS  HOP", W / 2 - 27, 200, 2);
+
+    // Blink prompt
+    if (API.frame % 40 < 28) {
+      text("PRESS ENTER TO START", W / 2 - 50, 240, 3);
+    }
+
+    if (hiScore > 0) {
+      text("HI SCORE  " + String(hiScore).padStart(6, "0"), W / 2 - 48, 270, 2);
+    }
+
+    text("GRAYBOX DEMO", W / 2 - 30, 305, 1);
+  }
+
+  // --- Game Over ---
+  function drawGameOver() {
+    drawPlay();
+    // Darken overlay
+    const bx = W / 2 - 90;
+    const by = H / 2 - 34;
+    rectf(bx, by, 180, 68, 0);
+    rect(bx, by, 180, 68, 3);
+    rect(bx + 1, by + 1, 178, 66, 1);
+
+    text("GAME OVER", bx + 50, by + 8, 3);
+    text("SCORE  " + String(score).padStart(6, "0"), bx + 36, by + 22, 2);
+    if (score > 0 && score >= hiScore) {
+      text("NEW HIGH SCORE!", bx + 28, by + 34, 3);
+    }
+    if (gameOverTimer > 60 && API.frame % 40 < 28) {
+      text("PRESS ENTER", bx + 40, by + 50, 2);
+    }
+  }
+
+  // --- Main ---
+  API._update = function() {
+    switch (state) {
+      case "title":
+        if (btnp("start")) {
+          ensureAudio();
+          note(0, "C4", 0.06);
+          note(1, "G4", 0.06);
+          resetGame();
+          state = "play";
+        }
+        break;
+      case "play":
+        updatePlay();
+        break;
+      case "gameover":
+        gameOverTimer++;
+        if (gameOverTimer > 90 && btnp("start")) {
+          state = "title";
+          gameOverTimer = 0;
+        }
+        break;
+    }
+  };
+
+  API._draw = function() {
+    switch (state) {
+      case "title": drawTitle(); break;
+      case "play": drawPlay(); break;
+      case "gameover": drawGameOver(); break;
+    }
+  };
+
+  setInterval(tick, 1000 / FPS);
+})();
+</script>
+</body>
+</html>

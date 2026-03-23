@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Ponpoko</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>Z</span> JUMP &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Ponpoko Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+  // 1: Raccoon standing right
+  defSprite(1,
+    "00222000" +
+    "02332200" +
+    "23033020" +
+    "02332200" +
+    "00333000" +
+    "02232200" +
+    "00200200" +
+    "00200200"
+  );
+  // 2: Raccoon walking right frame 2
+  defSprite(2,
+    "00222000" +
+    "02332200" +
+    "23033020" +
+    "02332200" +
+    "00333000" +
+    "02232200" +
+    "02000020" +
+    "02000020"
+  );
+  // 3: Raccoon climbing
+  defSprite(3,
+    "00222000" +
+    "02332200" +
+    "23033020" +
+    "02332200" +
+    "00333000" +
+    "02232200" +
+    "20020002" +
+    "20020002"
+  );
+  // 4: Raccoon jump
+  defSprite(4,
+    "00222000" +
+    "02332200" +
+    "23033020" +
+    "02332200" +
+    "00333000" +
+    "22232220" +
+    "00200200" +
+    "02000020"
+  );
+  // 10: Platform block
+  defSprite(10,
+    "33333333" +
+    "21212121" +
+    "12121212" +
+    "21212121" +
+    "12121212" +
+    "21212121" +
+    "12121212" +
+    "11111111"
+  );
+  // 11: Ladder
+  defSprite(11,
+    "20000002" +
+    "20000002" +
+    "22222222" +
+    "20000002" +
+    "20000002" +
+    "22222222" +
+    "20000002" +
+    "20000002"
+  );
+  // 12: Ladder top (with platform)
+  defSprite(12,
+    "33333333" +
+    "21212121" +
+    "20000002" +
+    "20000002" +
+    "22222222" +
+    "20000002" +
+    "20000002" +
+    "22222222"
+  );
+  // 20: Snake enemy
+  defSprite(20,
+    "00000000" +
+    "03300000" +
+    "32230000" +
+    "00023000" +
+    "00002300" +
+    "00023000" +
+    "00230000" +
+    "03300000"
+  );
+  // 21: Bird enemy frame 1
+  defSprite(21,
+    "00000000" +
+    "30000003" +
+    "03000030" +
+    "00322300" +
+    "00333300" +
+    "00333300" +
+    "00033000" +
+    "00000000"
+  );
+  // 22: Bird enemy frame 2
+  defSprite(22,
+    "30000003" +
+    "03000030" +
+    "00300300" +
+    "00322300" +
+    "00333300" +
+    "00333300" +
+    "00033000" +
+    "00000000"
+  );
+  // 23: Falling rock
+  defSprite(23,
+    "00111000" +
+    "01221100" +
+    "12112210" +
+    "12211210" +
+    "12122110" +
+    "01221100" +
+    "00111000" +
+    "00000000"
+  );
+  // 30: Apple (food item)
+  defSprite(30,
+    "00020000" +
+    "00332000" +
+    "03333300" +
+    "33233330" +
+    "33333330" +
+    "33333330" +
+    "03333300" +
+    "00333000"
+  );
+  // 31: Cherry
+  defSprite(31,
+    "00000200" +
+    "00002000" +
+    "00320300" +
+    "03330330" +
+    "33333330" +
+    "33333330" +
+    "03330330" +
+    "00300000"
+  );
+  // 32: Fish
+  defSprite(32,
+    "00000000" +
+    "00230000" +
+    "02333200" +
+    "23033320" +
+    "23333320" +
+    "02333200" +
+    "00230000" +
+    "00000000"
+  );
+  // 33: Rice ball (onigiri)
+  defSprite(33,
+    "00030000" +
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "33333330" +
+    "01111100" +
+    "01111100" +
+    "00111000"
+  );
+  // 34: Star bonus
+  defSprite(34,
+    "00030000" +
+    "00030000" +
+    "03333300" +
+    "00333000" +
+    "00333000" +
+    "03030300" +
+    "03000300" +
+    "30000030"
+  );
+  // 40: Explosion frame 1
+  defSprite(40,
+    "00000000" +
+    "00200100" +
+    "01002000" +
+    "00031000" +
+    "00130200" +
+    "01000010" +
+    "00100000" +
+    "00000000"
+  );
+  // 41: Explosion frame 2
+  defSprite(41,
+    "20010020" +
+    "01000010" +
+    "00203200" +
+    "03033030" +
+    "00232000" +
+    "01000300" +
+    "20001001" +
+    "00200010"
+  );
+  // 42: Life icon (small raccoon face)
+  defSprite(42,
+    "00000000" +
+    "00222000" +
+    "02332200" +
+    "23033020" +
+    "02332200" +
+    "00222000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // --- Game constants ---
+  const GRAVITY = 0.35;
+  const JUMP_FORCE = -5.5;
+  const MOVE_SPEED = 2.0;
+  const CLIMB_SPEED = 1.5;
+  const PLAT_H = 8;  // platform tile height in px
+
+  // --- Stage data ---
+  // Each stage defines platforms, ladders, items, enemies
+  // Platform: {x, y, w} in tiles (8px each) - y is row from top
+  // Ladder: {x, y1, y2} tile col, from row y1 to y2
+  // Item: {x, y, type} pixel coords, type=sprite id
+
+  const NUM_FLOORS = 7;
+  const FLOOR_Y = []; // pixel Y for each floor (0=top, 6=bottom/ground)
+  for (let i = 0; i < NUM_FLOORS; i++) {
+    FLOOR_Y[i] = 36 + i * 44;
+  }
+
+  // --- Game state ---
+  let state = "title";
+  let player, enemies, items, fallingObjs, particles;
+  let score, lives, stage, stageTimer;
+  let camY; // camera scroll offset
+  let platforms, ladders;
+  let goalItem; // item at top to collect
+  let invTimer; // invincibility frames after hit
+  let stageComplete, stageCompleteTimer;
+  let titleAnim;
+
+  function generateStage(stageNum) {
+    platforms = [];
+    ladders = [];
+    items = [];
+    enemies = [];
+    fallingObjs = [];
+    particles = [];
+    stageComplete = false;
+    stageCompleteTimer = 0;
+    invTimer = 0;
+
+    const difficulty = min(stageNum, 10);
+
+    // Generate floors - each floor is a row of platform tiles
+    // Floor 0 = top (goal), Floor NUM_FLOORS-1 = ground
+    for (let f = 0; f < NUM_FLOORS; f++) {
+      const y = FLOOR_Y[f];
+      // Full width platform with gaps for ladders
+      // Each platform is defined by pixel coords
+      const gapCount = 1 + flr(rnd(2));
+      const gaps = [];
+      for (let g = 0; g < gapCount; g++) {
+        gaps.push(40 + flr(rnd(W - 100)));
+      }
+
+      // Build segments avoiding gaps
+      let segments = [];
+      let sx = 8;
+      // Sort gaps
+      gaps.sort((a, b) => a - b);
+
+      if (f === NUM_FLOORS - 1) {
+        // Ground floor - solid
+        segments.push({ x: 0, y: y, w: W });
+      } else if (f === 0) {
+        // Top floor - solid with goal
+        segments.push({ x: 0, y: y, w: W });
+      } else {
+        // Middle floors have gaps for falling/jumping
+        let cx = 0;
+        for (const gx of gaps) {
+          if (gx - cx > 24) {
+            segments.push({ x: cx, y: y, w: gx - cx });
+          }
+          cx = gx + 24; // gap width
+        }
+        if (W - cx > 16) {
+          segments.push({ x: cx, y: y, w: W - cx });
+        }
+      }
+      for (const seg of segments) {
+        platforms.push(seg);
+      }
+    }
+
+    // Generate ladders connecting floors
+    for (let f = 0; f < NUM_FLOORS - 1; f++) {
+      const numLadders = 2 + flr(rnd(2));
+      for (let l = 0; l < numLadders; l++) {
+        const lx = 30 + flr(rnd(W - 80));
+        // Check that ladder position sits on a platform on both floors
+        const topY = FLOOR_Y[f];
+        const botY = FLOOR_Y[f + 1];
+        const onTop = platforms.some(p => p.y === topY && lx >= p.x && lx + 8 <= p.x + p.w);
+        const onBot = platforms.some(p => p.y === botY && lx >= p.x && lx + 8 <= p.x + p.w);
+        if (onTop && onBot) {
+          ladders.push({ x: lx, y1: topY, y2: botY });
+        }
+      }
+    }
+
+    // Ensure at least one ladder per floor gap
+    for (let f = 0; f < NUM_FLOORS - 1; f++) {
+      const hasLadder = ladders.some(l => l.y1 === FLOOR_Y[f] && l.y2 === FLOOR_Y[f + 1]);
+      if (!hasLadder) {
+        // Find a valid x position
+        const topY = FLOOR_Y[f];
+        const botY = FLOOR_Y[f + 1];
+        for (let attempt = 0; attempt < 20; attempt++) {
+          const lx = 30 + flr(rnd(W - 80));
+          const onTop = platforms.some(p => p.y === topY && lx >= p.x && lx + 8 <= p.x + p.w);
+          const onBot = platforms.some(p => p.y === botY && lx >= p.x && lx + 8 <= p.x + p.w);
+          if (onTop && onBot) {
+            ladders.push({ x: lx, y1: topY, y2: botY });
+            break;
+          }
+        }
+      }
+    }
+
+    // Place collectible items on platforms (not top or bottom floor)
+    const itemTypes = [30, 31, 32, 33];
+    for (let f = 1; f < NUM_FLOORS - 1; f++) {
+      const numItems = 1 + flr(rnd(2 + difficulty * 0.3));
+      for (let i = 0; i < numItems; i++) {
+        const ix = 20 + flr(rnd(W - 60));
+        const iy = FLOOR_Y[f] - 9;
+        // Check on a platform
+        const onPlat = platforms.some(p => p.y === FLOOR_Y[f] && ix >= p.x && ix + 8 <= p.x + p.w);
+        if (onPlat) {
+          items.push({
+            x: ix, y: iy,
+            type: itemTypes[flr(rnd(itemTypes.length))],
+            collected: false
+          });
+        }
+      }
+    }
+
+    // Goal item at top
+    goalItem = {
+      x: W / 2 - 4,
+      y: FLOOR_Y[0] - 12,
+      type: 34, // star
+      collected: false
+    };
+
+    // Place enemies on floors (not top or ground)
+    for (let f = 1; f < NUM_FLOORS - 1; f++) {
+      const numEnemies = min(1 + flr(difficulty * 0.4), 3);
+      for (let e = 0; e < numEnemies; e++) {
+        if (rnd(1) < 0.3 + difficulty * 0.05) {
+          const ex = 30 + flr(rnd(W - 80));
+          const ey = FLOOR_Y[f] - 8;
+          const etype = rnd(1) < 0.5 ? "snake" : "bird";
+          enemies.push({
+            x: ex, y: ey,
+            type: etype,
+            dir: rnd(1) < 0.5 ? 1 : -1,
+            speed: 0.6 + rnd(0.8) + difficulty * 0.08,
+            floor: f,
+            animTimer: 0,
+            active: true
+          });
+        }
+      }
+    }
+
+    // Place player at ground floor
+    player.x = W / 2 - 4;
+    player.y = FLOOR_Y[NUM_FLOORS - 1] - 9;
+    player.vy = 0;
+    player.onGround = true;
+    player.climbing = false;
+    player.dir = 1;
+    player.animTimer = 0;
+    player.jumpPressed = false;
+  }
+
+  function resetGame() {
+    player = {
+      x: W / 2 - 4, y: 0,
+      vx: 0, vy: 0,
+      onGround: false,
+      climbing: false,
+      dir: 1,
+      animTimer: 0,
+      jumpPressed: false
+    };
+    score = 0;
+    lives = 3;
+    stage = 1;
+    stageTimer = 0;
+    invTimer = 0;
+    titleAnim = 0;
+    generateStage(stage);
+  }
+
+  function isOnPlatform(x, y, w, h) {
+    // Check if entity at (x,y) with size (w,h) is standing on a platform
+    const footY = y + h;
+    for (const p of platforms) {
+      if (footY >= p.y && footY <= p.y + 4 &&
+          x + w > p.x + 2 && x < p.x + p.w - 2) {
+        return p.y;
+      }
+    }
+    return -1;
+  }
+
+  function isOnLadder(x, y) {
+    const cx = x + 4; // center of player
+    for (const l of ladders) {
+      if (cx >= l.x - 2 && cx <= l.x + 10 &&
+          y + 8 >= l.y1 && y <= l.y2) {
+        return l;
+      }
+    }
+    return null;
+  }
+
+  function canClimbUp(x, y) {
+    const cx = x + 4;
+    for (const l of ladders) {
+      if (cx >= l.x - 2 && cx <= l.x + 10 &&
+          y + 8 >= l.y1 && y + 4 <= l.y2) {
+        return l;
+      }
+    }
+    return null;
+  }
+
+  function canClimbDown(x, y) {
+    const cx = x + 4;
+    for (const l of ladders) {
+      if (cx >= l.x - 2 && cx <= l.x + 10 &&
+          y + 8 >= l.y1 - 4 && y + 8 <= l.y2) {
+        return l;
+      }
+    }
+    return null;
+  }
+
+  function addParticles(x, y, count, color) {
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: x, y: y,
+        vx: rnd(4) - 2, vy: rnd(3) - 2,
+        life: 8 + flr(rnd(12)),
+        color: color || (flr(rnd(3)) + 1)
+      });
+    }
+  }
+
+  // Sound functions
+  function jumpSound() { note(0, "E5", 0.05); setTimeout(() => note(0, "G5", 0.04), 40); }
+  function collectSound() {
+    note(0, "C5", 0.06);
+    setTimeout(() => note(0, "E5", 0.06), 60);
+    setTimeout(() => note(0, "G5", 0.08), 120);
+  }
+  function hitSound() {
+    note(0, "C3", 0.1); note(1, "G2", 0.1);
+    setTimeout(() => { note(0, "A2", 0.15); }, 100);
+  }
+  function deathSound() {
+    note(0, "C3", 0.15); note(1, "G2", 0.15);
+    setTimeout(() => { note(0, "A2", 0.2); note(1, "E2", 0.2); }, 120);
+  }
+  function stageClearSound() {
+    note(0, "C5", 0.08);
+    setTimeout(() => note(0, "E5", 0.08), 80);
+    setTimeout(() => note(0, "G5", 0.08), 160);
+    setTimeout(() => note(0, "C6", 0.15), 240);
+    setTimeout(() => note(1, "E6", 0.2), 320);
+  }
+  function fallingObjSound() { note(1, "D3", 0.04); }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      titleAnim++;
+      if (btnp("a") || btnp("start")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.08);
+        setTimeout(() => note(0, "E5", 0.08), 80);
+        setTimeout(() => note(0, "G5", 0.1), 160);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    // --- Play state ---
+    stageTimer++;
+
+    if (stageComplete) {
+      stageCompleteTimer++;
+      if (stageCompleteTimer > 90) {
+        stage++;
+        generateStage(stage);
+      }
+      return;
+    }
+
+    if (invTimer > 0) invTimer--;
+
+    const pl = player;
+
+    // --- Player movement ---
+    const ladder = isOnLadder(pl.x, pl.y);
+    const climbUp = canClimbUp(pl.x, pl.y);
+    const climbDown = canClimbDown(pl.x, pl.y);
+
+    // Start climbing
+    if (btn("up") && climbUp && !pl.climbing) {
+      pl.climbing = true;
+      pl.vy = 0;
+      pl.x = climbUp.x - 1; // snap to ladder
+    }
+    if (btn("down") && climbDown && pl.onGround && !pl.climbing) {
+      pl.climbing = true;
+      pl.vy = 0;
+      pl.x = climbDown.x - 1;
+    }
+
+    if (pl.climbing) {
+      const curLadder = isOnLadder(pl.x, pl.y);
+      if (!curLadder) {
+        pl.climbing = false;
+      } else {
+        // Climb up/down
+        if (btn("up")) {
+          pl.y -= CLIMB_SPEED;
+          pl.animTimer++;
+          // Check if reached top of ladder
+          if (pl.y + 8 < curLadder.y1 + 4) {
+            pl.y = curLadder.y1 - 8;
+            pl.climbing = false;
+            pl.onGround = true;
+          }
+        }
+        if (btn("down")) {
+          pl.y += CLIMB_SPEED;
+          pl.animTimer++;
+          // Check if reached bottom of ladder
+          if (pl.y + 8 > curLadder.y2) {
+            pl.y = curLadder.y2 - 8;
+            pl.climbing = false;
+            pl.onGround = true;
+          }
+        }
+        // Can move left/right off ladder
+        if (btn("left")) { pl.x -= 1; pl.dir = -1; }
+        if (btn("right")) { pl.x += 1; pl.dir = 1; }
+
+        // Jump off ladder
+        if (btnp("a")) {
+          pl.climbing = false;
+          pl.vy = JUMP_FORCE * 0.7;
+          pl.onGround = false;
+          jumpSound();
+        }
+        pl.vy = 0; // no gravity while climbing
+      }
+    }
+
+    if (!pl.climbing) {
+      // Horizontal movement
+      if (btn("left")) {
+        pl.x -= MOVE_SPEED;
+        pl.dir = -1;
+        pl.animTimer++;
+      }
+      if (btn("right")) {
+        pl.x += MOVE_SPEED;
+        pl.dir = 1;
+        pl.animTimer++;
+      }
+
+      // Jump
+      if (btnp("a") && pl.onGround) {
+        pl.vy = JUMP_FORCE;
+        pl.onGround = false;
+        jumpSound();
+      }
+
+      // Gravity
+      pl.vy += GRAVITY;
+      pl.y += pl.vy;
+
+      // Platform collision (only when falling)
+      if (pl.vy >= 0) {
+        const platY = isOnPlatform(pl.x, pl.y, 8, 9);
+        if (platY >= 0) {
+          pl.y = platY - 9;
+          pl.vy = 0;
+          pl.onGround = true;
+        } else {
+          pl.onGround = false;
+        }
+      } else {
+        pl.onGround = false;
+      }
+    }
+
+    // Screen bounds
+    pl.x = _max(0, min(W - 8, pl.x));
+    if (pl.y > H + 10) {
+      // Fell off screen
+      lives--;
+      invTimer = 60;
+      if (lives <= 0) {
+        state = "gameover";
+        addParticles(pl.x + 4, pl.y, 20, 3);
+        deathSound();
+      } else {
+        pl.x = W / 2 - 4;
+        pl.y = FLOOR_Y[NUM_FLOORS - 1] - 9;
+        pl.vy = 0;
+        pl.onGround = true;
+        pl.climbing = false;
+        hitSound();
+      }
+    }
+
+    // --- Item collection ---
+    for (const item of items) {
+      if (!item.collected &&
+          pl.x + 7 > item.x && pl.x < item.x + 8 &&
+          pl.y + 8 > item.y && pl.y < item.y + 8) {
+        item.collected = true;
+        score += 100;
+        addParticles(item.x + 4, item.y + 4, 6, 3);
+        collectSound();
+      }
+    }
+
+    // Goal item
+    if (!goalItem.collected &&
+        pl.x + 7 > goalItem.x && pl.x < goalItem.x + 8 &&
+        pl.y + 8 > goalItem.y && pl.y < goalItem.y + 8) {
+      goalItem.collected = true;
+      score += 500 + stage * 100;
+      stageComplete = true;
+      stageCompleteTimer = 0;
+      addParticles(goalItem.x + 4, goalItem.y + 4, 15, 3);
+      stageClearSound();
+    }
+
+    // --- Enemy update ---
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      if (!e.active) continue;
+
+      e.animTimer++;
+
+      if (e.type === "snake") {
+        // Snakes patrol on their floor
+        e.x += e.dir * e.speed;
+        // Reverse at platform edges
+        const floorY = FLOOR_Y[e.floor];
+        const onPlat = platforms.some(p =>
+          p.y === floorY && e.x + 4 >= p.x && e.x + 4 <= p.x + p.w
+        );
+        if (!onPlat || e.x < 4 || e.x > W - 12) {
+          e.dir *= -1;
+          e.x += e.dir * 2;
+        }
+      } else if (e.type === "bird") {
+        // Birds fly horizontally with slight wave
+        e.x += e.dir * e.speed * 1.2;
+        e.y = FLOOR_Y[e.floor] - 14 + sin(e.animTimer * 0.1) * 6;
+        if (e.x < -10) { e.x = W + 10; }
+        if (e.x > W + 10) { e.x = -10; }
+      }
+
+      // Enemy-player collision
+      if (invTimer <= 0 &&
+          pl.x + 6 > e.x && pl.x < e.x + 7 &&
+          pl.y + 7 > e.y && pl.y < e.y + 7) {
+        // Check if player is jumping on top of enemy
+        if (pl.vy > 0 && pl.y + 8 < e.y + 5) {
+          // Stomp enemy
+          e.active = false;
+          score += 200;
+          pl.vy = JUMP_FORCE * 0.6;
+          addParticles(e.x + 4, e.y + 4, 8, 2);
+          note(1, "E4", 0.06);
+          setTimeout(() => note(1, "G4", 0.06), 50);
+        } else {
+          // Player hit
+          lives--;
+          invTimer = 60;
+          addParticles(pl.x + 4, pl.y + 4, 8, 3);
+          if (lives <= 0) {
+            state = "gameover";
+            deathSound();
+          } else {
+            hitSound();
+            pl.vy = JUMP_FORCE * 0.5;
+            pl.x += (pl.x < e.x) ? -20 : 20;
+          }
+        }
+      }
+    }
+
+    // --- Falling objects ---
+    // Spawn falling rocks periodically
+    const fallRate = _max(40, 120 - stage * 10);
+    if (stageTimer % fallRate === 0 && fallingObjs.length < 4 + stage) {
+      const fx = 20 + flr(rnd(W - 40));
+      fallingObjs.push({
+        x: fx, y: -8,
+        vy: 1.5 + rnd(1) + stage * 0.15,
+        active: true
+      });
+    }
+
+    for (let i = fallingObjs.length - 1; i >= 0; i--) {
+      const obj = fallingObjs[i];
+      obj.y += obj.vy;
+      // Bounce off platforms slightly
+      for (const p of platforms) {
+        if (obj.y + 7 >= p.y && obj.y + 7 <= p.y + 3 &&
+            obj.x + 7 > p.x && obj.x < p.x + p.w &&
+            obj.vy > 0) {
+          // 50% chance to break through, 50% chance to stop
+          if (rnd(1) < 0.4) {
+            obj.vy *= 0.5;
+          }
+          // Otherwise fall through
+        }
+      }
+      if (obj.y > H + 10) {
+        fallingObjs.splice(i, 1);
+        continue;
+      }
+
+      // Hit player
+      if (invTimer <= 0 && obj.active &&
+          pl.x + 6 > obj.x && pl.x < obj.x + 7 &&
+          pl.y + 7 > obj.y && pl.y < obj.y + 7) {
+        obj.active = false;
+        fallingObjs.splice(i, 1);
+        lives--;
+        invTimer = 60;
+        addParticles(pl.x + 4, pl.y + 4, 8, 2);
+        if (lives <= 0) {
+          state = "gameover";
+          deathSound();
+        } else {
+          hitSound();
+        }
+      }
+    }
+
+    // --- Particles ---
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  };
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    cls(0);
+
+    if (state === "title") {
+      // Background decorative pattern
+      for (let y = 0; y < H; y += 16) {
+        for (let x = 0; x < W; x += 16) {
+          if ((x + y) % 32 === 0) pix(x, y, 1);
+        }
+      }
+
+      const ty = 50 + sin(titleAnim * 0.06) * 4;
+
+      // Title
+      text("PONPOKO", flr(W / 2 - 7 * 2.5), flr(ty), 3);
+      text("PONPOKO", flr(W / 2 - 7 * 2.5) + 1, flr(ty) + 1, 1);
+
+      // Subtitle in Korean
+      text("- RACCOON -", flr(W / 2 - 11 * 2.5), flr(ty) + 14, 2);
+
+      rectf(W / 2 - 60, flr(ty) + 24, 120, 1, 2);
+
+      // Animated raccoon
+      const rx = W / 2 - 4;
+      const walkFrame = flr(titleAnim / 8) % 2 === 0 ? 1 : 2;
+      spr(walkFrame, flr(rx + sin(titleAnim * 0.08) * 30), flr(ty) + 35);
+
+      // Show some items
+      spr(30, W / 2 - 40, flr(ty) + 36 + flr(sin(titleAnim * 0.1) * 3));
+      spr(31, W / 2 + 32, flr(ty) + 38 + flr(sin(titleAnim * 0.1 + 1) * 3));
+      spr(32, W / 2 - 56, flr(ty) + 34 + flr(sin(titleAnim * 0.1 + 2) * 3));
+      spr(33, W / 2 + 48, flr(ty) + 36 + flr(sin(titleAnim * 0.1 + 3) * 3));
+
+      if (flr(titleAnim / 20) % 2 === 0) {
+        text("PRESS A TO START", flr(W / 2 - 16 * 2.5), 195, 3);
+      }
+
+      // Instructions
+      text("ARROWS: MOVE/CLIMB", flr(W / 2 - 18 * 2.5), 225, 2);
+      text("Z: JUMP", flr(W / 2 - 7 * 2.5), 237, 2);
+      text("REACH THE STAR!", flr(W / 2 - 15 * 2.5), 255, 2);
+
+      // Score table
+      spr(20, W / 2 - 50, 270); text("SNAKE  200", W / 2 - 36, 272, 2);
+      spr(21, W / 2 - 50, 284); text("BIRD   200", W / 2 - 36, 286, 2);
+      spr(34, W / 2 - 50, 298); text("STAR   500+", W / 2 - 36, 300, 2);
+
+      text("GRAYBOX DEMO V0.1", flr(W / 2 - 17 * 2.5), 312, 1);
+      return;
+    }
+
+    if (state === "gameover") {
+      for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+      text("GAME OVER", flr(W / 2 - 9 * 2.5), 120, 3);
+      text("SCORE: " + score, flr(W / 2 - (7 + String(score).length) * 2.5), 145, 2);
+      text("STAGE: " + stage, flr(W / 2 - (7 + String(stage).length) * 2.5), 160, 2);
+      if (flr(API.frame / 20) % 2 === 0) {
+        text("PRESS A TO CONTINUE", flr(W / 2 - 19 * 2.5), 200, 3);
+      }
+      return;
+    }
+
+    // --- Play state rendering ---
+
+    // Draw platforms
+    for (const p of platforms) {
+      // Draw as tiled blocks
+      for (let tx = p.x; tx < p.x + p.w; tx += 8) {
+        const drawW = min(8, p.x + p.w - tx);
+        if (drawW >= 8) {
+          spr(10, tx, p.y);
+        } else {
+          // Partial platform edge
+          rectf(tx, p.y, drawW, 8, 1);
+          rectf(tx, p.y, drawW, 1, 3);
+        }
+      }
+    }
+
+    // Draw ladders
+    for (const l of ladders) {
+      for (let ly = l.y1; ly < l.y2; ly += 8) {
+        if (ly === l.y1) {
+          spr(12, l.x, ly);
+        } else {
+          spr(11, l.x, ly);
+        }
+      }
+    }
+
+    // Draw items
+    for (const item of items) {
+      if (!item.collected) {
+        spr(item.type, flr(item.x), flr(item.y));
+      }
+    }
+
+    // Draw goal item (pulsing)
+    if (!goalItem.collected) {
+      const pulse = sin(API.frame * 0.15) * 2;
+      spr(goalItem.type, flr(goalItem.x), flr(goalItem.y + pulse));
+      // Arrow pointing to goal
+      if (API.frame % 30 < 20) {
+        const arrowY = goalItem.y - 10 + sin(API.frame * 0.2) * 3;
+        pix(goalItem.x + 3, flr(arrowY), 3);
+        pix(goalItem.x + 2, flr(arrowY) - 1, 3);
+        pix(goalItem.x + 4, flr(arrowY) - 1, 3);
+        pix(goalItem.x + 1, flr(arrowY) - 2, 3);
+        pix(goalItem.x + 5, flr(arrowY) - 2, 3);
+      }
+    }
+
+    // Draw falling objects
+    for (const obj of fallingObjs) {
+      if (obj.active) {
+        spr(23, flr(obj.x), flr(obj.y));
+      }
+    }
+
+    // Draw enemies
+    for (const e of enemies) {
+      if (!e.active) continue;
+      if (e.type === "snake") {
+        spr(20, flr(e.x), flr(e.y), e.dir < 0);
+      } else if (e.type === "bird") {
+        const birdFrame = flr(e.animTimer / 6) % 2 === 0 ? 21 : 22;
+        spr(birdFrame, flr(e.x), flr(e.y), e.dir < 0);
+      }
+    }
+
+    // Draw player
+    const pl = player;
+    if (invTimer <= 0 || flr(API.frame / 3) % 2 === 0) {
+      let sprId;
+      if (pl.climbing) {
+        sprId = 3;
+      } else if (!pl.onGround) {
+        sprId = 4;
+      } else if (btn("left") || btn("right")) {
+        sprId = flr(pl.animTimer / 5) % 2 === 0 ? 1 : 2;
+      } else {
+        sprId = 1;
+      }
+      spr(sprId, flr(pl.x), flr(pl.y), pl.dir < 0);
+    }
+
+    // Draw particles
+    for (const p of particles) {
+      pix(flr(p.x), flr(p.y), p.color);
+    }
+
+    // --- HUD ---
+    rectf(0, 0, W, 14, 0);
+    line(0, 14, W, 14, 1);
+    text("SCORE:" + score, 4, 4, 3);
+    text("STAGE:" + stage, W / 2 - 25, 4, 2);
+    for (let i = 0; i < lives; i++) spr(42, W - 40 + i * 10, 3);
+
+    // Stage complete message
+    if (stageComplete) {
+      const msgY = 140 + sin(stageCompleteTimer * 0.1) * 3;
+      rectf(W / 2 - 70, flr(msgY) - 4, 140, 30, 0);
+      rect(W / 2 - 70, flr(msgY) - 4, 140, 30, 3);
+      text("STAGE CLEAR!", flr(W / 2 - 12 * 2.5), flr(msgY), 3);
+      text("BONUS: " + (500 + stage * 100), flr(W / 2 - 12 * 2.5), flr(msgY) + 12, 2);
+    }
+  };
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

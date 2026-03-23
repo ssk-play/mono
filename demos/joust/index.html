@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Joust</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>←→</span> MOVE &nbsp;&nbsp; <span>Z</span> FLAP &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  // Extended spr that wraps around screen edges
+  API.sprWrap = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx];
+      let dx=x+px, dy=y+py;
+      // wrap horizontally
+      if(dx<0) dx+=W; else if(dx>=W) dx-=W;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Joust Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, sprWrap, text: drawText, btn, btnp, note, stop, rnd, flr,
+          abs: _abs, min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+
+  // 1: Player knight on ostrich - facing right, wings up
+  defSprite(1,
+    "00033000" +
+    "00033200" +
+    "03333300" +
+    "33332300" +
+    "03322000" +
+    "00322000" +
+    "00300300" +
+    "00300300"
+  );
+
+  // 2: Player knight on ostrich - facing right, wings down
+  defSprite(2,
+    "00033000" +
+    "00033200" +
+    "00333300" +
+    "00332300" +
+    "33322000" +
+    "03322000" +
+    "00300300" +
+    "00300300"
+  );
+
+  // 3: Player knight on ostrich - facing right, wings mid (glide)
+  defSprite(3,
+    "00033000" +
+    "00033200" +
+    "03333300" +
+    "03332300" +
+    "03322000" +
+    "00322000" +
+    "00300300" +
+    "00300300"
+  );
+
+  // 4: Enemy buzzard rider - facing right, wings up
+  defSprite(4,
+    "00011000" +
+    "00011100" +
+    "01111100" +
+    "11112100" +
+    "01122000" +
+    "00122000" +
+    "00100100" +
+    "00100100"
+  );
+
+  // 5: Enemy buzzard rider - facing right, wings down
+  defSprite(5,
+    "00011000" +
+    "00011100" +
+    "00111100" +
+    "00112100" +
+    "11122000" +
+    "01122000" +
+    "00100100" +
+    "00100100"
+  );
+
+  // 6: Enemy buzzard rider - facing right, wings mid
+  defSprite(6,
+    "00011000" +
+    "00011100" +
+    "01111100" +
+    "01112100" +
+    "01122000" +
+    "00122000" +
+    "00100100" +
+    "00100100"
+  );
+
+  // 7: Egg
+  defSprite(7,
+    "00000000" +
+    "00000000" +
+    "00033000" +
+    "00322300" +
+    "03222230" +
+    "03222230" +
+    "00322300" +
+    "00033000"
+  );
+
+  // 8: Hatching egg (cracking)
+  defSprite(8,
+    "00000000" +
+    "00020000" +
+    "00233000" +
+    "00322300" +
+    "02222230" +
+    "03222030" +
+    "00322300" +
+    "00033000"
+  );
+
+  // 9: Explosion frame 1
+  defSprite(9,
+    "00000000" +
+    "00200100" +
+    "01002000" +
+    "00031000" +
+    "00130200" +
+    "01000010" +
+    "00100000" +
+    "00000000"
+  );
+
+  // 10: Explosion frame 2
+  defSprite(10,
+    "20010020" +
+    "01000010" +
+    "00203200" +
+    "03033030" +
+    "00232000" +
+    "01000300" +
+    "20001001" +
+    "00200010"
+  );
+
+  // 11: Platform tile
+  defSprite(11,
+    "33333333" +
+    "22222222" +
+    "21212121" +
+    "11111111" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 12: Lava surface (animated frame 1)
+  defSprite(12,
+    "00000000" +
+    "01001010" +
+    "10110101" +
+    "11111111" +
+    "21212121" +
+    "12121212" +
+    "11111111" +
+    "11111111"
+  );
+
+  // 13: Lava surface (animated frame 2)
+  defSprite(13,
+    "00000000" +
+    "10010100" +
+    "01101011" +
+    "11111111" +
+    "12121212" +
+    "21212121" +
+    "11111111" +
+    "11111111"
+  );
+
+  // 14: Life icon (small knight)
+  defSprite(14,
+    "00000000" +
+    "00033000" +
+    "00033200" +
+    "03333300" +
+    "33332300" +
+    "03322000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 15: Shadow enemy (stronger) - wings up
+  defSprite(15,
+    "00011000" +
+    "00011100" +
+    "01111100" +
+    "11111100" +
+    "01111000" +
+    "00111000" +
+    "00100100" +
+    "00100100"
+  );
+
+  // 16: Shadow enemy - wings down
+  defSprite(16,
+    "00011000" +
+    "00011100" +
+    "00111100" +
+    "00111100" +
+    "11111000" +
+    "01111000" +
+    "00100100" +
+    "00100100"
+  );
+
+  // --- Platforms ---
+  const platforms = [
+    // Bottom ground platforms (above lava)
+    { x: 0, y: 290, w: 80 },
+    { x: 400, y: 290, w: 80 },
+    // Mid-low platforms
+    { x: 80, y: 250, w: 80 },
+    { x: 300, y: 250, w: 80 },
+    // Middle platforms
+    { x: 170, y: 200, w: 100 },
+    { x: 0, y: 180, w: 60 },
+    { x: 420, y: 180, w: 60 },
+    // Upper platforms
+    { x: 60, y: 140, w: 80 },
+    { x: 300, y: 130, w: 90 },
+    // Top platform
+    { x: 180, y: 80, w: 120 },
+  ];
+
+  const GRAVITY = 0.18;
+  const FLAP_POWER = -2.8;
+  const MAX_FALL = 3.5;
+  const MOVE_SPEED = 1.8;
+  const LAVA_Y = 306;
+
+  // --- Game state ---
+  let state = "title";
+  let player, enemies, eggs, explosions, particles;
+  let score, lives, wave, waveTimer, waveMessage, spawnQueue;
+  let titleBob;
+
+  function resetGame() {
+    player = {
+      x: W / 2 - 4, y: 200,
+      vx: 0, vy: 0,
+      facing: 1,  // 1=right, -1=left
+      wingFrame: 0,
+      wingTimer: 0,
+      invincible: 0,
+      onGround: false,
+    };
+    enemies = [];
+    eggs = [];
+    explosions = [];
+    particles = [];
+    score = 0;
+    lives = 3;
+    wave = 0;
+    waveTimer = 0;
+    waveMessage = 0;
+    spawnQueue = [];
+    spawnWave();
+  }
+
+  function spawnWave() {
+    wave++;
+    waveMessage = 90;
+    const count = min(2 + wave * 2, 12);
+    spawnQueue = [];
+    for (let i = 0; i < count; i++) {
+      // type: 0=normal, 1=shadow (stronger, from wave 3+)
+      const type = (wave >= 3 && rnd(1) < 0.3) ? 1 : 0;
+      spawnQueue.push({ type, delay: i * 40 + flr(rnd(20)) });
+    }
+    waveTimer = 0;
+  }
+
+  function spawnEnemy(type) {
+    // Spawn from top edges
+    const side = rnd(1) < 0.5 ? -1 : 1;
+    const ex = side < 0 ? -8 : W;
+    const ey = 10 + rnd(60);
+    enemies.push({
+      x: ex, y: ey,
+      vx: side < 0 ? 1.5 + rnd(1) : -(1.5 + rnd(1)),
+      vy: -0.5 + rnd(1),
+      facing: side < 0 ? 1 : -1,
+      type: type, // 0=bounder, 1=shadow
+      wingFrame: 0,
+      wingTimer: 0,
+      flapTimer: 15 + flr(rnd(20)),
+      alive: true,
+      targetY: 80 + rnd(180),
+      aiTimer: 0,
+    });
+  }
+
+  function addExplosion(x, y) {
+    explosions.push({ x, y, timer: 12 });
+    for (let i = 0; i < 8; i++)
+      particles.push({
+        x: x + 4, y: y + 4,
+        vx: rnd(4) - 2, vy: rnd(4) - 2,
+        life: 6 + flr(rnd(10)),
+        color: flr(rnd(3)) + 1
+      });
+  }
+
+  // --- Sounds ---
+  function flapSound() { note(0, "E5", 0.03); }
+  function hitSound() { note(1, "C3", 0.06); setTimeout(() => note(1, "E3", 0.05), 40); }
+  function collectSound() { note(0, "G5", 0.05); setTimeout(() => note(0, "C6", 0.08), 50); }
+  function deathSound() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function waveClearSound() {
+    note(0, "C5", 0.1);
+    setTimeout(() => note(0, "E5", 0.1), 100);
+    setTimeout(() => note(0, "G5", 0.1), 200);
+    setTimeout(() => note(0, "C6", 0.15), 300);
+  }
+  function lavaSound() { note(1, "A2", 0.15); note(0, "D2", 0.2); }
+
+  // --- Platform collision ---
+  function checkPlatformCollision(ent) {
+    ent.onGround = false;
+    if (ent.vy < 0) return; // moving up, skip
+    for (const p of platforms) {
+      if (ent.x + 6 > p.x && ent.x + 2 < p.x + p.w &&
+          ent.y + 8 > p.y && ent.y + 8 < p.y + 6 && ent.vy >= 0) {
+        ent.y = p.y - 8;
+        ent.vy = 0;
+        ent.onGround = true;
+        return;
+      }
+    }
+  }
+
+  // --- Wrap horizontally ---
+  function wrapX(ent) {
+    if (ent.x < -8) ent.x += W + 8;
+    if (ent.x > W) ent.x -= W + 8;
+  }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      if (btnp("a") || btnp("start")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.1);
+        setTimeout(() => note(0, "E5", 0.1), 100);
+        setTimeout(() => note(0, "G5", 0.15), 200);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      // Animate particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    // --- Play state ---
+
+    // Wave message timer
+    if (waveMessage > 0) waveMessage--;
+
+    // Spawn queue
+    for (let i = spawnQueue.length - 1; i >= 0; i--) {
+      spawnQueue[i].delay--;
+      if (spawnQueue[i].delay <= 0) {
+        spawnEnemy(spawnQueue[i].type);
+        spawnQueue.splice(i, 1);
+      }
+    }
+
+    // --- Player movement ---
+    if (player.invincible > 0) player.invincible--;
+
+    // Horizontal movement
+    if (btn("left")) { player.vx = -MOVE_SPEED; player.facing = -1; }
+    else if (btn("right")) { player.vx = MOVE_SPEED; player.facing = 1; }
+    else { player.vx *= 0.85; } // friction
+
+    // Flap
+    if (btnp("a")) {
+      player.vy = FLAP_POWER;
+      player.wingFrame = 1;
+      player.wingTimer = 6;
+      flapSound();
+    }
+
+    // Gravity
+    player.vy += GRAVITY;
+    if (player.vy > MAX_FALL) player.vy = MAX_FALL;
+
+    // Apply velocity
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // Wing animation
+    if (player.wingTimer > 0) {
+      player.wingTimer--;
+      if (player.wingTimer <= 0) player.wingFrame = 0;
+    }
+    if (player.vy < -0.5) player.wingFrame = 1; // wings up when ascending
+    else if (player.vy > 1) player.wingFrame = 2; // wings down when falling
+    else if (player.onGround) player.wingFrame = 0;
+
+    // Wrap screen
+    wrapX(player);
+
+    // Platform collision
+    checkPlatformCollision(player);
+
+    // Ceiling
+    if (player.y < 12) { player.y = 12; player.vy = 0.5; }
+
+    // Lava death
+    if (player.y + 8 > LAVA_Y) {
+      lives--;
+      addExplosion(player.x, LAVA_Y - 10);
+      lavaSound();
+      player.x = W / 2 - 4;
+      player.y = 60;
+      player.vx = 0;
+      player.vy = 0;
+      player.invincible = 60;
+      if (lives <= 0) { state = "gameover"; addExplosion(player.x, player.y); }
+    }
+
+    // --- Enemy AI ---
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+
+      // AI: flap to maintain target altitude, move toward player
+      e.flapTimer--;
+      if (e.flapTimer <= 0) {
+        // Flap if below target or below player
+        if (e.y > e.targetY || e.y > player.y - 20) {
+          e.vy = FLAP_POWER * 0.8;
+          e.wingFrame = 1;
+          e.wingTimer = 6;
+        }
+        e.flapTimer = 10 + flr(rnd(15));
+      }
+
+      // Adjust target occasionally
+      e.aiTimer++;
+      if (e.aiTimer > 60) {
+        e.aiTimer = 0;
+        e.targetY = 60 + rnd(200);
+        // Chase player horizontally
+        if (rnd(1) < 0.6) {
+          const dir = player.x > e.x ? 1 : -1;
+          e.vx = dir * (1.0 + rnd(1.0) + wave * 0.1);
+          e.facing = dir;
+        }
+      }
+
+      // Gravity
+      e.vy += GRAVITY;
+      if (e.vy > MAX_FALL) e.vy = MAX_FALL;
+
+      // Apply velocity
+      e.x += e.vx;
+      e.y += e.vy;
+
+      // Wing animation
+      if (e.wingTimer > 0) {
+        e.wingTimer--;
+        if (e.wingTimer <= 0) e.wingFrame = 0;
+      }
+      if (e.vy < -0.5) e.wingFrame = 1;
+      else if (e.vy > 1) e.wingFrame = 2;
+
+      // Wrap
+      wrapX(e);
+
+      // Platform collision
+      checkPlatformCollision(e);
+
+      // Lava death for enemies
+      if (e.y + 8 > LAVA_Y) {
+        addExplosion(e.x, LAVA_Y - 10);
+        score += 50;
+        enemies.splice(i, 1);
+        hitSound();
+        continue;
+      }
+
+      // Player-enemy collision
+      if (player.invincible <= 0) {
+        const dx = player.x - e.x;
+        const dy = player.y - e.y;
+        // Check overlap (roughly 6x6 hitbox centered)
+        if (_abs(dx) < 7 && _abs(dy) < 8) {
+          // Jousting: whoever is higher (lower y) with downward momentum wins
+          // Also: player lance tip is at top, so if player is above enemy = win
+          const playerTop = player.y;
+          const enemyTop = e.y;
+
+          if (playerTop < enemyTop - 2) {
+            // Player wins!
+            addExplosion(e.x, e.y);
+            const pts = e.type === 1 ? 300 : 150;
+            score += pts;
+            hitSound();
+            // Drop egg
+            eggs.push({
+              x: e.x, y: e.y,
+              vx: e.vx * 0.3,
+              vy: -1,
+              hatchTimer: 300 + flr(rnd(150)), // time before hatching
+              onGround: false,
+              hatching: false,
+              type: e.type,
+            });
+            enemies.splice(i, 1);
+            // Bounce player up
+            player.vy = -2;
+          } else if (enemyTop < playerTop - 2) {
+            // Enemy wins!
+            lives--;
+            addExplosion(player.x, player.y);
+            deathSound();
+            player.x = W / 2 - 4;
+            player.y = 60;
+            player.vx = 0;
+            player.vy = 0;
+            player.invincible = 60;
+            if (lives <= 0) { state = "gameover"; addExplosion(player.x, player.y); }
+          } else {
+            // Tie - bounce apart
+            player.vx = dx > 0 ? 2 : -2;
+            e.vx = dx > 0 ? -2 : 2;
+            player.vy = -1.5;
+            e.vy = -1.5;
+          }
+        }
+      }
+    }
+
+    // --- Eggs ---
+    for (let i = eggs.length - 1; i >= 0; i--) {
+      const eg = eggs[i];
+
+      // Gravity
+      eg.vy += GRAVITY;
+      if (eg.vy > MAX_FALL) eg.vy = MAX_FALL;
+      eg.x += eg.vx;
+      eg.y += eg.vy;
+      eg.vx *= 0.95;
+
+      // Platform collision for eggs
+      eg.onGround = false;
+      if (eg.vy >= 0) {
+        for (const p of platforms) {
+          if (eg.x + 6 > p.x && eg.x + 2 < p.x + p.w &&
+              eg.y + 8 > p.y && eg.y + 8 < p.y + 6) {
+            eg.y = p.y - 8;
+            eg.vy = 0;
+            eg.vx = 0;
+            eg.onGround = true;
+            break;
+          }
+        }
+      }
+
+      // Lava
+      if (eg.y + 8 > LAVA_Y) {
+        eggs.splice(i, 1);
+        continue;
+      }
+
+      wrapX(eg);
+
+      // Hatch timer
+      eg.hatchTimer--;
+      if (eg.hatchTimer < 60) eg.hatching = true;
+      if (eg.hatchTimer <= 0) {
+        // Hatch into new enemy!
+        spawnEnemy(eg.type);
+        eggs.splice(i, 1);
+        continue;
+      }
+
+      // Player collects egg
+      if (_abs(player.x - eg.x) < 8 && _abs(player.y - eg.y) < 8) {
+        score += 250;
+        collectSound();
+        // Small sparkle particles
+        for (let p = 0; p < 5; p++)
+          particles.push({
+            x: eg.x + 4, y: eg.y + 4,
+            vx: rnd(3) - 1.5, vy: rnd(3) - 1.5,
+            life: 8 + flr(rnd(6)),
+            color: 3
+          });
+        eggs.splice(i, 1);
+      }
+    }
+
+    // Explosions
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].timer--;
+      if (explosions[i].timer <= 0) explosions.splice(i, 1);
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Wave clear check
+    if (enemies.length === 0 && eggs.length === 0 && spawnQueue.length === 0 && state === "play") {
+      waveTimer++;
+      if (waveTimer === 1) waveClearSound();
+      if (waveTimer > 90) {
+        waveTimer = 0;
+        spawnWave();
+      }
+    }
+  };
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    cls(0);
+
+    const lavaFrame = flr(API.frame / 8) % 2;
+
+    if (state === "title") {
+      // Draw platforms
+      drawPlatforms();
+      drawLava(lavaFrame);
+
+      const ty = 50 + sin(API.frame * 0.05) * 5;
+
+      // Title shadow
+      drawText("JOUST", 205, flr(ty) + 1, 1);
+      // Title
+      drawText("JOUST", 204, flr(ty), 3);
+      rectf(185, flr(ty) + 10, 110, 1, 2);
+
+      // Show animated player on title
+      const px = 200 + sin(API.frame * 0.04) * 40;
+      const py = 100 + sin(API.frame * 0.06) * 15;
+      const wf = flr(API.frame / 6) % 3;
+      const sprId = wf === 0 ? 1 : wf === 1 ? 2 : 3;
+      spr(sprId, flr(px), flr(py));
+
+      // Show enemy on other side
+      const ex = 280 - sin(API.frame * 0.04) * 40;
+      const ey = 105 + sin(API.frame * 0.06 + 2) * 15;
+      const ef = flr(API.frame / 6) % 3;
+      const esprId = ef === 0 ? 4 : ef === 1 ? 5 : 6;
+      spr(esprId, flr(ex), flr(ey), true);
+
+      if (flr(API.frame / 20) % 2 === 0) drawText("PRESS FLAP TO START", 160, 170, 3);
+
+      // Score info
+      drawText("DEFEAT ENEMY KNIGHTS", 155, 200, 2);
+      drawText("HIGHER LANCE WINS", 168, 212, 2);
+      drawText("COLLECT EGGS FOR POINTS", 144, 224, 2);
+      drawText("BEWARE THE LAVA", 175, 236, 2);
+
+      drawText("GRAYBOX DEMO V0.1", 168, 305, 1);
+      return;
+    }
+
+    if (state === "gameover") {
+      drawPlatforms();
+      drawLava(lavaFrame);
+      for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+      drawText("GAME OVER", 195, 100, 3);
+      drawText("SCORE: " + score, 195, 125, 2);
+      drawText("WAVE: " + wave, 207, 140, 2);
+      if (flr(API.frame / 20) % 2 === 0) drawText("PRESS FLAP TO CONTINUE", 148, 180, 3);
+      return;
+    }
+
+    // --- Play state rendering ---
+
+    // Platforms
+    drawPlatforms();
+
+    // Lava
+    drawLava(lavaFrame);
+
+    // Eggs
+    for (const eg of eggs) {
+      if (eg.hatching && flr(API.frame / 4) % 2 === 0) {
+        sprWrap(8, flr(eg.x), flr(eg.y));
+      } else {
+        sprWrap(7, flr(eg.x), flr(eg.y));
+      }
+    }
+
+    // Enemies
+    for (const e of enemies) {
+      let sprBase;
+      if (e.type === 1) {
+        sprBase = e.wingFrame === 1 ? 15 : 16; // shadow enemy
+      } else {
+        sprBase = e.wingFrame === 1 ? 4 : e.wingFrame === 2 ? 5 : 6;
+      }
+      const flip = e.facing < 0;
+      sprWrap(sprBase, flr(e.x), flr(e.y), flip);
+    }
+
+    // Player
+    if (player.invincible <= 0 || flr(API.frame / 3) % 2 === 0) {
+      const sprBase = player.wingFrame === 1 ? 1 : player.wingFrame === 2 ? 2 : 3;
+      const flip = player.facing < 0;
+      sprWrap(sprBase, flr(player.x), flr(player.y), flip);
+    }
+
+    // Explosions
+    for (const e of explosions) {
+      const sprId = e.timer > 6 ? 9 : 10;
+      spr(sprId, flr(e.x), flr(e.y));
+    }
+
+    // Particles
+    for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+    // HUD
+    rectf(0, 0, W, 12, 0);
+    drawText("SCORE:" + score, 4, 3, 3);
+    drawText("WAVE:" + wave, W / 2 - 25, 3, 2);
+    for (let i = 0; i < lives; i++) spr(14, W - 36 + i * 10, 2);
+
+    // Wave announcement
+    if (waveMessage > 0) {
+      const msgY = 40 + sin(waveMessage * 0.1) * 3;
+      drawText("WAVE " + wave, 210, flr(msgY), 3);
+      if (waveMessage > 60) drawText("GET READY!", 195, flr(msgY) + 12, 2);
+    }
+  };
+
+  function drawPlatforms() {
+    for (const p of platforms) {
+      const tiles = Math.ceil(p.w / 8);
+      for (let t = 0; t < tiles; t++) {
+        spr(11, p.x + t * 8, p.y);
+      }
+    }
+  }
+
+  function drawLava(frame) {
+    const sprId = frame === 0 ? 12 : 13;
+    // Lava surface
+    for (let x = 0; x < W; x += 8) {
+      spr(sprId, x, LAVA_Y);
+    }
+    // Lava body below surface
+    rectf(0, LAVA_Y + 4, W, H - LAVA_Y - 4, 1);
+    // Lava glow particles
+    if (flr(API.frame / 4) % 3 === 0) {
+      const gx = flr(rnd(W));
+      pix(gx, LAVA_Y - 1, 2);
+    }
+  }
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

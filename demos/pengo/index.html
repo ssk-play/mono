@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Pengo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>Z</span> PUSH/BREAK &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Pengo Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Grid constants ---
+  // Arena: 13 columns x 15 rows of 16x16 cells = 208x240
+  // Centered in 480x320 with room for HUD
+  const COLS = 13;
+  const ROWS = 15;
+  const TILE = 16;
+  const ARENA_X = flr((W - COLS * TILE) / 2);
+  const ARENA_Y = 20;
+  const ARENA_W = COLS * TILE;
+  const ARENA_H = ROWS * TILE;
+
+  // Cell types
+  const EMPTY = 0;
+  const ICE = 1;
+  const DIAMOND = 2;
+  const EGG = 3;
+
+  // --- Sprites ---
+  // 1: Pengo facing down frame 1
+  defSprite(1,
+    "00333300" +
+    "03333330" +
+    "33233230" +
+    "33333330" +
+    "03333300" +
+    "03322330" +
+    "00333300" +
+    "00300300"
+  );
+  // 2: Pengo facing down frame 2
+  defSprite(2,
+    "00333300" +
+    "03333330" +
+    "33233230" +
+    "33333330" +
+    "03333300" +
+    "03322330" +
+    "00333300" +
+    "03000030"
+  );
+  // 3: Pengo facing up frame 1
+  defSprite(3,
+    "00333300" +
+    "03333330" +
+    "33333330" +
+    "33333330" +
+    "03333300" +
+    "03333330" +
+    "00333300" +
+    "00300300"
+  );
+  // 4: Pengo facing up frame 2
+  defSprite(4,
+    "00333300" +
+    "03333330" +
+    "33333330" +
+    "33333330" +
+    "03333300" +
+    "03333330" +
+    "00333300" +
+    "03000030"
+  );
+  // 5: Pengo facing right frame 1
+  defSprite(5,
+    "00333300" +
+    "03333300" +
+    "33233300" +
+    "33333330" +
+    "03333330" +
+    "03322330" +
+    "00333300" +
+    "00300300"
+  );
+  // 6: Pengo facing right frame 2
+  defSprite(6,
+    "00333300" +
+    "03333300" +
+    "33233300" +
+    "33333330" +
+    "03333330" +
+    "03322330" +
+    "00333300" +
+    "03000030"
+  );
+  // 10: Ice block top-left
+  defSprite(10,
+    "22222222" +
+    "21111112" +
+    "21222212" +
+    "21222212" +
+    "21222212" +
+    "21222212" +
+    "21111112" +
+    "21222212"
+  );
+  // 11: Ice block top-right
+  defSprite(11,
+    "22222222" +
+    "21111112" +
+    "21222212" +
+    "21222212" +
+    "21222212" +
+    "21222212" +
+    "21111112" +
+    "21222212"
+  );
+  // 12: Ice block bottom-left
+  defSprite(12,
+    "21222212" +
+    "21111112" +
+    "21222212" +
+    "21222212" +
+    "21222212" +
+    "21222212" +
+    "21111112" +
+    "22222222"
+  );
+  // 13: Ice block bottom-right
+  defSprite(13,
+    "21222212" +
+    "21111112" +
+    "21222212" +
+    "21222212" +
+    "21222212" +
+    "21222212" +
+    "21111112" +
+    "22222222"
+  );
+  // 14: Diamond block top-left
+  defSprite(14,
+    "33333333" +
+    "32222223" +
+    "32333323" +
+    "32313323" +
+    "32333323" +
+    "32333323" +
+    "32222223" +
+    "32333323"
+  );
+  // 15: Diamond block top-right
+  defSprite(15,
+    "33333333" +
+    "32222223" +
+    "32333323" +
+    "32331323" +
+    "32333323" +
+    "32333323" +
+    "32222223" +
+    "32333323"
+  );
+  // 16: Diamond block bottom-left
+  defSprite(16,
+    "32333323" +
+    "32222223" +
+    "32333323" +
+    "32333323" +
+    "32313323" +
+    "32333323" +
+    "32222223" +
+    "33333333"
+  );
+  // 17: Diamond block bottom-right
+  defSprite(17,
+    "32333323" +
+    "32222223" +
+    "32333323" +
+    "32333323" +
+    "32331323" +
+    "32333323" +
+    "32222223" +
+    "33333333"
+  );
+  // 20: Sno-Bee enemy frame 1
+  defSprite(20,
+    "01111100" +
+    "13333310" +
+    "13033030" +
+    "13333310" +
+    "01333100" +
+    "01311310" +
+    "00111100" +
+    "01000010"
+  );
+  // 21: Sno-Bee enemy frame 2
+  defSprite(21,
+    "01111100" +
+    "13333310" +
+    "13033030" +
+    "13333310" +
+    "01333100" +
+    "01311310" +
+    "00111100" +
+    "10000001"
+  );
+  // 22: Sno-Bee stunned
+  defSprite(22,
+    "01111100" +
+    "13333310" +
+    "10030030" +
+    "13333310" +
+    "01333100" +
+    "01111110" +
+    "00111100" +
+    "00100100"
+  );
+  // 25: Explosion frame 1
+  defSprite(25,
+    "20000020" +
+    "02000200" +
+    "00222200" +
+    "02222220" +
+    "00222200" +
+    "02000200" +
+    "20000020" +
+    "00000000"
+  );
+  // 26: Explosion frame 2
+  defSprite(26,
+    "10001001" +
+    "00100010" +
+    "01000100" +
+    "00010000" +
+    "01000100" +
+    "00100010" +
+    "10001001" +
+    "00000000"
+  );
+  // 31: Pengo push frame
+  defSprite(31,
+    "00333300" +
+    "03333330" +
+    "33233230" +
+    "33333330" +
+    "33333300" +
+    "33322330" +
+    "00333300" +
+    "00300300"
+  );
+  // 32: Life icon
+  defSprite(32,
+    "00000000" +
+    "00333300" +
+    "03233230" +
+    "03333300" +
+    "00322300" +
+    "00333300" +
+    "00000000" +
+    "00000000"
+  );
+  // 33: Egg crack
+  defSprite(33,
+    "22222222" +
+    "21111112" +
+    "21200212" +
+    "21022012" +
+    "21200212" +
+    "21022012" +
+    "21111112" +
+    "22222222"
+  );
+
+  // --- Game state ---
+  let state = "title";
+  let grid = [];
+  let pengo, enemies, slidingBlocks, explosions, particles;
+  let score, lives, level, wallShakeTimer, wallShakeDir;
+  let levelClearTimer, deathTimer, bonusPopups;
+  let diamondBonusTimer, diamondBonusText;
+  let hatchTimers;
+
+  function initGrid() {
+    grid = [];
+    for (let c = 0; c < COLS; c++) {
+      grid[c] = [];
+      for (let r = 0; r < ROWS; r++) {
+        grid[c][r] = EMPTY;
+      }
+    }
+    // Fill ~55% with ice
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        if (rnd(1) < 0.55) grid[c][r] = ICE;
+      }
+    }
+    // Place 3 diamond blocks
+    let placed = 0;
+    while (placed < 3) {
+      const c = flr(rnd(COLS));
+      const r = flr(rnd(ROWS));
+      if (grid[c][r] === ICE) { grid[c][r] = DIAMOND; placed++; }
+    }
+    // Place egg blocks
+    const numEggs = min(3 + level, 8);
+    let eggsPlaced = 0;
+    while (eggsPlaced < numEggs) {
+      const c = flr(rnd(COLS));
+      const r = flr(rnd(ROWS));
+      if (grid[c][r] === ICE) { grid[c][r] = EGG; eggsPlaced++; }
+    }
+    // Clear pengo spawn area
+    const pc = flr(COLS / 2);
+    const pr = ROWS - 1;
+    grid[pc][pr] = EMPTY;
+    if (pc > 0) grid[pc - 1][pr] = EMPTY;
+    if (pc < COLS - 1) grid[pc + 1][pr] = EMPTY;
+    if (pr > 0) grid[pc][pr - 1] = EMPTY;
+  }
+
+  function resetGame() {
+    score = 0;
+    lives = 3;
+    level = 1;
+    startLevel();
+  }
+
+  function startLevel() {
+    initGrid();
+    pengo = {
+      cx: flr(COLS / 2), cy: ROWS - 1,
+      dir: 1, // 0=down,1=up,2=left,3=right
+      moveTimer: 0, pushTimer: 0,
+      animFrame: 0, animTimer: 0,
+      invincible: 0
+    };
+    enemies = [];
+    slidingBlocks = [];
+    explosions = [];
+    particles = [];
+    bonusPopups = [];
+    wallShakeTimer = 0;
+    wallShakeDir = 0;
+    levelClearTimer = 0;
+    deathTimer = 0;
+    diamondBonusTimer = 0;
+    diamondBonusText = "";
+    hatchTimers = [];
+
+    // Spawn 2 free enemies
+    for (let i = 0; i < min(2, 3 + level); i++) spawnFreeEnemy();
+
+    // Set up egg hatch timers
+    const eggCells = [];
+    for (let c = 0; c < COLS; c++)
+      for (let r = 0; r < ROWS; r++)
+        if (grid[c][r] === EGG) eggCells.push({ c, r });
+
+    for (let i = 0; i < eggCells.length; i++) {
+      hatchTimers.push({
+        cx: eggCells[i].c, cy: eggCells[i].r,
+        timer: 150 + flr(rnd(250)) + i * 100,
+        hatching: false, hatchAnim: 0
+      });
+    }
+  }
+
+  function spawnFreeEnemy() {
+    for (let a = 0; a < 200; a++) {
+      const c = flr(rnd(COLS));
+      const r = flr(rnd(ROWS - 4));
+      if (grid[c][r] === EMPTY) {
+        const dist = _abs(c - (pengo ? pengo.cx : flr(COLS/2))) + _abs(r - (pengo ? pengo.cy : ROWS-1));
+        if (dist > 5) { enemies.push(createEnemy(c, r)); return; }
+      }
+    }
+  }
+
+  function createEnemy(cx, cy) {
+    return {
+      cx, cy, dir: flr(rnd(4)),
+      moveTimer: 0,
+      moveDelay: _max(6, 18 - level * 2),
+      stunTimer: 0,
+      animFrame: 0, animTimer: 0,
+      breakTimer: 0,
+      targetBlock: null,
+      alive: true
+    };
+  }
+
+  function cellToX(cx) { return ARENA_X + cx * TILE; }
+  function cellToY(cy) { return ARENA_Y + cy * TILE; }
+  function inBounds(cx, cy) { return cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS; }
+
+  const DX = [0, 0, -1, 1];
+  const DY = [1, -1, 0, 0];
+  function dirDx(dir) { return DX[dir]; }
+  function dirDy(dir) { return DY[dir]; }
+
+  // --- Sound effects ---
+  function pushSound() { note(0, "E4", 0.05); }
+  function crushSound() { note(0, "C3", 0.08); setTimeout(() => note(0, "G2", 0.06), 50); }
+  function stunSound() { note(1, "A5", 0.04); setTimeout(() => note(1, "E5", 0.04), 40); }
+  function wallShakeSound() { note(0, "C2", 0.06); note(1, "G2", 0.06); }
+  function breakBlockSound() { note(0, "G3", 0.04); }
+  function deathSound() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function diamondBonusSound() {
+    note(0, "C5", 0.1);
+    setTimeout(() => note(0, "E5", 0.1), 80);
+    setTimeout(() => note(0, "G5", 0.1), 160);
+    setTimeout(() => note(0, "C6", 0.2), 240);
+  }
+  function levelClearSound() {
+    note(0, "G5", 0.1);
+    setTimeout(() => note(0, "A5", 0.1), 100);
+    setTimeout(() => note(0, "B5", 0.1), 200);
+    setTimeout(() => note(0, "C6", 0.2), 300);
+  }
+  function hatchSound() { note(1, "D4", 0.06); setTimeout(() => note(1, "F4", 0.04), 50); }
+
+  // --- Block push logic ---
+  function pushBlock(cx, cy, dir) {
+    const type = grid[cx][cy];
+    if (type === EMPTY) return;
+
+    const dx = dirDx(dir);
+    const dy = dirDy(dir);
+
+    // Find slide destination
+    let nx = cx + dx;
+    let ny = cy + dy;
+    let crushed = [];
+
+    while (inBounds(nx, ny) && grid[nx][ny] === EMPTY) {
+      // Check enemies in path
+      for (const e of enemies) {
+        if (e.alive && e.cx === nx && e.cy === ny && e.stunTimer <= 0) crushed.push(e);
+      }
+      nx += dx;
+      ny += dy;
+    }
+
+    const finalX = nx - dx;
+    const finalY = ny - dy;
+
+    // Nothing moved
+    if (finalX === cx && finalY === cy) return false;
+
+    grid[cx][cy] = EMPTY;
+    // Remove hatch timer
+    hatchTimers = hatchTimers.filter(h => h.cx !== cx || h.cy !== cy);
+
+    // Crush enemies
+    for (const e of crushed) {
+      e.alive = false;
+      addExplosion(cellToX(e.cx) + 4, cellToY(e.cy) + 4);
+      score += 400;
+      crushSound();
+      bonusPopups.push({ x: cellToX(e.cx), y: cellToY(e.cy), text: "400", timer: 40 });
+    }
+
+    const hitWall = !inBounds(nx, ny);
+    if (hitWall) {
+      // Block destroyed by wall
+      addExplosion(cellToX(finalX) + 4, cellToY(finalY) + 4);
+      breakBlockSound();
+    } else {
+      // Block stops
+      grid[finalX][finalY] = type;
+    }
+
+    // Visual sliding
+    slidingBlocks.push({
+      type, dir,
+      x: cellToX(cx), y: cellToY(cy),
+      toX: cellToX(finalX), toY: cellToY(finalY),
+      speed: 8, done: false
+    });
+
+    pushSound();
+    checkDiamondBonus();
+    return true;
+  }
+
+  function checkDiamondBonus() {
+    // Horizontal
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c <= COLS - 3; c++) {
+        if (grid[c][r] === DIAMOND && grid[c+1][r] === DIAMOND && grid[c+2][r] === DIAMOND) {
+          awardDiamondBonus();
+          return;
+        }
+      }
+    }
+    // Vertical
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r <= ROWS - 3; r++) {
+        if (grid[c][r] === DIAMOND && grid[c][r+1] === DIAMOND && grid[c][r+2] === DIAMOND) {
+          awardDiamondBonus();
+          return;
+        }
+      }
+    }
+  }
+
+  function awardDiamondBonus() {
+    score += 10000;
+    diamondBonusTimer = 90;
+    diamondBonusText = "DIAMOND BONUS 10000!";
+    diamondBonusSound();
+    for (const e of enemies) { if (e.alive) e.stunTimer = 120; }
+  }
+
+  function wallVibrate(dir) {
+    wallShakeTimer = 15;
+    wallShakeDir = dir;
+    wallShakeSound();
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      let onWall = false;
+      if (dir === 0 && e.cy === ROWS - 1) onWall = true;
+      if (dir === 1 && e.cy === 0) onWall = true;
+      if (dir === 2 && e.cx === 0) onWall = true;
+      if (dir === 3 && e.cx === COLS - 1) onWall = true;
+      if (onWall) {
+        e.stunTimer = 90;
+        stunSound();
+        score += 100;
+        bonusPopups.push({ x: cellToX(e.cx), y: cellToY(e.cy), text: "100", timer: 30 });
+      }
+    }
+  }
+
+  function addExplosion(x, y) {
+    explosions.push({ x, y, timer: 12 });
+    for (let i = 0; i < 6; i++)
+      particles.push({
+        x, y, vx: rnd(3) - 1.5, vy: rnd(3) - 1.5,
+        life: 5 + flr(rnd(8)), color: flr(rnd(3)) + 1
+      });
+  }
+
+  function isLevelClear() {
+    return enemies.filter(e => e.alive).length === 0 && hatchTimers.length === 0;
+  }
+
+  function killPengo() {
+    if (deathTimer > 0) return;
+    lives--;
+    deathTimer = 60;
+    addExplosion(cellToX(pengo.cx) + 4, cellToY(pengo.cy) + 4);
+    deathSound();
+  }
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      if (btnp("a") || btnp("start")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.1);
+        setTimeout(() => note(0, "E5", 0.1), 100);
+        setTimeout(() => note(0, "G5", 0.15), 200);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    // --- Play state ---
+    if (deathTimer > 0) {
+      deathTimer--;
+      // Update particles during death
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        explosions[i].timer--;
+        if (explosions[i].timer <= 0) explosions.splice(i, 1);
+      }
+      if (deathTimer === 0) {
+        if (lives <= 0) { state = "gameover"; return; }
+        pengo.cx = flr(COLS / 2);
+        pengo.cy = ROWS - 1;
+        pengo.invincible = 60;
+        // Clear area around respawn
+        grid[pengo.cx][pengo.cy] = EMPTY;
+        if (pengo.cx > 0) grid[pengo.cx - 1][pengo.cy] = EMPTY;
+        if (pengo.cx < COLS - 1) grid[pengo.cx + 1][pengo.cy] = EMPTY;
+        if (pengo.cy > 0) grid[pengo.cx][pengo.cy - 1] = EMPTY;
+      }
+      return;
+    }
+
+    // Level clear
+    if (isLevelClear() && levelClearTimer === 0) {
+      levelClearTimer = 90;
+      levelClearSound();
+    }
+    if (levelClearTimer > 0) {
+      levelClearTimer--;
+      if (levelClearTimer === 0) { level++; startLevel(); }
+      return;
+    }
+
+    // Timers
+    if (wallShakeTimer > 0) wallShakeTimer--;
+    if (diamondBonusTimer > 0) diamondBonusTimer--;
+    if (pengo.invincible > 0) pengo.invincible--;
+
+    for (let i = bonusPopups.length - 1; i >= 0; i--) {
+      bonusPopups[i].timer--;
+      bonusPopups[i].y -= 0.5;
+      if (bonusPopups[i].timer <= 0) bonusPopups.splice(i, 1);
+    }
+
+    // --- Pengo movement ---
+    if (pengo.moveTimer > 0) pengo.moveTimer--;
+    if (pengo.pushTimer > 0) pengo.pushTimer--;
+
+    pengo.animTimer++;
+    if (pengo.animTimer >= 8) { pengo.animTimer = 0; pengo.animFrame = 1 - pengo.animFrame; }
+
+    if (pengo.moveTimer <= 0 && pengo.pushTimer <= 0) {
+      let moveDir = -1;
+      if (btn("down")) moveDir = 0;
+      else if (btn("up")) moveDir = 1;
+      else if (btn("left")) moveDir = 2;
+      else if (btn("right")) moveDir = 3;
+
+      if (moveDir >= 0) {
+        pengo.dir = moveDir;
+        const nx = pengo.cx + dirDx(moveDir);
+        const ny = pengo.cy + dirDy(moveDir);
+        if (inBounds(nx, ny) && grid[nx][ny] === EMPTY) {
+          const occ = enemies.some(e => e.alive && e.cx === nx && e.cy === ny && e.stunTimer <= 0);
+          if (!occ) {
+            pengo.cx = nx;
+            pengo.cy = ny;
+            pengo.moveTimer = 4;
+          }
+        }
+      }
+    }
+
+    // --- Push action (Z) ---
+    if (btnp("a") && pengo.pushTimer <= 0) {
+      const tx = pengo.cx + dirDx(pengo.dir);
+      const ty = pengo.cy + dirDy(pengo.dir);
+      pengo.pushTimer = 10;
+
+      if (!inBounds(tx, ty)) {
+        // Push against arena wall
+        wallVibrate(pengo.dir);
+      } else if (grid[tx][ty] !== EMPTY) {
+        // Try to push the block
+        const behindX = tx + dirDx(pengo.dir);
+        const behindY = ty + dirDy(pengo.dir);
+        if (!inBounds(behindX, behindY) || grid[behindX][behindY] === EMPTY) {
+          pushBlock(tx, ty, pengo.dir);
+        } else {
+          // Can't push - break the block instead (not diamonds)
+          if (grid[tx][ty] !== DIAMOND) {
+            grid[tx][ty] = EMPTY;
+            hatchTimers = hatchTimers.filter(h => h.cx !== tx || h.cy !== ty);
+            addExplosion(cellToX(tx) + 4, cellToY(ty) + 4);
+            breakBlockSound();
+            score += 30;
+          } else {
+            // Can't break diamond blocks
+            pushSound();
+          }
+        }
+      }
+    }
+
+    // --- Sliding blocks visual ---
+    for (let i = slidingBlocks.length - 1; i >= 0; i--) {
+      const sb = slidingBlocks[i];
+      sb.x += dirDx(sb.dir) * sb.speed;
+      sb.y += dirDy(sb.dir) * sb.speed;
+      const dx = _abs(sb.toX - sb.x);
+      const dy = _abs(sb.toY - sb.y);
+      if (dx <= sb.speed && dy <= sb.speed) slidingBlocks.splice(i, 1);
+    }
+
+    // --- Egg hatching ---
+    for (let i = hatchTimers.length - 1; i >= 0; i--) {
+      const h = hatchTimers[i];
+      if (grid[h.cx][h.cy] !== EGG) { hatchTimers.splice(i, 1); continue; }
+      h.timer--;
+      if (h.timer <= 30 && !h.hatching) h.hatching = true;
+      if (h.hatching) h.hatchAnim++;
+      if (h.timer <= 0) {
+        grid[h.cx][h.cy] = EMPTY;
+        enemies.push(createEnemy(h.cx, h.cy));
+        hatchTimers.splice(i, 1);
+        hatchSound();
+      }
+    }
+
+    // --- Enemy AI ---
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      if (e.stunTimer > 0) { e.stunTimer--; continue; }
+
+      e.animTimer++;
+      if (e.animTimer >= 10) { e.animTimer = 0; e.animFrame = 1 - e.animFrame; }
+
+      // Breaking block
+      if (e.breakTimer > 0) {
+        e.breakTimer--;
+        if (e.breakTimer === 0 && e.targetBlock) {
+          const bx = e.targetBlock.cx;
+          const by = e.targetBlock.cy;
+          if (inBounds(bx, by) && grid[bx][by] !== EMPTY && grid[bx][by] !== DIAMOND) {
+            grid[bx][by] = EMPTY;
+            hatchTimers = hatchTimers.filter(h => h.cx !== bx || h.cy !== by);
+            addExplosion(cellToX(bx) + 4, cellToY(by) + 4);
+            breakBlockSound();
+          }
+          e.targetBlock = null;
+        }
+        continue;
+      }
+
+      e.moveTimer--;
+      if (e.moveTimer <= 0) {
+        e.moveTimer = e.moveDelay;
+
+        const ddx = pengo.cx - e.cx;
+        const ddy = pengo.cy - e.cy;
+
+        let dirs;
+        if (rnd(1) < 0.2) {
+          // Random movement
+          dirs = [flr(rnd(4)), flr(rnd(4)), flr(rnd(4)), flr(rnd(4))];
+        } else {
+          // Chase pengo
+          dirs = [];
+          if (_abs(ddx) > _abs(ddy)) {
+            dirs.push(ddx > 0 ? 3 : 2);
+            dirs.push(ddy > 0 ? 0 : 1);
+            dirs.push(ddy > 0 ? 1 : 0);
+            dirs.push(ddx > 0 ? 2 : 3);
+          } else {
+            dirs.push(ddy > 0 ? 0 : 1);
+            dirs.push(ddx > 0 ? 3 : 2);
+            dirs.push(ddx > 0 ? 2 : 3);
+            dirs.push(ddy > 0 ? 1 : 0);
+          }
+        }
+
+        for (const dir of dirs) {
+          const nx = e.cx + dirDx(dir);
+          const ny = e.cy + dirDy(dir);
+          if (!inBounds(nx, ny)) continue;
+          if (grid[nx][ny] === EMPTY) {
+            const occ = enemies.some(o => o !== e && o.alive && o.cx === nx && o.cy === ny);
+            if (!occ) {
+              e.cx = nx; e.cy = ny; e.dir = dir;
+              break;
+            }
+          } else if (grid[nx][ny] !== DIAMOND && rnd(1) < 0.25) {
+            e.breakTimer = 15;
+            e.targetBlock = { cx: nx, cy: ny };
+            e.dir = dir;
+            break;
+          }
+        }
+      }
+    }
+
+    // Enemy-pengo collision
+    if (pengo.invincible <= 0) {
+      for (const e of enemies) {
+        if (e.alive && e.stunTimer <= 0 && e.cx === pengo.cx && e.cy === pengo.cy) {
+          killPengo();
+          break;
+        }
+      }
+    }
+
+    // Stomp stunned enemies
+    for (const e of enemies) {
+      if (e.alive && e.stunTimer > 0 && e.cx === pengo.cx && e.cy === pengo.cy) {
+        e.alive = false;
+        addExplosion(cellToX(e.cx) + 4, cellToY(e.cy) + 4);
+        score += 500;
+        crushSound();
+        bonusPopups.push({ x: cellToX(e.cx), y: cellToY(e.cy), text: "500", timer: 40 });
+      }
+    }
+
+    enemies = enemies.filter(e => e.alive);
+
+    // Explosions & particles
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].timer--;
+      if (explosions[i].timer <= 0) explosions.splice(i, 1);
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  };
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    cls(0);
+
+    if (state === "title") { drawTitle(); return; }
+    if (state === "gameover") { drawGameOver(); return; }
+
+    // --- Play state ---
+    const shk = wallShakeTimer > 0 ? flr(sin(wallShakeTimer * 2) * 2) : 0;
+    const shX = (wallShakeDir >= 2) ? shk : 0;
+    const shY = (wallShakeDir < 2) ? shk : 0;
+
+    // Arena background
+    rectf(ARENA_X - 1, ARENA_Y - 1, ARENA_W + 2, ARENA_H + 2, 0);
+
+    // Walls
+    const wc = wallShakeTimer > 0 && flr(API.frame / 2) % 2 === 0 ? 2 : 1;
+    // Top & bottom walls
+    rectf(ARENA_X - TILE + shX, ARENA_Y - TILE + shY, ARENA_W + TILE * 2, TILE, wc);
+    rectf(ARENA_X - TILE + shX, ARENA_Y + ARENA_H + shY, ARENA_W + TILE * 2, TILE, wc);
+    // Left & right walls
+    rectf(ARENA_X - TILE + shX, ARENA_Y + shY, TILE, ARENA_H, wc);
+    rectf(ARENA_X + ARENA_W + shX, ARENA_Y + shY, TILE, ARENA_H, wc);
+    // Wall detail lines
+    for (let i = 0; i <= COLS + 1; i++) {
+      const wx = ARENA_X - TILE + i * TILE + shX;
+      line(wx, ARENA_Y - TILE + shY, wx, ARENA_Y + shY - 1, 0);
+      line(wx, ARENA_Y + ARENA_H + shY, wx, ARENA_Y + ARENA_H + TILE + shY, 0);
+    }
+    for (let j = 0; j <= ROWS; j++) {
+      const wy = ARENA_Y + j * TILE + shY;
+      line(ARENA_X - TILE + shX, wy, ARENA_X + shX - 1, wy, 0);
+      line(ARENA_X + ARENA_W + shX, wy, ARENA_X + ARENA_W + TILE + shX, wy, 0);
+    }
+    // Wall inner border
+    rect(ARENA_X - 1 + shX, ARENA_Y - 1 + shY, ARENA_W + 2, ARENA_H + 2, wc === 2 ? 3 : 2);
+
+    // Grid cells
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        const x = ARENA_X + c * TILE + shX;
+        const y = ARENA_Y + r * TILE + shY;
+        const cell = grid[c][r];
+        if (cell === ICE || cell === EGG) {
+          let hatching = false;
+          if (cell === EGG) {
+            const ht = hatchTimers.find(h => h.cx === c && h.cy === r);
+            if (ht && ht.hatching) hatching = true;
+          }
+          if (hatching && flr(API.frame / 4) % 2 === 0) {
+            drawBlock16(x, y, 33);
+          } else {
+            drawBlock16(x, y, 10);
+          }
+        } else if (cell === DIAMOND) {
+          drawBlock16(x, y, 14);
+        }
+      }
+    }
+
+    // Sliding blocks
+    for (const sb of slidingBlocks) {
+      const sprBase = sb.type === DIAMOND ? 14 : 10;
+      drawBlock16(flr(sb.x) + shX, flr(sb.y) + shY, sprBase);
+    }
+
+    // Enemies
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const ex = cellToX(e.cx) + shX;
+      const ey = cellToY(e.cy) + shY;
+      if (e.stunTimer > 0) {
+        if (e.stunTimer < 30 && flr(API.frame / 4) % 2 === 0) continue;
+        draw16(ex, ey, 22, false);
+      } else {
+        draw16(ex, ey, e.animFrame === 0 ? 20 : 21, false);
+      }
+    }
+
+    // Pengo
+    if (deathTimer <= 0) {
+      if (pengo.invincible <= 0 || flr(API.frame / 3) % 2 === 0) {
+        const px = cellToX(pengo.cx) + shX;
+        const py = cellToY(pengo.cy) + shY;
+        let sprId;
+        if (pengo.pushTimer > 5) {
+          sprId = 31;
+        } else if (pengo.dir === 0) {
+          sprId = pengo.animFrame === 0 ? 1 : 2;
+        } else if (pengo.dir === 1) {
+          sprId = pengo.animFrame === 0 ? 3 : 4;
+        } else {
+          sprId = pengo.animFrame === 0 ? 5 : 6;
+        }
+        draw16(px, py, sprId, pengo.dir === 2);
+      }
+    }
+
+    // Explosions
+    for (const e of explosions) {
+      const sprId = e.timer > 6 ? 25 : 26;
+      // Draw at 16x16
+      draw16(flr(e.x) - 4, flr(e.y) - 4, sprId, false);
+    }
+
+    // Particles
+    for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+    // Bonus popups
+    for (const bp of bonusPopups) text(bp.text, flr(bp.x) + 2, flr(bp.y), 3);
+
+    // Diamond bonus overlay
+    if (diamondBonusTimer > 0) {
+      const msg = diamondBonusText;
+      const bx = W / 2 - (msg.length * (FONT_W + 1)) / 2;
+      rectf(bx - 6, H / 2 - 14, msg.length * (FONT_W + 1) + 12, 20, 0);
+      rect(bx - 6, H / 2 - 14, msg.length * (FONT_W + 1) + 12, 20, 3);
+      text(msg, flr(bx), H / 2 - 8, 3);
+    }
+
+    // Level clear overlay
+    if (levelClearTimer > 0) {
+      const msg = "LEVEL " + level + " CLEAR!";
+      const bx = W / 2 - (msg.length * (FONT_W + 1)) / 2;
+      rectf(bx - 6, H / 2 - 14, msg.length * (FONT_W + 1) + 12, 20, 0);
+      rect(bx - 6, H / 2 - 14, msg.length * (FONT_W + 1) + 12, 20, 3);
+      text(msg, flr(bx), H / 2 - 8, 3);
+    }
+
+    // HUD top
+    rectf(0, 0, W, 14, 0);
+    text("SCORE:" + score, 4, 4, 3);
+    text("LV:" + level, W / 2 - 15, 4, 2);
+    for (let i = 0; i < lives; i++) spr(32, W - 40 + i * 10, 3);
+
+    // HUD bottom
+    rectf(0, H - 10, W, 10, 0);
+    const ac = enemies.filter(e => e.alive).length;
+    text("ENEMIES:" + ac + "  EGGS:" + hatchTimers.length, 4, H - 8, 1);
+  };
+
+  // Draw an 8x8 sprite scaled to 16x16
+  function draw16(x, y, sprId, flipX) {
+    const s = sprites[sprId];
+    if (!s) return;
+    x = flr(x); y = flr(y);
+    for (let py = 0; py < 8; py++) {
+      for (let px = 0; px < 8; px++) {
+        const sx = flipX ? 7 - px : px;
+        const c = s[py * 8 + sx];
+        const dx = x + px * 2;
+        const dy = y + py * 2;
+        for (let yy = 0; yy < 2; yy++)
+          for (let xx = 0; xx < 2; xx++) {
+            const fx = dx + xx, fy = dy + yy;
+            if (fx >= 0 && fx < W && fy >= 0 && fy < H)
+              buf32[fy * W + fx] = COLOR_U32[c];
+          }
+      }
+    }
+  }
+
+  // Draw a 16x16 block using 4 copies of an 8x8 sprite quadrant base
+  function drawBlock16(x, y, sprBase) {
+    spr(sprBase, flr(x), flr(y));
+    spr(sprBase + 1, flr(x) + 8, flr(y));
+    spr(sprBase + 2, flr(x), flr(y) + 8);
+    spr(sprBase + 3, flr(x) + 8, flr(y) + 8);
+  }
+
+  function drawTitle() {
+    // Background ice pattern
+    for (let i = 0; i < 30; i++) {
+      const bx = ((i * 43 + flr(API.frame * 0.2)) % (W + 32)) - 16;
+      const by = ((i * 67) % (H + 32)) - 16;
+      rectf(bx, by, 14, 14, 1);
+      rect(bx + 1, by + 1, 12, 12, 0);
+      rect(bx + 3, by + 3, 8, 8, 1);
+    }
+
+    const ty = 40 + sin(API.frame * 0.05) * 4;
+
+    // Title shadow + text
+    text("PENGO", 213, flr(ty) + 1, 1);
+    text("PENGO", 212, flr(ty), 3);
+    rectf(180, flr(ty) + 10, 120, 1, 2);
+
+    // Animated characters
+    const cx = W / 2;
+    const anim = flr(API.frame / 10) % 2;
+    draw16(cx - 8, flr(ty) + 20, anim === 0 ? 1 : 2, false);
+
+    const ea = flr(API.frame / 12) % 2;
+    draw16(cx - 40, flr(ty) + 22 + sin(API.frame * 0.1) * 3, ea === 0 ? 20 : 21, false);
+    draw16(cx + 24, flr(ty) + 22 + sin(API.frame * 0.1 + 2) * 3, ea === 0 ? 21 : 20, false);
+
+    // Diamond blocks flanking
+    drawBlock16(cx - 72, flr(ty) + 22, 14);
+    drawBlock16(cx + 56, flr(ty) + 22, 14);
+
+    if (flr(API.frame / 20) % 2 === 0) text("PRESS Z TO START", 170, 155, 3);
+
+    // Instructions
+    text("- HOW TO PLAY -", 178, 178, 2);
+    text("ARROWS   MOVE PENGO", 163, 194, 2);
+    text("Z   PUSH OR BREAK ICE", 155, 207, 2);
+    text("CRUSH ENEMIES WITH BLOCKS", 140, 220, 2);
+    text("ALIGN 3 DIAMONDS  10000 PTS", 130, 233, 2);
+    text("PUSH WALL TO STUN ENEMIES", 140, 246, 2);
+
+    text("CRUSH:400  STUN:100  STOMP:500", 120, 268, 1);
+    text("GRAYBOX DEMO V0.1", 168, 305, 1);
+  }
+
+  function drawGameOver() {
+    for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+    // Draw remaining arena faded
+    rectf(W / 2 - 80, 80, 160, 120, 0);
+    rect(W / 2 - 80, 80, 160, 120, 1);
+
+    text("GAME OVER", 198, 100, 3);
+    text("SCORE: " + score, 193, 130, 2);
+    text("LEVEL: " + level, 200, 148, 2);
+    if (flr(API.frame / 20) % 2 === 0) text("PRESS Z TO CONTINUE", 155, 210, 3);
+  }
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

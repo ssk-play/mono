@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Scramble</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>Z</span> SHOOT &nbsp;&nbsp; <span>X</span> BOMB &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Scramble Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+  // 1: Player ship (right-facing jet)
+  defSprite(1,
+    "00033000" +
+    "03333300" +
+    "33333330" +
+    "33233331" +
+    "33333330" +
+    "03333300" +
+    "00033000" +
+    "00010000"
+  );
+  // 2: Player bullet (horizontal)
+  defSprite(2,
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00033300" +
+    "00022200" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+  // 3: Bomb (falling)
+  defSprite(3,
+    "00000000" +
+    "00030000" +
+    "00333000" +
+    "00323000" +
+    "00333000" +
+    "00030000" +
+    "00000000" +
+    "00000000"
+  );
+  // 4: Rocket (launching from ground)
+  defSprite(4,
+    "00030000" +
+    "00333000" +
+    "00323000" +
+    "00333000" +
+    "00333000" +
+    "00121000" +
+    "00313000" +
+    "00101000"
+  );
+  // 5: UFO
+  defSprite(5,
+    "00000000" +
+    "00333000" +
+    "03323300" +
+    "33333330" +
+    "32323230" +
+    "33333330" +
+    "03333300" +
+    "00000000"
+  );
+  // 6: Fuel tank (ground target)
+  defSprite(6,
+    "00000000" +
+    "00333300" +
+    "03222230" +
+    "03233230" +
+    "03222230" +
+    "03333330" +
+    "03333330" +
+    "00000000"
+  );
+  // 7: Explosion 1
+  defSprite(7,
+    "00000000" +
+    "00200100" +
+    "01032000" +
+    "00331300" +
+    "00133200" +
+    "01000010" +
+    "00100000" +
+    "00000000"
+  );
+  // 8: Explosion 2
+  defSprite(8,
+    "20010020" +
+    "01000010" +
+    "00233200" +
+    "03033030" +
+    "00232000" +
+    "01000300" +
+    "20001001" +
+    "00200010"
+  );
+  // 9: Life icon (small ship)
+  defSprite(9,
+    "00000000" +
+    "00330000" +
+    "03333000" +
+    "33233300" +
+    "03333000" +
+    "00330000" +
+    "00000000" +
+    "00000000"
+  );
+  // 10: Missile launcher (ground structure)
+  defSprite(10,
+    "00000000" +
+    "00000000" +
+    "00030000" +
+    "00033000" +
+    "00033000" +
+    "01133100" +
+    "13333310" +
+    "33333330"
+  );
+  // 11: Base core (end boss)
+  defSprite(11,
+    "00333000" +
+    "03323300" +
+    "33222330" +
+    "32212230" +
+    "33222330" +
+    "03323300" +
+    "00333000" +
+    "00030000"
+  );
+  // 12: Base wall
+  defSprite(12,
+    "33333333" +
+    "32323232" +
+    "33333333" +
+    "23232323" +
+    "33333333" +
+    "32323232" +
+    "33333333" +
+    "23232323"
+  );
+  // 13: Fireball (from volcano section)
+  defSprite(13,
+    "00000000" +
+    "00030000" +
+    "00323000" +
+    "03232300" +
+    "03323300" +
+    "00323000" +
+    "00030000" +
+    "00000000"
+  );
+  // 14: Ground turret
+  defSprite(14,
+    "00000000" +
+    "00000000" +
+    "00330000" +
+    "03330000" +
+    "00330000" +
+    "01331000" +
+    "13333100" +
+    "33333330"
+  );
+  // 15: Meteor/asteroid
+  defSprite(15,
+    "00222000" +
+    "02112200" +
+    "21211220" +
+    "22111120" +
+    "21121220" +
+    "02212200" +
+    "00222000" +
+    "00000000"
+  );
+
+  // --- Terrain generation ---
+  // Each section is 120 tiles wide (960 px). 6 sections = 720 tiles total.
+  // Terrain is defined as ceiling and floor heights at each column (8px wide).
+  const SECTION_W = 120; // tiles per section
+  const TOTAL_SECTIONS = 6;
+  const MAP_W = SECTION_W * TOTAL_SECTIONS + 70; // extra for base
+  const TILE = 8;
+  const MAP_H = H / TILE; // 40 tiles tall
+
+  // Terrain arrays: ceiling height (in pixels from top) and floor height (in pixels from top)
+  const ceilY = new Float32Array(MAP_W + 10);
+  const floorY = new Float32Array(MAP_W + 10);
+
+  // Ground objects: {tx, type} where tx is tile x
+  let groundObjects = [];
+  let airEnemies = [];
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clampf(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+  function generateTerrain() {
+    groundObjects = [];
+    airEnemies = [];
+
+    let cy = 40;  // ceiling (pixels from top)
+    let fy = 260; // floor (pixels from top)
+
+    for (let section = 0; section < TOTAL_SECTIONS; section++) {
+      const sx = section * SECTION_W;
+      for (let i = 0; i < SECTION_W; i++) {
+        const tx = sx + i;
+        const t = i / SECTION_W;
+
+        switch (section) {
+          case 0: // Open plains - gentle terrain, rockets and UFOs
+            cy = 30 + sin(tx * 0.05) * 15;
+            fy = 265 + sin(tx * 0.08) * 10;
+            if (i % 20 === 10) groundObjects.push({ tx, type: "rocket" });
+            if (i % 25 === 0 && i > 10) groundObjects.push({ tx, type: "fuel" });
+            if (i % 30 === 15) airEnemies.push({ tx, type: "ufo", y: 80 + rnd(60) });
+            break;
+
+          case 1: // Narrow canyon - walls close in
+            cy = 40 + sin(tx * 0.06) * 20 + 30 * sin(t * Math.PI);
+            fy = 260 - sin(tx * 0.06) * 20 - 30 * sin(t * Math.PI);
+            if (i % 18 === 9) groundObjects.push({ tx, type: "turret" });
+            if (i % 22 === 0) groundObjects.push({ tx, type: "fuel" });
+            if (i % 20 === 5) airEnemies.push({ tx, type: "ufo", y: 100 + rnd(40) });
+            break;
+
+          case 2: // Volcano zone - fireballs rising from below
+            cy = 35 + sin(tx * 0.04) * 10;
+            fy = 250 + sin(tx * 0.1) * 20;
+            if (i % 12 === 6) groundObjects.push({ tx, type: "fireball" });
+            if (i % 25 === 0) groundObjects.push({ tx, type: "fuel" });
+            if (i % 15 === 3) groundObjects.push({ tx, type: "rocket" });
+            if (i % 28 === 14) airEnemies.push({ tx, type: "ufo", y: 60 + rnd(80) });
+            break;
+
+          case 3: // Asteroid field - narrow gaps, meteors
+            cy = 50 + sin(tx * 0.07) * 25 + 15 * sin(tx * 0.15);
+            fy = 255 - sin(tx * 0.07) * 25 - 15 * sin(tx * 0.15);
+            if (i % 10 === 5) airEnemies.push({ tx, type: "meteor", y: 80 + rnd(80) });
+            if (i % 30 === 0) groundObjects.push({ tx, type: "fuel" });
+            if (i % 20 === 10) groundObjects.push({ tx, type: "turret" });
+            break;
+
+          case 4: // Deep cavern - very narrow, turrets everywhere
+            cy = 60 + sin(tx * 0.08) * 30 + 20 * sin(t * Math.PI * 2);
+            fy = 240 - sin(tx * 0.08) * 30 - 20 * sin(t * Math.PI * 2);
+            if (i % 14 === 7) groundObjects.push({ tx, type: "turret" });
+            if (i % 16 === 0) groundObjects.push({ tx, type: "rocket" });
+            if (i % 20 === 0) groundObjects.push({ tx, type: "fuel" });
+            if (i % 22 === 11) airEnemies.push({ tx, type: "ufo", y: cy + 30 + rnd(30) });
+            break;
+
+          case 5: // Base approach - opens up then base at end
+            if (t < 0.7) {
+              cy = 55 - t * 40;
+              fy = 245 + t * 20;
+            } else {
+              // Base section - corridor
+              cy = 80;
+              fy = 230;
+            }
+            if (i % 18 === 9 && t < 0.7) groundObjects.push({ tx, type: "rocket" });
+            if (i % 22 === 0 && t < 0.6) groundObjects.push({ tx, type: "fuel" });
+            if (i % 15 === 7 && t < 0.7) airEnemies.push({ tx, type: "ufo", y: cy + 20 + rnd(60) });
+            if (i >= SECTION_W - 8) groundObjects.push({ tx, type: "base_wall" });
+            if (i === SECTION_W - 3) groundObjects.push({ tx, type: "base_core" });
+            break;
+        }
+
+        // Clamp terrain
+        cy = clampf(cy, 16, 140);
+        fy = clampf(fy, 200, 310);
+        if (fy - cy < 80) fy = cy + 80; // minimum gap
+
+        ceilY[tx] = cy;
+        floorY[tx] = fy;
+      }
+    }
+
+    // Fill remaining with open space
+    for (let tx = TOTAL_SECTIONS * SECTION_W; tx < MAP_W + 10; tx++) {
+      ceilY[tx] = 30;
+      floorY[tx] = 290;
+    }
+  }
+
+  // --- Game state ---
+  let state = "title";
+  let player, bullets, bombs, explosions, particles, stars;
+  let rockets, ufos, fireballs, meteors;
+  let score, lives, fuel, maxFuel;
+  let scrollX, scrollSpeed;
+  let shootCooldown, bombCooldown;
+  let baseDead, baseHP, winTimer;
+  let sectionMsg, sectionMsgTimer;
+  let respawnTimer;
+
+  const SECTION_NAMES = [
+    "OPEN PLAINS", "NARROW CANYON", "VOLCANO ZONE",
+    "ASTEROID FIELD", "DEEP CAVERN", "ENEMY BASE"
+  ];
+
+  function resetGame() {
+    player = { x: 60, y: 160, speed: 2.5, alive: true };
+    bullets = [];
+    bombs = [];
+    explosions = [];
+    particles = [];
+    rockets = [];
+    ufos = [];
+    fireballs = [];
+    meteors = [];
+    score = 0;
+    lives = 3;
+    fuel = 1000;
+    maxFuel = 1000;
+    scrollX = 0;
+    scrollSpeed = 1.5;
+    shootCooldown = 0;
+    bombCooldown = 0;
+    baseDead = false;
+    baseHP = 20;
+    winTimer = 0;
+    sectionMsg = "";
+    sectionMsgTimer = 0;
+    respawnTimer = 0;
+    stars = [];
+    for (let i = 0; i < 60; i++)
+      stars.push({ x: flr(rnd(W)), y: flr(rnd(H)), speed: 0.3 + rnd(0.5), bright: flr(rnd(2)) + 1 });
+    generateTerrain();
+  }
+
+  function addExplosion(x, y, big) {
+    explosions.push({ x, y, timer: big ? 18 : 12 });
+    const count = big ? 14 : 8;
+    for (let i = 0; i < count; i++)
+      particles.push({
+        x: x + 4, y: y + 4,
+        vx: rnd(4) - 2, vy: rnd(4) - 2,
+        life: 6 + flr(rnd(12)),
+        color: flr(rnd(3)) + 1
+      });
+  }
+
+  // Sound effects
+  function shootSound() { note(0, "E6", 0.03); }
+  function bombSound() { note(1, "C4", 0.05); }
+  function hitSound() { note(1, "C3", 0.06); setTimeout(() => note(1, "E3", 0.05), 40); }
+  function fuelSound() { note(0, "G5", 0.05); setTimeout(() => note(0, "B5", 0.05), 50); setTimeout(() => note(0, "D6", 0.08), 100); }
+  function deathSound() {
+    note(0, "C3", 0.12); note(1, "G2", 0.12);
+    setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
+  }
+  function winSound() {
+    note(0, "C5", 0.1);
+    setTimeout(() => note(0, "E5", 0.1), 100);
+    setTimeout(() => note(0, "G5", 0.1), 200);
+    setTimeout(() => note(0, "C6", 0.2), 300);
+    setTimeout(() => note(1, "C5", 0.15), 350);
+  }
+
+  // Get terrain height at a world X position
+  function getCeil(wx) {
+    const tx = flr(wx / TILE);
+    if (tx < 0 || tx >= MAP_W) return 0;
+    const frac = (wx - tx * TILE) / TILE;
+    return lerp(ceilY[tx], ceilY[_max(0, min(MAP_W - 1, tx + 1))], frac);
+  }
+  function getFloor(wx) {
+    const tx = flr(wx / TILE);
+    if (tx < 0 || tx >= MAP_W) return H;
+    const frac = (wx - tx * TILE) / TILE;
+    return lerp(floorY[tx], floorY[_max(0, min(MAP_W - 1, tx + 1))], frac);
+  }
+
+  function currentSection() {
+    return min(TOTAL_SECTIONS - 1, flr(scrollX / (SECTION_W * TILE)));
+  }
+
+  // Spawn logic - check if ground objects should activate
+  function checkSpawns() {
+    const screenRight = scrollX + W + 16;
+    const screenLeft = scrollX - 16;
+
+    // Ground objects
+    for (let i = groundObjects.length - 1; i >= 0; i--) {
+      const obj = groundObjects[i];
+      const wx = obj.tx * TILE;
+      if (wx < screenRight && wx > screenLeft) {
+        if (obj.type === "rocket") {
+          // Check if already spawned
+          if (!obj.spawned) {
+            obj.spawned = true;
+            rockets.push({ x: wx, y: getFloor(wx) - 16, vy: 0, launched: false, timer: 30 + flr(rnd(60)), wx });
+          }
+        }
+        if (obj.type === "fireball" && !obj.spawned) {
+          obj.spawned = true;
+          fireballs.push({ x: wx, y: getFloor(wx) - 8, vy: -2 - rnd(1.5), life: 80, wx });
+        }
+      }
+    }
+
+    // Air enemies
+    for (let i = airEnemies.length - 1; i >= 0; i--) {
+      const ae = airEnemies[i];
+      const wx = ae.tx * TILE;
+      if (wx < scrollX + W + 40 && wx > scrollX + W - 10) {
+        if (!ae.spawned) {
+          ae.spawned = true;
+          if (ae.type === "ufo") {
+            ufos.push({ x: wx - scrollX + W, y: ae.y, vx: -2 - rnd(1), vy: sin(rnd(6.28)) * 0.8, wx, timer: 0 });
+          } else if (ae.type === "meteor") {
+            meteors.push({ x: wx - scrollX + W, y: ae.y, vx: -1.5 - rnd(1), vy: 0.5 + rnd(1), wx });
+          }
+        }
+      }
+    }
+  }
+
+  // Collision check: point in rect
+  function pointInRect(px, py, rx, ry, rw, rh) {
+    return px >= rx && px < rx + rw && py >= ry && py < ry + rh;
+  }
+  // Rect overlap
+  function rectsOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
+  }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    // Stars
+    for (const s of stars) {
+      s.x -= scrollSpeed * 0.3;
+      if (s.x < 0) { s.x = W; s.y = flr(rnd(H)); }
+    }
+
+    if (state === "title") {
+      scrollX = (scrollX + 0.5) % 200;
+      if (btnp("a") || btnp("start")) {
+        state = "play";
+        resetGame();
+        sectionMsg = SECTION_NAMES[0];
+        sectionMsgTimer = 90;
+        note(0, "C5", 0.1);
+        setTimeout(() => note(0, "E5", 0.1), 100);
+        setTimeout(() => note(0, "G5", 0.15), 200);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    if (state === "win") {
+      winTimer++;
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      // Celebratory particles
+      if (winTimer % 5 === 0) {
+        const px = rnd(W), py = rnd(H * 0.6);
+        for (let j = 0; j < 6; j++)
+          particles.push({ x: px, y: py, vx: rnd(4) - 2, vy: rnd(3) - 2, life: 15 + flr(rnd(15)), color: flr(rnd(3)) + 1 });
+      }
+      if (winTimer > 180 || btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    // --- Play state ---
+    const prevSection = currentSection();
+
+    // Scroll
+    if (!baseDead) {
+      scrollX += scrollSpeed;
+    }
+
+    // Check section transition
+    const curSection = currentSection();
+    if (curSection !== prevSection && curSection < TOTAL_SECTIONS) {
+      sectionMsg = SECTION_NAMES[curSection];
+      sectionMsgTimer = 90;
+    }
+    if (sectionMsgTimer > 0) sectionMsgTimer--;
+
+    // Fuel depletion
+    fuel -= 0.5;
+    if (fuel <= 0) {
+      fuel = 0;
+      if (player.alive) {
+        player.alive = false;
+        addExplosion(player.x, player.y, true);
+        deathSound();
+        respawnTimer = 60;
+      }
+    }
+
+    // Player respawn
+    if (!player.alive) {
+      respawnTimer--;
+      if (respawnTimer <= 0) {
+        lives--;
+        if (lives <= 0) {
+          state = "gameover";
+          return;
+        }
+        player.alive = true;
+        player.x = 60;
+        player.y = 160;
+        fuel = _max(fuel, 300);
+      }
+      // Still update world while dead
+    }
+
+    // Player movement
+    if (player.alive) {
+      if (btn("up")) player.y -= player.speed;
+      if (btn("down")) player.y += player.speed;
+      if (btn("left")) player.x -= player.speed;
+      if (btn("right")) player.x += player.speed;
+      player.x = _max(8, min(W - 16, player.x));
+      player.y = _max(16, min(H - 16, player.y));
+
+      // Terrain collision
+      const pwx = scrollX + player.x;
+      const pCeil = getCeil(pwx);
+      const pFloor = getFloor(pwx);
+      if (player.y < pCeil + 2 || player.y + 6 > pFloor - 2) {
+        player.alive = false;
+        addExplosion(player.x, player.y, true);
+        deathSound();
+        respawnTimer = 60;
+      }
+
+      // Shoot
+      if (shootCooldown > 0) shootCooldown--;
+      if (btn("a") && shootCooldown <= 0) {
+        bullets.push({ x: player.x + 8, y: player.y + 3 });
+        shootCooldown = 5;
+        shootSound();
+      }
+
+      // Bomb
+      if (bombCooldown > 0) bombCooldown--;
+      if (btnp("b") && bombCooldown <= 0) {
+        bombs.push({ x: player.x + 2, y: player.y + 6, vy: 0 });
+        bombCooldown = 12;
+        bombSound();
+      }
+    }
+
+    // Update bullets
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      bullets[i].x += 6;
+      if (bullets[i].x > W + 8) { bullets.splice(i, 1); continue; }
+      // Bullet vs terrain
+      const bwx = scrollX + bullets[i].x;
+      const bc = getCeil(bwx);
+      const bf = getFloor(bwx);
+      if (bullets[i].y < bc || bullets[i].y > bf) {
+        addExplosion(bullets[i].x - 4, bullets[i].y - 4, false);
+        bullets.splice(i, 1);
+      }
+    }
+
+    // Update bombs
+    for (let i = bombs.length - 1; i >= 0; i--) {
+      const b = bombs[i];
+      b.vy += 0.15;
+      b.y += b.vy;
+      b.x += 1; // slight forward momentum
+      // Bomb vs floor
+      const bwx = scrollX + b.x;
+      const bf = getFloor(bwx);
+      if (b.y >= bf - 4 || b.y > H) {
+        addExplosion(b.x - 4, b.y - 4, true);
+        hitSound();
+        // Check ground object hits
+        checkBombHit(b.x, b.y);
+        bombs.splice(i, 1);
+      }
+    }
+
+    // Spawn enemies
+    checkSpawns();
+
+    // Update rockets
+    for (let i = rockets.length - 1; i >= 0; i--) {
+      const r = rockets[i];
+      const screenX = r.wx - scrollX;
+      if (screenX < -20 || screenX > W + 20) { rockets.splice(i, 1); continue; }
+      r.x = screenX;
+
+      if (!r.launched) {
+        r.timer--;
+        if (r.timer <= 0) {
+          r.launched = true;
+          r.vy = -3;
+        }
+      } else {
+        r.y += r.vy;
+        r.vy -= 0.02; // slight acceleration up
+        if (r.y < -16) { rockets.splice(i, 1); continue; }
+      }
+
+      // Rocket vs player
+      if (player.alive && rectsOverlap(player.x, player.y, 8, 8, r.x, r.y, 6, 8)) {
+        addExplosion(r.x, r.y, true);
+        rockets.splice(i, 1);
+        player.alive = false;
+        addExplosion(player.x, player.y, true);
+        deathSound();
+        respawnTimer = 60;
+        continue;
+      }
+
+      // Bullet vs rocket
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        if (rectsOverlap(bullets[j].x, bullets[j].y, 6, 2, r.x, r.y, 6, 8)) {
+          addExplosion(r.x, r.y, false);
+          score += 50;
+          hitSound();
+          rockets.splice(i, 1);
+          bullets.splice(j, 1);
+          break;
+        }
+      }
+    }
+
+    // Update UFOs
+    for (let i = ufos.length - 1; i >= 0; i--) {
+      const u = ufos[i];
+      u.x += u.vx;
+      u.timer++;
+      u.y += sin(u.timer * 0.08) * 1.2;
+      if (u.x < -16) { ufos.splice(i, 1); continue; }
+
+      // UFO vs player
+      if (player.alive && rectsOverlap(player.x, player.y, 8, 8, u.x, u.y, 8, 6)) {
+        addExplosion(u.x, u.y, true);
+        ufos.splice(i, 1);
+        player.alive = false;
+        addExplosion(player.x, player.y, true);
+        deathSound();
+        respawnTimer = 60;
+        continue;
+      }
+
+      // Bullet vs UFO
+      let hit = false;
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        if (rectsOverlap(bullets[j].x, bullets[j].y, 6, 2, u.x, u.y, 8, 6)) {
+          addExplosion(u.x, u.y, false);
+          score += 100;
+          hitSound();
+          ufos.splice(i, 1);
+          bullets.splice(j, 1);
+          hit = true;
+          break;
+        }
+      }
+      if (hit) continue;
+    }
+
+    // Update fireballs
+    for (let i = fireballs.length - 1; i >= 0; i--) {
+      const f = fireballs[i];
+      f.y += f.vy;
+      f.life--;
+      const screenX = f.wx - scrollX;
+      f.x = screenX;
+      if (f.life <= 0 || screenX < -16 || screenX > W + 16) { fireballs.splice(i, 1); continue; }
+
+      // Fireball vs player
+      if (player.alive && rectsOverlap(player.x, player.y, 8, 8, f.x, f.y, 6, 6)) {
+        addExplosion(f.x, f.y, false);
+        fireballs.splice(i, 1);
+        player.alive = false;
+        addExplosion(player.x, player.y, true);
+        deathSound();
+        respawnTimer = 60;
+      }
+    }
+
+    // Update meteors
+    for (let i = meteors.length - 1; i >= 0; i--) {
+      const m = meteors[i];
+      m.x += m.vx;
+      m.y += m.vy;
+      if (m.x < -16 || m.y > H + 16) { meteors.splice(i, 1); continue; }
+
+      // Meteor vs player
+      if (player.alive && rectsOverlap(player.x, player.y, 8, 8, m.x, m.y, 8, 7)) {
+        addExplosion(m.x, m.y, true);
+        meteors.splice(i, 1);
+        player.alive = false;
+        addExplosion(player.x, player.y, true);
+        deathSound();
+        respawnTimer = 60;
+        continue;
+      }
+
+      // Bullet vs meteor
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        if (rectsOverlap(bullets[j].x, bullets[j].y, 6, 2, m.x, m.y, 8, 7)) {
+          addExplosion(m.x, m.y, false);
+          score += 30;
+          hitSound();
+          meteors.splice(i, 1);
+          bullets.splice(j, 1);
+          break;
+        }
+      }
+    }
+
+    // Check ground object bullet/bomb collisions
+    checkGroundHits();
+
+    // Check base
+    if (curSection === 5 && !baseDead) {
+      const baseObj = groundObjects.find(o => o.type === "base_core" && !o.destroyed);
+      if (baseObj) {
+        const bsx = baseObj.tx * TILE - scrollX;
+        // Bullet vs base
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          if (rectsOverlap(bullets[j].x, bullets[j].y, 6, 2, bsx, getFloor(baseObj.tx * TILE) - 24, 8, 16)) {
+            bullets.splice(j, 1);
+            baseHP--;
+            addExplosion(bsx + rnd(8), getFloor(baseObj.tx * TILE) - 20 + rnd(12), false);
+            hitSound();
+            if (baseHP <= 0) {
+              baseDead = true;
+              baseObj.destroyed = true;
+              score += 1000;
+              for (let k = 0; k < 8; k++) {
+                setTimeout(() => {
+                  addExplosion(bsx - 8 + rnd(24), getFloor(baseObj.tx * TILE) - 28 + rnd(20), true);
+                }, k * 100);
+              }
+              winSound();
+              setTimeout(() => { state = "win"; winTimer = 0; }, 500);
+            }
+          }
+        }
+      }
+    }
+
+    // Explosions
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].timer--;
+      if (explosions[i].timer <= 0) explosions.splice(i, 1);
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Check if scrolled past end without destroying base
+    if (scrollX > MAP_W * TILE && !baseDead) {
+      // Loop back or game over
+      state = "gameover";
+    }
+  };
+
+  function checkBombHit(bx, by) {
+    const bwx = scrollX + bx;
+    for (const obj of groundObjects) {
+      if (obj.destroyed) continue;
+      const owx = obj.tx * TILE;
+      if (_abs(bwx - owx) < 12) {
+        const ofy = getFloor(owx);
+        if (_abs(by - (ofy - 8)) < 16) {
+          if (obj.type === "fuel") {
+            obj.destroyed = true;
+            fuel = min(maxFuel, fuel + 200);
+            score += 150;
+            fuelSound();
+            addExplosion(owx - scrollX, ofy - 12, true);
+          } else if (obj.type === "turret" || obj.type === "rocket") {
+            obj.destroyed = true;
+            score += 80;
+            hitSound();
+            addExplosion(owx - scrollX, ofy - 12, true);
+          } else if (obj.type === "base_wall") {
+            obj.destroyed = true;
+            score += 50;
+            hitSound();
+            addExplosion(owx - scrollX, ofy - 12, true);
+          } else if (obj.type === "base_core") {
+            baseHP -= 3;
+            hitSound();
+            addExplosion(owx - scrollX, ofy - 16, true);
+            if (baseHP <= 0) {
+              baseDead = true;
+              obj.destroyed = true;
+              score += 1000;
+              winSound();
+              setTimeout(() => { state = "win"; winTimer = 0; }, 500);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function checkGroundHits() {
+    for (const obj of groundObjects) {
+      if (obj.destroyed) continue;
+      const owx = obj.tx * TILE;
+      const osx = owx - scrollX;
+      if (osx < -16 || osx > W + 16) continue;
+      const ofy = getFloor(owx);
+
+      // Bullets
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (rectsOverlap(b.x, b.y, 6, 2, osx, ofy - 10, 8, 10)) {
+          bullets.splice(j, 1);
+          if (obj.type === "fuel") {
+            obj.destroyed = true;
+            fuel = min(maxFuel, fuel + 200);
+            score += 150;
+            fuelSound();
+            addExplosion(osx, ofy - 12, true);
+          } else if (obj.type === "turret" || obj.type === "rocket") {
+            obj.destroyed = true;
+            score += 80;
+            hitSound();
+            addExplosion(osx, ofy - 12, false);
+          } else if (obj.type === "base_wall") {
+            obj.destroyed = true;
+            score += 50;
+            hitSound();
+            addExplosion(osx, ofy - 12, false);
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    cls(0);
+
+    // Stars
+    for (const s of stars) pix(flr(s.x), flr(s.y), s.bright);
+
+    if (state === "title") {
+      // Draw a bit of terrain for ambiance
+      drawTerrainSlice(0, W);
+
+      const ty = 60 + sin(API.frame * 0.05) * 5;
+      text("SCRAMBLE", 193, flr(ty), 3);
+      text("SCRAMBLE", 194, flr(ty) + 1, 1);
+      rectf(165, flr(ty) + 12, 150, 1, 2);
+
+      // Show ship
+      spr(1, W / 2 - 20, flr(ty) + 30 + sin(API.frame * 0.08) * 3);
+      // Show enemies
+      spr(5, W / 2 + 10, flr(ty) + 28 + sin(API.frame * 0.08 + 1) * 3);
+      spr(4, W / 2 + 30, flr(ty) + 50 + sin(API.frame * 0.08 + 2) * 3);
+
+      if (flr(API.frame / 20) % 2 === 0) text("PRESS START", 195, 190, 3);
+
+      // Score table
+      text("-TARGETS-", 200, 220, 2);
+      spr(5, 190, 234); text("  UFO   100 PTS", 200, 236, 2);
+      spr(6, 190, 248); text("  FUEL  150 PTS", 200, 250, 2);
+      spr(4, 190, 262); text("  ROCKET 50 PTS", 200, 264, 2);
+      spr(15, 190, 276); text("  METEOR 30 PTS", 200, 278, 2);
+
+      text("GRAYBOX DEMO V0.1", 168, 305, 1);
+      return;
+    }
+
+    if (state === "gameover") {
+      for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+      text("GAME OVER", 195, 110, 3);
+      text("SCORE: " + score, 190, 140, 2);
+      const sec = min(currentSection() + 1, TOTAL_SECTIONS);
+      text("SECTION: " + sec + "/" + TOTAL_SECTIONS, 180, 155, 2);
+      if (flr(API.frame / 20) % 2 === 0) text("PRESS START", 193, 200, 3);
+      return;
+    }
+
+    if (state === "win") {
+      for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+      text("MISSION COMPLETE!", 170, 100, 3);
+      text("SCORE: " + score, 195, 135, 2);
+      text("FUEL BONUS: " + flr(fuel), 178, 155, 2);
+      const finalScore = score + flr(fuel) * 2;
+      text("TOTAL: " + finalScore, 193, 175, 3);
+      if (flr(API.frame / 15) % 2 === 0) text("WELL DONE PILOT!", 175, 215, 3);
+      return;
+    }
+
+    // --- Play state rendering ---
+
+    // Draw terrain
+    drawTerrainSlice(scrollX, W);
+
+    // Draw ground objects
+    for (const obj of groundObjects) {
+      if (obj.destroyed) continue;
+      const owx = obj.tx * TILE;
+      const osx = flr(owx - scrollX);
+      if (osx < -8 || osx > W + 8) continue;
+      const ofy = flr(getFloor(owx));
+
+      switch (obj.type) {
+        case "fuel":
+          spr(6, osx, ofy - 8);
+          // Flashing "F" label
+          if (flr(API.frame / 10) % 2 === 0) text("F", osx + 2, ofy - 14, 3);
+          break;
+        case "rocket":
+          spr(10, osx, ofy - 8);
+          break;
+        case "turret":
+          spr(14, osx, ofy - 8);
+          break;
+        case "base_wall":
+          spr(12, osx, ofy - 8);
+          spr(12, osx, ofy - 16);
+          break;
+        case "base_core":
+          spr(11, osx, ofy - 16);
+          spr(11, osx, ofy - 24);
+          // HP indicator
+          if (baseHP > 0) {
+            const bw = flr((baseHP / 20) * 12);
+            rectf(osx - 2, ofy - 28, bw, 2, 3);
+          }
+          break;
+      }
+    }
+
+    // Rockets
+    for (const r of rockets) {
+      spr(4, flr(r.x), flr(r.y));
+      // Exhaust
+      if (r.launched) {
+        pix(flr(r.x) + 3, flr(r.y) + 8, flr(API.frame / 2) % 2 === 0 ? 3 : 2);
+        pix(flr(r.x) + 3, flr(r.y) + 9, 1);
+      }
+    }
+
+    // Fireballs
+    for (const f of fireballs) {
+      spr(13, flr(f.x), flr(f.y));
+    }
+
+    // Meteors
+    for (const m of meteors) {
+      spr(15, flr(m.x), flr(m.y));
+    }
+
+    // UFOs
+    for (const u of ufos) {
+      spr(5, flr(u.x), flr(u.y));
+    }
+
+    // Bombs
+    for (const b of bombs) {
+      spr(3, flr(b.x), flr(b.y));
+    }
+
+    // Bullets
+    for (const b of bullets) {
+      spr(2, flr(b.x), flr(b.y));
+    }
+
+    // Player
+    if (player.alive) {
+      if (respawnTimer > 0 && flr(API.frame / 3) % 2 === 0) {
+        // blink
+      } else {
+        spr(1, flr(player.x), flr(player.y));
+        // Engine exhaust
+        const ex = flr(player.x) - 2;
+        const ey = flr(player.y) + 3;
+        pix(ex, ey, flr(API.frame / 2) % 2 === 0 ? 3 : 2);
+        pix(ex - 1, ey, 1);
+        if (API.frame % 3 === 0) pix(ex - 2, ey + (rnd(3) - 1 | 0), 1);
+      }
+    }
+
+    // Explosions
+    for (const e of explosions) {
+      const sprId = e.timer > 6 ? 7 : 8;
+      spr(sprId, flr(e.x), flr(e.y));
+    }
+
+    // Particles
+    for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+    // ---- HUD ----
+    // Top bar background
+    rectf(0, 0, W, 14, 0);
+
+    // Score
+    text("SCORE:" + score, 4, 3, 3);
+
+    // Section indicator
+    const sec = currentSection();
+    text("S" + (sec + 1), W / 2 - 10, 3, 2);
+
+    // Lives
+    for (let i = 0; i < lives; i++) spr(9, W - 40 + i * 10, 2);
+
+    // Fuel gauge - bottom of screen
+    rectf(0, H - 10, W, 10, 0);
+    text("FUEL", 4, H - 9, 2);
+    const fuelBarW = 120;
+    const fuelBarX = 30;
+    rect(fuelBarX, H - 9, fuelBarW + 2, 7, 1);
+    const fuelPct = fuel / maxFuel;
+    const fuelColor = fuelPct < 0.2 ? (flr(API.frame / 6) % 2 === 0 ? 3 : 1) : (fuelPct < 0.4 ? 2 : 3);
+    rectf(fuelBarX + 1, H - 8, flr(fuelPct * fuelBarW), 5, fuelColor);
+
+    // Altitude warning
+    if (player.alive) {
+      const pwx = scrollX + player.x;
+      const pc = getCeil(pwx);
+      const pf = getFloor(pwx);
+      if (player.y - pc < 20 || pf - player.y < 20) {
+        if (flr(API.frame / 6) % 2 === 0) text("!WARNING!", 200, H - 9, 3);
+      }
+    }
+
+    // Section announcement
+    if (sectionMsgTimer > 0) {
+      const my = 30 + sin(sectionMsgTimer * 0.1) * 3;
+      text(sectionMsg, W / 2 - sectionMsg.length * 2.5, flr(my), 3);
+      if (sectionMsgTimer > 60) text("SECTION " + (currentSection() + 1), W / 2 - 22, flr(my) + 12, 2);
+    }
+  };
+
+  function drawTerrainSlice(camX, width) {
+    // Draw terrain as filled polygons
+    const startTx = _max(0, flr(camX / TILE) - 1);
+    const endTx = min(MAP_W - 1, flr((camX + width) / TILE) + 2);
+
+    for (let tx = startTx; tx <= endTx; tx++) {
+      const sx = flr(tx * TILE - camX);
+      const cy = flr(ceilY[tx]);
+      const fy = flr(floorY[tx]);
+
+      // Ceiling fill
+      if (cy > 0) {
+        rectf(sx, 0, TILE, cy, 1);
+        // Ceiling edge detail
+        for (let px = 0; px < TILE; px++) {
+          const noise = flr(sin((tx * TILE + px) * 0.3) * 3);
+          pix(sx + px, cy + noise, 2);
+          pix(sx + px, cy + noise - 1, 1);
+          if ((tx * TILE + px) % 4 === 0) pix(sx + px, cy + noise + 1, 1);
+        }
+      }
+
+      // Floor fill
+      if (fy < H) {
+        rectf(sx, fy, TILE, H - fy, 1);
+        // Floor edge detail
+        for (let px = 0; px < TILE; px++) {
+          const noise = flr(sin((tx * TILE + px) * 0.25) * 2);
+          pix(sx + px, fy + noise, 2);
+          pix(sx + px, fy + noise + 1, 1);
+          if ((tx * TILE + px) % 3 === 0) pix(sx + px, fy + noise - 1, 1);
+        }
+      }
+
+      // Some terrain detail stripes
+      if (cy > 8) {
+        for (let dy = 0; dy < cy; dy += 6) {
+          if ((tx + dy) % 5 === 0) {
+            pix(sx + 2, dy, 2);
+            pix(sx + 3, dy, 2);
+          }
+        }
+      }
+      if (fy < H - 8) {
+        for (let dy = fy + 4; dy < H; dy += 6) {
+          if ((tx + dy) % 4 === 0) {
+            pix(sx + 1, dy, 2);
+            pix(sx + 4, dy, 2);
+          }
+        }
+      }
+    }
+  }
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

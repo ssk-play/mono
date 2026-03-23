@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Mr. Do!</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>Z</span> THROW BALL &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Mr. Do! Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+  // 1: Mr. Do (clown) facing right
+  defSprite(1,
+    "00333000" +
+    "03222300" +
+    "32232230" +
+    "03333300" +
+    "00333000" +
+    "03313300" +
+    "00333000" +
+    "03000300"
+  );
+  // 2: Mr. Do facing left
+  defSprite(2,
+    "00333000" +
+    "03222300" +
+    "32232230" +
+    "03333300" +
+    "00333000" +
+    "03313300" +
+    "00333000" +
+    "03000300"
+  );
+  // 3: Mr. Do facing up
+  defSprite(3,
+    "00333000" +
+    "03222300" +
+    "32222230" +
+    "03333300" +
+    "00333000" +
+    "03333300" +
+    "00333000" +
+    "03000300"
+  );
+  // 4: Mr. Do facing down
+  defSprite(4,
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "03222300" +
+    "00333000" +
+    "03313300" +
+    "00333000" +
+    "03000300"
+  );
+  // 5: Cherry
+  defSprite(5,
+    "00001300" +
+    "00013000" +
+    "00130000" +
+    "02200220" +
+    "23202320" +
+    "22302230" +
+    "23202320" +
+    "02200220"
+  );
+  // 6: Apple (pushable)
+  defSprite(6,
+    "00031000" +
+    "00300000" +
+    "02222200" +
+    "23322320" +
+    "23222320" +
+    "22322220" +
+    "23222320" +
+    "02222200"
+  );
+  // 7: Enemy (red monster) - basic
+  defSprite(7,
+    "02222200" +
+    "23333320" +
+    "23133130" +
+    "23333320" +
+    "22322320" +
+    "23333320" +
+    "23333320" +
+    "20200202"
+  );
+  // 8: Enemy walking frame 2
+  defSprite(8,
+    "02222200" +
+    "23333320" +
+    "23133130" +
+    "23333320" +
+    "22322320" +
+    "23333320" +
+    "23333320" +
+    "02020020"
+  );
+  // 9: Power ball
+  defSprite(9,
+    "00333000" +
+    "03333300" +
+    "33233330" +
+    "33333330" +
+    "33333330" +
+    "33333330" +
+    "03333300" +
+    "00333000"
+  );
+  // 10: Dirt tile (full)
+  defSprite(10,
+    "11111111" +
+    "11211121" +
+    "11111111" +
+    "12111111" +
+    "11111211" +
+    "11111111" +
+    "11121111" +
+    "11111111"
+  );
+  // 11: Explosion frame 1
+  defSprite(11,
+    "00000000" +
+    "00200100" +
+    "01003000" +
+    "00032100" +
+    "00230300" +
+    "02000020" +
+    "00300000" +
+    "00000000"
+  );
+  // 12: Explosion frame 2
+  defSprite(12,
+    "30010020" +
+    "01000030" +
+    "00302300" +
+    "03033030" +
+    "00232000" +
+    "01000300" +
+    "20003001" +
+    "00200010"
+  );
+  // 13: Life icon (small clown)
+  defSprite(13,
+    "00000000" +
+    "00330000" +
+    "03220300" +
+    "03330300" +
+    "00330000" +
+    "03130300" +
+    "00330000" +
+    "00000000"
+  );
+  // 14: EXTRA letter enemy (special)
+  defSprite(14,
+    "03333300" +
+    "32222230" +
+    "32132130" +
+    "32222230" +
+    "33233230" +
+    "32222230" +
+    "32222230" +
+    "30300303"
+  );
+  // 15: Falling apple
+  defSprite(15,
+    "00031000" +
+    "00300000" +
+    "02222200" +
+    "23322320" +
+    "23222320" +
+    "22322220" +
+    "23222320" +
+    "02222200"
+  );
+  // 16: Mr. Do digging right frame 2
+  defSprite(16,
+    "00333000" +
+    "03222300" +
+    "32232230" +
+    "03333300" +
+    "00333300" +
+    "03331300" +
+    "00333000" +
+    "00300030"
+  );
+  // 17: Mr. Do digging up frame 2
+  defSprite(17,
+    "00333000" +
+    "03222300" +
+    "32222230" +
+    "03333300" +
+    "00333000" +
+    "03333300" +
+    "00333000" +
+    "00300030"
+  );
+
+  // --- Game constants ---
+  const TILE = 8;
+  const MAP_W = 60;   // tiles across (480/8)
+  const MAP_H = 37;   // tiles tall (296/8, leaving room for HUD at top + bottom)
+  const HUD_Y = 12;   // pixel offset for playfield start
+  const FIELD_H = MAP_H * TILE;
+
+  // Tile types
+  const T_EMPTY = 0;
+  const T_DIRT = 1;
+  const T_CHERRY = 2;
+  const T_APPLE = 3;
+
+  // --- Game state ---
+  let state = "title";
+  let player, ball, enemies, apples, explosions, particles;
+  let score, lives, level, cherryCount, totalCherries;
+  let extraLetters; // "EXTRA" collected
+  let levelClearTimer, deathTimer;
+  let grid; // 2D tile grid
+  let playerDir, playerFrame, invincTimer;
+
+  function makeGrid() {
+    grid = [];
+    for (let y = 0; y < MAP_H; y++) {
+      grid[y] = [];
+      for (let x = 0; x < MAP_W; x++) {
+        grid[y][x] = T_DIRT;
+      }
+    }
+  }
+
+  function carveTunnel(x0, y0, x1, y1) {
+    // Carve a path in the grid (2 tiles wide for movement)
+    if (y0 === y1) {
+      const minX = min(x0, x1), maxX = _max(x0, x1);
+      for (let x = minX; x <= maxX; x++) {
+        for (let dy = 0; dy < 2; dy++) {
+          if (y0+dy >= 0 && y0+dy < MAP_H && x >= 0 && x < MAP_W)
+            grid[y0+dy][x] = T_EMPTY;
+        }
+      }
+    } else {
+      const minY = min(y0, y1), maxY = _max(y0, y1);
+      for (let y = minY; y <= maxY; y++) {
+        for (let dx = 0; dx < 2; dx++) {
+          if (y >= 0 && y < MAP_H && x0+dx >= 0 && x0+dx < MAP_W)
+            grid[y][x0+dx] = T_EMPTY;
+        }
+      }
+    }
+  }
+
+  function generateLevel(lvl) {
+    makeGrid();
+    cherryCount = 0;
+    totalCherries = 0;
+    apples = [];
+
+    // Clear border area
+    for (let x = 0; x < MAP_W; x++) { grid[0][x] = T_EMPTY; grid[MAP_H-1][x] = T_EMPTY; }
+    for (let y = 0; y < MAP_H; y++) { grid[y][0] = T_EMPTY; grid[y][MAP_W-1] = T_EMPTY; }
+
+    // Create tunnel network
+    // Horizontal tunnels
+    const numHTunnels = 5 + min(lvl, 4);
+    const numVTunnels = 4 + min(lvl, 3);
+
+    const hTunnels = [];
+    for (let i = 0; i < numHTunnels; i++) {
+      const y = 3 + flr(rnd(MAP_H - 6));
+      const x0 = 2 + flr(rnd(10));
+      const x1 = MAP_W - 3 - flr(rnd(10));
+      hTunnels.push({ y, x0, x1 });
+      carveTunnel(x0, y, x1, y);
+    }
+
+    // Vertical tunnels connecting horizontal ones
+    for (let i = 0; i < numVTunnels; i++) {
+      const x = 4 + flr(rnd(MAP_W - 8));
+      const y0 = 2 + flr(rnd(8));
+      const y1 = MAP_H - 3 - flr(rnd(8));
+      carveTunnel(x, y0, x, y1);
+    }
+
+    // Carve starting area (center bottom)
+    const startTX = flr(MAP_W / 2) - 2;
+    const startTY = MAP_H - 5;
+    for (let dy = -1; dy < 3; dy++)
+      for (let dx = -1; dx < 4; dx++)
+        if (startTY+dy >= 0 && startTY+dy < MAP_H && startTX+dx >= 0 && startTX+dx < MAP_W)
+          grid[startTY+dy][startTX+dx] = T_EMPTY;
+
+    // Place cherries in dirt cells (scattered)
+    const cherryChance = 0.06 + lvl * 0.005;
+    for (let y = 2; y < MAP_H - 2; y++) {
+      for (let x = 2; x < MAP_W - 2; x++) {
+        if (grid[y][x] === T_DIRT && rnd(1) < cherryChance) {
+          grid[y][x] = T_CHERRY;
+          totalCherries++;
+        }
+      }
+    }
+
+    // Place apples (on dirt, above tunnels)
+    const numApples = 3 + min(lvl, 5);
+    let placed = 0;
+    for (let attempt = 0; attempt < 200 && placed < numApples; attempt++) {
+      const ax = 3 + flr(rnd(MAP_W - 6));
+      const ay = 3 + flr(rnd(MAP_H - 10));
+      if (grid[ay][ax] === T_DIRT && ay + 2 < MAP_H && grid[ay+2][ax] === T_EMPTY) {
+        grid[ay][ax] = T_APPLE;
+        apples.push({ tx: ax, ty: ay, px: ax * TILE, py: ay * TILE + HUD_Y, falling: false, fallSpeed: 0, settled: true, crushTimer: 0 });
+        placed++;
+      }
+    }
+
+    // Spawn enemies in tunnels
+    enemies = [];
+    const numEnemies = 4 + min(lvl * 2, 10);
+    for (let i = 0; i < numEnemies; i++) {
+      let ex, ey;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        ex = 3 + flr(rnd(MAP_W - 6));
+        ey = 2 + flr(rnd(MAP_H - 6));
+        if (grid[ey][ex] === T_EMPTY) {
+          // Don't spawn too close to player start
+          const dist = _abs(ex - flr(MAP_W/2)) + _abs(ey - (MAP_H - 4));
+          if (dist > 12) break;
+        }
+      }
+      const isExtra = (i === 0 && lvl > 1); // First enemy on level 2+ carries EXTRA letter
+      enemies.push({
+        x: ex * TILE, y: ey * TILE + HUD_Y,
+        tx: ex, ty: ey,
+        dir: flr(rnd(4)), // 0=right,1=left,2=up,3=down
+        speed: 0.5 + lvl * 0.1,
+        moveTimer: 0,
+        animFrame: 0,
+        alive: true,
+        extra: isExtra,
+        extraLetter: isExtra ? "EXTRA"[min(flr(rnd(5)), 4)] : null,
+        chaseMode: false,
+        chaseTimer: 90 + flr(rnd(90)),
+        digging: false,
+        digTimer: 0,
+      });
+    }
+  }
+
+  function resetGame() {
+    score = 0;
+    lives = 3;
+    level = 0;
+    extraLetters = "";
+    explosions = [];
+    particles = [];
+    nextLevel();
+  }
+
+  function nextLevel() {
+    level++;
+    generateLevel(level);
+    // Place player at center bottom
+    const startTX = flr(MAP_W / 2);
+    const startTY = MAP_H - 4;
+    player = {
+      x: startTX * TILE,
+      y: startTY * TILE + HUD_Y,
+      tx: startTX, ty: startTY,
+      speed: 1.6,
+    };
+    playerDir = 0; // 0=right,1=left,2=up,3=down
+    playerFrame = 0;
+    ball = null;
+    levelClearTimer = 0;
+    deathTimer = 0;
+    invincTimer = 60;
+  }
+
+  function tileAt(px, py) {
+    const tx = flr(px / TILE);
+    const ty = flr((py - HUD_Y) / TILE);
+    if (tx < 0 || tx >= MAP_W || ty < 0 || ty >= MAP_H) return T_EMPTY;
+    return grid[ty][tx];
+  }
+
+  function setTile(px, py, val) {
+    const tx = flr(px / TILE);
+    const ty = flr((py - HUD_Y) / TILE);
+    if (tx >= 0 && tx < MAP_W && ty >= 0 && ty < MAP_H) grid[ty][tx] = val;
+  }
+
+  function gridGet(tx, ty) {
+    if (tx < 0 || tx >= MAP_W || ty < 0 || ty >= MAP_H) return T_EMPTY;
+    return grid[ty][tx];
+  }
+
+  function addExplosion(x, y) {
+    explosions.push({ x, y, timer: 14 });
+    for (let i = 0; i < 6; i++)
+      particles.push({ x: x+4, y: y+4, vx: rnd(3)-1.5, vy: rnd(3)-1.5, life: 8+flr(rnd(8)), color: flr(rnd(3))+1 });
+  }
+
+  // Sound effects
+  function cherrySound() { note(0, "E5", 0.03); }
+  function throwSound() { note(0, "G5", 0.05); setTimeout(() => note(0, "C6", 0.04), 40); }
+  function bounceSound() { note(1, "A4", 0.02); }
+  function killSound() { note(1, "C3", 0.06); setTimeout(() => note(1, "E3", 0.06), 50); }
+  function crushSound() { note(0, "D3", 0.1); note(1, "G2", 0.12); }
+  function deathSound() { note(0, "C3", 0.15); note(1, "G2", 0.15); setTimeout(() => { note(0, "A2", 0.2); }, 120); }
+  function clearSound() {
+    note(0, "C5", 0.08);
+    setTimeout(() => note(0, "E5", 0.08), 80);
+    setTimeout(() => note(0, "G5", 0.08), 160);
+    setTimeout(() => note(0, "C6", 0.15), 240);
+  }
+  function extraSound() {
+    note(0, "G5", 0.06);
+    setTimeout(() => note(0, "B5", 0.06), 60);
+    setTimeout(() => note(0, "D6", 0.1), 120);
+  }
+
+  resetGame();
+
+  // ============================================================
+  // Update
+  // ============================================================
+  API._update = function() {
+    if (state === "title") {
+      if (btnp("a") || btnp("start")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.08);
+        setTimeout(() => note(0, "E5", 0.08), 80);
+        setTimeout(() => note(0, "G5", 0.12), 160);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (btnp("a") || btnp("start")) state = "title";
+      return;
+    }
+
+    // --- Play state ---
+    if (deathTimer > 0) {
+      deathTimer--;
+      // Update particles during death
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      if (deathTimer === 0) {
+        if (lives <= 0) {
+          state = "gameover";
+        } else {
+          // Respawn
+          const startTX = flr(MAP_W / 2);
+          const startTY = MAP_H - 4;
+          player.x = startTX * TILE;
+          player.y = startTY * TILE + HUD_Y;
+          invincTimer = 90;
+          ball = null;
+        }
+      }
+      return;
+    }
+
+    if (levelClearTimer > 0) {
+      levelClearTimer--;
+      if (levelClearTimer === 0) nextLevel();
+      return;
+    }
+
+    if (invincTimer > 0) invincTimer--;
+    playerFrame = (playerFrame + 1) % 20;
+
+    // Player movement
+    let dx = 0, dy = 0;
+    if (btn("right")) { dx = 1; playerDir = 0; }
+    else if (btn("left")) { dx = -1; playerDir = 1; }
+    else if (btn("up")) { dy = -1; playerDir = 2; }
+    else if (btn("down")) { dy = 1; playerDir = 3; }
+
+    if (dx !== 0 || dy !== 0) {
+      const nx = player.x + dx * player.speed;
+      const ny = player.y + dy * player.speed;
+
+      // Bounds check
+      if (nx >= 0 && nx <= (MAP_W - 1) * TILE && ny >= HUD_Y && ny <= HUD_Y + (MAP_H - 1) * TILE) {
+        player.x = nx;
+        player.y = ny;
+
+        // Dig through dirt and collect cherries at player tile positions
+        const ptx = flr(player.x / TILE);
+        const pty = flr((player.y - HUD_Y) / TILE);
+        // Check 2x2 area around player
+        for (let cdy = 0; cdy <= 1; cdy++) {
+          for (let cdx = 0; cdx <= 0; cdx++) {
+            const cx = ptx + cdx;
+            const cy = pty + cdy;
+            if (cx >= 0 && cx < MAP_W && cy >= 0 && cy < MAP_H) {
+              if (grid[cy][cx] === T_DIRT) {
+                grid[cy][cx] = T_EMPTY;
+              } else if (grid[cy][cx] === T_CHERRY) {
+                grid[cy][cx] = T_EMPTY;
+                cherryCount++;
+                score += 50;
+                cherrySound();
+              }
+            }
+          }
+        }
+
+        // Check if player pushes an apple
+        for (const a of apples) {
+          if (a.falling) continue;
+          const adx = player.x - a.px;
+          const ady = player.y - a.py;
+          if (_abs(adx) < 7 && _abs(ady) < 7) {
+            // Push apple in movement direction (only horizontal)
+            if (dx !== 0 && _abs(ady) < 5) {
+              const newATX = a.tx + dx;
+              if (newATX >= 0 && newATX < MAP_W) {
+                if (gridGet(newATX, a.ty) === T_EMPTY || gridGet(newATX, a.ty) === T_DIRT) {
+                  grid[a.ty][a.tx] = T_EMPTY;
+                  a.tx += dx;
+                  a.px = a.tx * TILE;
+                  grid[a.ty][a.tx] = T_APPLE;
+                  // Check if apple should fall
+                  if (a.ty + 1 < MAP_H && gridGet(a.tx, a.ty + 1) === T_EMPTY) {
+                    a.falling = true;
+                    a.fallSpeed = 0;
+                    a.settled = false;
+                    grid[a.ty][a.tx] = T_EMPTY;
+                  }
+                }
+              }
+              // Push player back slightly
+              player.x -= dx * player.speed;
+            }
+          }
+        }
+      }
+    }
+
+    // Power ball throw
+    if (btnp("a") && !ball) {
+      const bdx = [1, -1, 0, 0][playerDir];
+      const bdy = [0, 0, -1, 1][playerDir];
+      ball = {
+        x: player.x + 1,
+        y: player.y + 1,
+        vx: bdx * 3,
+        vy: bdy * 3,
+        bounces: 0,
+        maxBounces: 4 + level,
+        alive: true,
+      };
+      throwSound();
+    }
+
+    // Update power ball
+    if (ball && ball.alive) {
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      // Bounce off walls
+      if (ball.x < 0 || ball.x > (MAP_W - 1) * TILE) {
+        ball.vx = -ball.vx;
+        ball.bounces++;
+        bounceSound();
+      }
+      if (ball.y < HUD_Y || ball.y > HUD_Y + (MAP_H - 1) * TILE) {
+        ball.vy = -ball.vy;
+        ball.bounces++;
+        bounceSound();
+      }
+
+      // Bounce off dirt walls
+      const btx = flr(ball.x / TILE);
+      const bty = flr((ball.y - HUD_Y) / TILE);
+      if (btx >= 0 && btx < MAP_W && bty >= 0 && bty < MAP_H) {
+        if (grid[bty][btx] === T_DIRT) {
+          ball.vx = -ball.vx;
+          ball.vy = -ball.vy;
+          ball.bounces++;
+          bounceSound();
+        }
+      }
+
+      // Ball kills enemies
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (!e.alive) continue;
+        if (_abs(ball.x - e.x) < 7 && _abs(ball.y - e.y) < 7) {
+          e.alive = false;
+          addExplosion(e.x, e.y);
+          score += 100;
+          killSound();
+          if (e.extra && e.extraLetter) {
+            if (extraLetters.indexOf(e.extraLetter) === -1) {
+              extraLetters += e.extraLetter;
+              extraSound();
+              if (extraLetters.length >= 5) {
+                // Bonus life for EXTRA
+                lives++;
+                extraLetters = "";
+              }
+            }
+          }
+          ball.alive = false;
+          ball = null;
+          enemies.splice(i, 1);
+          break;
+        }
+      }
+
+      // Ball returns to player after max bounces
+      if (ball && ball.bounces >= ball.maxBounces) {
+        // Move toward player
+        const tdx = player.x - ball.x;
+        const tdy = player.y - ball.y;
+        const dist = Math.sqrt(tdx * tdx + tdy * tdy);
+        if (dist < 6) {
+          ball = null;
+        } else if (dist > 0) {
+          ball.vx = (tdx / dist) * 3;
+          ball.vy = (tdy / dist) * 3;
+        }
+      }
+    }
+
+    // Update apples - gravity
+    for (let i = apples.length - 1; i >= 0; i--) {
+      const a = apples[i];
+
+      // Check if apple should start falling
+      if (!a.falling && a.ty + 1 < MAP_H && gridGet(a.tx, a.ty + 1) === T_EMPTY) {
+        a.falling = true;
+        a.fallSpeed = 0;
+        a.settled = false;
+        grid[a.ty][a.tx] = T_EMPTY;
+      }
+
+      if (a.falling) {
+        a.fallSpeed = min(a.fallSpeed + 0.3, 3);
+        a.py += a.fallSpeed;
+
+        const newTY = flr((a.py - HUD_Y) / TILE);
+        // Check if apple hit ground or dirt
+        if (newTY + 1 >= MAP_H || (newTY !== a.ty && newTY + 1 < MAP_H && gridGet(a.tx, newTY + 1) !== T_EMPTY)) {
+          a.falling = false;
+          a.ty = newTY;
+          a.py = a.ty * TILE + HUD_Y;
+          if (a.ty >= 0 && a.ty < MAP_H) grid[a.ty][a.tx] = T_APPLE;
+          a.settled = true;
+          crushSound();
+          // Shatter apple if it fell far
+          if (a.fallSpeed >= 2.5) {
+            addExplosion(a.px, a.py);
+            if (a.ty >= 0 && a.ty < MAP_H) grid[a.ty][a.tx] = T_EMPTY;
+            apples.splice(i, 1);
+            continue;
+          }
+        }
+
+        // Apple crushes enemies
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const e = enemies[j];
+          if (!e.alive) continue;
+          if (_abs(a.px - e.x) < 7 && _abs(a.py - e.y) < 7) {
+            e.alive = false;
+            addExplosion(e.x, e.y);
+            score += 200;
+            crushSound();
+            enemies.splice(j, 1);
+          }
+        }
+
+        // Apple hits player (only if falling fast)
+        if (a.fallSpeed > 1 && invincTimer <= 0) {
+          if (_abs(a.px - player.x) < 6 && _abs(a.py - player.y) < 6) {
+            playerDeath();
+          }
+        }
+      }
+    }
+
+    // Update enemies
+    for (const e of enemies) {
+      if (!e.alive) continue;
+
+      e.animFrame = (e.animFrame + 1) % 16;
+      e.chaseTimer--;
+
+      if (e.chaseTimer <= 0) {
+        e.chaseMode = true;
+      }
+
+      e.moveTimer++;
+      if (e.moveTimer < 3) continue;
+      e.moveTimer = 0;
+
+      // Find direction to player
+      const pdx = player.x - e.x;
+      const pdy = player.y - e.y;
+
+      // Get current tile position
+      const etx = flr(e.x / TILE);
+      const ety = flr((e.y - HUD_Y) / TILE);
+
+      // Possible moves (check if tile is empty/passable)
+      const moves = [];
+      // right
+      if (etx + 1 < MAP_W && (gridGet(etx + 1, ety) === T_EMPTY || gridGet(etx+1,ety) === T_CHERRY))
+        moves.push({ dx: 1, dy: 0, dir: 0 });
+      // left
+      if (etx - 1 >= 0 && (gridGet(etx - 1, ety) === T_EMPTY || gridGet(etx-1,ety) === T_CHERRY))
+        moves.push({ dx: -1, dy: 0, dir: 1 });
+      // up
+      if (ety - 1 >= 0 && (gridGet(etx, ety - 1) === T_EMPTY || gridGet(etx,ety-1) === T_CHERRY))
+        moves.push({ dx: 0, dy: -1, dir: 2 });
+      // down
+      if (ety + 1 < MAP_H && (gridGet(etx, ety + 1) === T_EMPTY || gridGet(etx,ety+1) === T_CHERRY))
+        moves.push({ dx: 0, dy: 1, dir: 3 });
+
+      // If chasing, enemies can dig through dirt occasionally
+      if (e.chaseMode && moves.length < 2 && rnd(1) < 0.15) {
+        if (etx + 1 < MAP_W && gridGet(etx+1, ety) === T_DIRT && pdx > 0)
+          moves.push({ dx: 1, dy: 0, dir: 0, dig: true });
+        if (etx - 1 >= 0 && gridGet(etx-1, ety) === T_DIRT && pdx < 0)
+          moves.push({ dx: -1, dy: 0, dir: 1, dig: true });
+        if (ety - 1 >= 0 && gridGet(etx, ety-1) === T_DIRT && pdy < 0)
+          moves.push({ dx: 0, dy: -1, dir: 2, dig: true });
+        if (ety + 1 < MAP_H && gridGet(etx, ety+1) === T_DIRT && pdy > 0)
+          moves.push({ dx: 0, dy: 1, dir: 3, dig: true });
+      }
+
+      if (moves.length > 0) {
+        let chosen;
+        if (e.chaseMode && rnd(1) < 0.7) {
+          // Choose move closest to player
+          let bestDist = 99999;
+          for (const m of moves) {
+            const nx = etx + m.dx;
+            const ny = ety + m.dy;
+            const d = _abs(nx * TILE - player.x) + _abs(ny * TILE + HUD_Y - player.y);
+            if (d < bestDist) { bestDist = d; chosen = m; }
+          }
+        } else {
+          // Random move, but prefer not reversing
+          const nonReverse = moves.filter(m => {
+            if (e.dir === 0 && m.dir === 1) return false;
+            if (e.dir === 1 && m.dir === 0) return false;
+            if (e.dir === 2 && m.dir === 3) return false;
+            if (e.dir === 3 && m.dir === 2) return false;
+            return true;
+          });
+          const pool = nonReverse.length > 0 ? nonReverse : moves;
+          chosen = pool[flr(rnd(pool.length))];
+        }
+
+        if (chosen) {
+          if (chosen.dig) {
+            const nx = etx + chosen.dx;
+            const ny = ety + chosen.dy;
+            if (ny >= 0 && ny < MAP_H && nx >= 0 && nx < MAP_W) {
+              grid[ny][nx] = T_EMPTY;
+            }
+          }
+          e.x += chosen.dx * TILE;
+          e.y += chosen.dy * TILE;
+          e.dir = chosen.dir;
+          e.tx = etx + chosen.dx;
+          e.ty = ety + chosen.dy;
+        }
+      }
+
+      // Enemy-player collision
+      if (invincTimer <= 0 && _abs(e.x - player.x) < 6 && _abs(e.y - player.y) < 6) {
+        playerDeath();
+      }
+    }
+
+    // Remove dead enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      if (!enemies[i].alive) enemies.splice(i, 1);
+    }
+
+    // Explosions
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].timer--;
+      if (explosions[i].timer <= 0) explosions.splice(i, 1);
+    }
+
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // Level clear check
+    const allCherriesGone = cherryCount >= totalCherries && totalCherries > 0;
+    const allEnemiesGone = enemies.length === 0;
+    if ((allCherriesGone || allEnemiesGone) && levelClearTimer === 0 && deathTimer === 0) {
+      levelClearTimer = 90;
+      clearSound();
+    }
+  };
+
+  function playerDeath() {
+    lives--;
+    addExplosion(player.x, player.y);
+    deathSound();
+    deathTimer = 60;
+  }
+
+  // ============================================================
+  // Draw
+  // ============================================================
+  API._draw = function() {
+    cls(0);
+
+    if (state === "title") {
+      drawTitle();
+      return;
+    }
+
+    if (state === "gameover") {
+      for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+      text("GAME OVER", 195, 110, 3);
+      text("SCORE: " + score, 195, 135, 2);
+      text("LEVEL: " + level, 200, 150, 2);
+      if (extraLetters.length > 0) text("EXTRA: " + extraLetters, 190, 165, 2);
+      if (flr(API.frame / 20) % 2 === 0) text("PRESS A TO CONTINUE", 158, 210, 3);
+      return;
+    }
+
+    // --- Play state rendering ---
+
+    // Draw dirt and cherries
+    const camX = 0;
+    const startTX = flr(camX / TILE);
+    const endTX = min(startTX + 61, MAP_W);
+    const startTY = 0;
+    const endTY = MAP_H;
+
+    for (let ty = startTY; ty < endTY; ty++) {
+      for (let tx = startTX; tx < endTX; tx++) {
+        const t = grid[ty][tx];
+        const px = tx * TILE;
+        const py = ty * TILE + HUD_Y;
+        if (t === T_DIRT) {
+          // Draw dirt block
+          const c1 = ((tx + ty) % 3 === 0) ? 2 : 1;
+          rectf(px, py, TILE, TILE, c1);
+          // Small detail dots
+          if ((tx * 7 + ty * 13) % 5 === 0) pix(px + 3, py + 3, 2);
+          if ((tx * 11 + ty * 3) % 7 === 0) pix(px + 5, py + 5, 0);
+        } else if (t === T_CHERRY) {
+          spr(5, px, py);
+        } else if (t === T_APPLE) {
+          // Apples rendered separately
+        }
+      }
+    }
+
+    // Draw apples
+    for (const a of apples) {
+      spr(6, flr(a.px), flr(a.py));
+    }
+
+    // Draw power ball
+    if (ball && ball.alive) {
+      spr(9, flr(ball.x), flr(ball.y));
+      // Trail particles
+      if (API.frame % 2 === 0) {
+        pix(ball.x + 2 + rnd(4), ball.y + 2 + rnd(4), 2);
+      }
+    }
+
+    // Draw enemies
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const sprId = e.extra ? 14 : (e.animFrame < 8 ? 7 : 8);
+      spr(sprId, flr(e.x), flr(e.y));
+      // Draw EXTRA letter above special enemies
+      if (e.extra && e.extraLetter) {
+        text(e.extraLetter, flr(e.x) + 2, flr(e.y) - 7, 3);
+      }
+    }
+
+    // Draw player (blink when invincible)
+    if (deathTimer === 0 && !(invincTimer > 0 && flr(API.frame / 3) % 2 === 0)) {
+      const pSpr = playerDir === 0 ? (playerFrame < 10 ? 1 : 16) :
+                   playerDir === 1 ? (playerFrame < 10 ? 2 : 16) :
+                   playerDir === 2 ? (playerFrame < 10 ? 3 : 17) :
+                   (playerFrame < 10 ? 4 : 4);
+      const flipX = playerDir === 1;
+      spr(pSpr, flr(player.x), flr(player.y), flipX);
+    }
+
+    // Explosions
+    for (const e of explosions) {
+      const sprId = e.timer > 7 ? 11 : 12;
+      spr(sprId, flr(e.x), flr(e.y));
+    }
+
+    // Particles
+    for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+
+    // HUD
+    rectf(0, 0, W, HUD_Y, 0);
+    text("SCORE:" + score, 4, 3, 3);
+    text("LV:" + level, W / 2 - 15, 3, 2);
+
+    // Lives
+    for (let i = 0; i < lives; i++) spr(13, W - 48 + i * 10, 2);
+
+    // EXTRA letters display
+    if (extraLetters.length > 0) {
+      text("EXTRA", W / 2 + 40, 3, 1);
+      for (let i = 0; i < extraLetters.length; i++) {
+        // Highlight collected letters
+        text(extraLetters[i], W / 2 + 40 + (("EXTRA".indexOf(extraLetters[i])) * 5), 3, 3);
+      }
+    }
+
+    // Ball indicator
+    if (!ball) {
+      circf(W - 56, 6, 2, 3);
+    }
+
+    // Level clear message
+    if (levelClearTimer > 0) {
+      const msgY = 150 + sin(levelClearTimer * 0.1) * 3;
+      rectf(170, flr(msgY) - 4, 140, 20, 0);
+      text("LEVEL CLEAR!", 190, flr(msgY), 3);
+    }
+
+    // Cherry count at bottom
+    rectf(0, H - 10, W, 10, 0);
+    text("CHERRIES:" + cherryCount + "/" + totalCherries, 4, H - 8, 2);
+    text("ENEMIES:" + enemies.length, W - 80, H - 8, 2);
+  };
+
+  function drawTitle() {
+    // Animated background dirt pattern
+    for (let ty = 0; ty < 40; ty++) {
+      for (let tx = 0; tx < 60; tx++) {
+        if ((tx + ty + flr(API.frame / 30)) % 4 !== 0) {
+          const c = ((tx + ty) % 3 === 0) ? 1 : 0;
+          if (c > 0) rectf(tx * 8, ty * 8, 8, 8, c);
+        }
+      }
+    }
+
+    // Title box
+    rectf(130, 50, 220, 50, 0);
+    rect(132, 52, 216, 46, 2);
+
+    const ty = 60 + sin(API.frame * 0.05) * 3;
+    text("MR. DO!", 195, flr(ty), 3);
+    rectf(170, flr(ty) + 10, 140, 1, 2);
+    text("A GRAYBOX DEMO", 182, flr(ty) + 16, 1);
+
+    // Animated characters
+    const cx = W / 2;
+    // Mr. Do bouncing
+    const doY = 125 + sin(API.frame * 0.1) * 4;
+    spr(1, cx - 4, flr(doY));
+    // Power ball orbit
+    const bx = cx + cos(API.frame * 0.08) * 20;
+    const by = 130 + sin(API.frame * 0.08) * 10;
+    spr(9, flr(bx), flr(by));
+
+    // Enemies marching
+    for (let i = 0; i < 5; i++) {
+      const ex = 160 + i * 35;
+      const ey = 170 + sin(API.frame * 0.07 + i) * 3;
+      spr(i === 2 ? 14 : (flr(API.frame/8) % 2 === 0 ? 7 : 8), flr(ex), flr(ey));
+    }
+
+    // Cherries decoration
+    for (let i = 0; i < 4; i++) {
+      spr(5, 155 + i * 50, 200);
+    }
+
+    // Apple
+    spr(6, cx - 4, 220);
+
+    if (flr(API.frame / 20) % 2 === 0) text("PRESS A TO START", 170, 250, 3);
+
+    // Instructions
+    text("DIG THROUGH DIRT", 177, 270, 2);
+    text("COLLECT CHERRIES", 177, 280, 2);
+    text("THROW POWER BALL", 177, 290, 2);
+    text("PUSH APPLES ON FOES", 170, 300, 2);
+
+    text("GRAYBOX DEMO V0.1", 168, H - 10, 1);
+  }
+
+  // ============================================================
+  // Boot
+  // ============================================================
+  if (API._init) API._init();
+  setInterval(tick, 1000 / FPS);
+  document.addEventListener("keydown", ensureAudio, { once: true });
+  document.addEventListener("click", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>

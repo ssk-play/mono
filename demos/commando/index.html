@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GrayBox — Demo: Commando</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: monospace;
+    overflow: hidden;
+  }
+  #frame {
+    background: #111;
+    border: 3px solid #333;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  #controls {
+    margin-top: 12px;
+    color: #6b6b6b;
+    font-size: 11px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  #controls span { color: #b0b0b0; }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="screen"></canvas>
+</div>
+<div id="controls">
+  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>Z</span> SHOOT &nbsp;&nbsp; <span>X</span> GRENADE &nbsp;&nbsp; <span>ENTER</span> START
+</div>
+<script>
+(() => {
+  "use strict";
+
+  // ============================================================
+  // GrayBox Runtime (inline)
+  // ============================================================
+  const W = 480;
+  const H = 320;
+  const SCALE = 2;
+  const FPS = 30;
+  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = (W * SCALE) + "px";
+  canvas.style.height = (H * SCALE) + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const buf = ctx.createImageData(W, H);
+  const buf32 = new Uint32Array(buf.data.buffer);
+
+  function hexToABGR(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  }
+  const COLOR_U32 = COLORS.map(hexToABGR);
+
+  const sprites = {};
+  const tilemap = {};
+
+  const keyMap = {
+    "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
+    "w": "up", "s": "down", "a": "left", "d": "right",
+    "z": "a", "Z": "a", "x": "b", "X": "b",
+    "Enter": "start", " ": "a"
+  };
+  const keys = {};
+  const keysPrev = {};
+
+  document.addEventListener("keydown", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = true; e.preventDefault(); }
+  });
+  document.addEventListener("keyup", e => {
+    const k = keyMap[e.key];
+    if (k) { keys[k] = false; e.preventDefault(); }
+  });
+
+  let audioCtx = null;
+  const channels = [null, null];
+  const channelGains = [null, null];
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      for (let i = 0; i < 2; i++) {
+        channelGains[i] = audioCtx.createGain();
+        channelGains[i].gain.value = 0.15;
+        channelGains[i].connect(audioCtx.destination);
+      }
+    }
+  }
+
+  const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function noteToFreq(noteStr) {
+    const match = noteStr.match(/^([A-G]#?)(\d)$/);
+    if (!match) return 440;
+    const name = match[1];
+    const octave = parseInt(match[2]);
+    const semitone = NOTE_NAMES.indexOf(name);
+    if (semitone === -1) return 440;
+    const midi = (octave + 1) * 12 + semitone;
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  const FONT_W = 4;
+  const FONT_H = 6;
+  const FONT = {};
+  const fontData = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+    "0":"0110100111011011101110010110","1":"0100110001000100010001001110",
+    "2":"0110100100010010010010001111","3":"1110000100010110000110011110",
+    "4":"1001100110011111000100010001","5":"1111100010001110000100011110",
+    "6":"0110100010001110100110010110","7":"1111000100010010010001001000",
+    "8":"0110100110010110100110010110","9":"0110100110010111000100010110",
+    " ":"0000000000000000000000000000",
+    ".":"0000000000000000000001000100",
+    ",":"0000000000000000001000101000",
+    "!":"0100010001000100000000000100",
+    "?":"0110100100010010000000000010",
+    "-":"0000000000001110000000000000",
+    "+":"0000001001001110010000100000",
+    ":":"0000010001000000010001000000",
+    "/":"0001000100100010010010001000",
+    "*":"0000101001001110010010100000",
+    "#":"0101111101011111010100000000",
+    "(":"0010010010001000010001000010",
+    ")":"0100001000010001000100100100",
+    "=":"0000000011110000111100000000",
+    "'":"0100010010000000000000000000",
+    "\"":"1010101000000000000000000000",
+    "<":"0010010010001000010000100010",
+    ">":"1000010000100001001001001000",
+    "_":"0000000000000000000000001111",
+  };
+  for (const [ch, bits] of Object.entries(fontData)) {
+    FONT[ch] = [];
+    for (let i = 0; i < bits.length; i++) FONT[ch].push(parseInt(bits[i]));
+  }
+
+  const API = {};
+  API._init = null;
+  API._update = null;
+  API._draw = null;
+  API.frame = 0;
+
+  API.cls = function(c = 0) { buf32.fill(COLOR_U32[c] || COLOR_U32[0]); };
+  API.pix = function(x, y, c) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    buf32[y * W + x] = COLOR_U32[c] || COLOR_U32[0];
+  };
+  API.line = function(x0, y0, x1, y1, c) {
+    x0=Math.floor(x0); y0=Math.floor(y0); x1=Math.floor(x1); y1=Math.floor(y1);
+    const dx=Math.abs(x1-x0), dy=Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx-dy;
+    while(true) {
+      API.pix(x0,y0,c);
+      if(x0===x1&&y0===y1) break;
+      const e2=2*err;
+      if(e2>-dy){err-=dy;x0+=sx;}
+      if(e2<dx){err+=dx;y0+=sy;}
+    }
+  };
+  API.rect = function(x,y,w,h,c) {
+    API.line(x,y,x+w-1,y,c); API.line(x+w-1,y,x+w-1,y+h-1,c);
+    API.line(x+w-1,y+h-1,x,y+h-1,c); API.line(x,y+h-1,x,y,c);
+  };
+  API.rectf = function(x,y,w,h,c) {
+    x=Math.floor(x); y=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[0];
+    for(let py=Math.max(0,y);py<Math.min(H,y+h);py++)
+      for(let px=Math.max(0,x);px<Math.min(W,x+w);px++)
+        buf32[py*W+px]=col;
+  };
+  API.circ = function(cx,cy,r,c) {
+    let x=r,y=0,d=1-r; cx=Math.floor(cx); cy=Math.floor(cy);
+    while(x>=y){
+      API.pix(cx+x,cy+y,c);API.pix(cx-x,cy+y,c);
+      API.pix(cx+x,cy-y,c);API.pix(cx-x,cy-y,c);
+      API.pix(cx+y,cy+x,c);API.pix(cx-y,cy+x,c);
+      API.pix(cx+y,cy-x,c);API.pix(cx-y,cy-x,c);
+      y++; if(d<0){d+=2*y+1;}else{x--;d+=2*(y-x)+1;}
+    }
+  };
+  API.circf = function(cx,cy,r,c) {
+    cx=Math.floor(cx); cy=Math.floor(cy);
+    const col=COLOR_U32[c]||COLOR_U32[0]; const r2=r*r;
+    for(let py=-r;py<=r;py++) for(let px=-r;px<=r;px++)
+      if(px*px+py*py<=r2){ const sx=cx+px,sy=cy+py;
+        if(sx>=0&&sx<W&&sy>=0&&sy<H) buf32[sy*W+sx]=col; }
+  };
+  API.sprite = function(id, data) {
+    const arr = new Uint8Array(64); let i = 0;
+    for (const ch of data) { if (ch>='0'&&ch<='3') { arr[i++]=parseInt(ch); if(i>=64) break; } }
+    sprites[id] = arr;
+  };
+  API.spr = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx], dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  // Sprite draw with transparency (color 0 = transparent)
+  API.sprT = function(id, x, y, flipX, flipY) {
+    const s=sprites[id]; if(!s) return;
+    x=Math.floor(x); y=Math.floor(y);
+    for(let py=0;py<8;py++) for(let px=0;px<8;px++){
+      const sx=flipX?7-px:px, sy=flipY?7-py:py;
+      const c=s[sy*8+sx]; if(c===0) continue;
+      const dx=x+px, dy=y+py;
+      if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
+    }
+  };
+  API.text = function(str, x, y, c) {
+    str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
+    const col=COLOR_U32[c]||COLOR_U32[3];
+    for(const ch of str){
+      const glyph=FONT[ch];
+      if(glyph) for(let py=0;py<FONT_H;py++) for(let px=0;px<FONT_W;px++)
+        if(glyph[py*FONT_W+px]){ const dx=cx+px,dy=cy+py;
+          if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=col; }
+      cx+=FONT_W+1;
+    }
+  };
+  API.mget = function(cx,cy) { return tilemap[cx+","+cy]||0; };
+  API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
+  API.map = function(mx,my,mw,mh,sx,sy) {
+    for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*8,sy+ty*8); }
+  };
+  API.btn = function(k) { return !!keys[k]; };
+  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  API.note = function(ch, noteStr, dur) {
+    ensureAudio(); if(ch<0||ch>1) return; API.stop(ch);
+    const osc=audioCtx.createOscillator(); osc.type="square";
+    osc.frequency.value=noteToFreq(noteStr);
+    osc.connect(channelGains[ch]); osc.start();
+    osc.stop(audioCtx.currentTime+dur); channels[ch]=osc;
+  };
+  API.stop = function(ch) {
+    if(ch===undefined){API.stop(0);API.stop(1);return;}
+    if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
+  };
+  API.rnd = function(max) { return Math.random()*max; };
+  API.flr = Math.floor;
+  API.abs = Math.abs;
+  API.min = Math.min;
+  API.max = Math.max;
+  API.sin = Math.sin;
+  API.cos = Math.cos;
+
+  function tick() {
+    if (API._update) API._update();
+    if (API._draw) API._draw();
+    ctx.putImageData(buf, 0, 0);
+    for (const k in keys) keysPrev[k] = keys[k];
+    API.frame++;
+  }
+
+  // ============================================================
+  // Commando Game
+  // ============================================================
+  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos } = API;
+
+  // --- Sprites ---
+
+  // 1: Player soldier facing up
+  defSprite(1,
+    "00233200" +
+    "00322300" +
+    "00033000" +
+    "02333320" +
+    "30333030" +
+    "00333000" +
+    "00211200" +
+    "00200200"
+  );
+  // 2: Player facing down
+  defSprite(2,
+    "00200200" +
+    "00211200" +
+    "00333000" +
+    "02333320" +
+    "30333030" +
+    "00033000" +
+    "00322300" +
+    "00233200"
+  );
+  // 3: Player facing right
+  defSprite(3,
+    "00233000" +
+    "00323000" +
+    "00033300" +
+    "02333320" +
+    "00333033" +
+    "00333000" +
+    "00122000" +
+    "00200200"
+  );
+  // 4: Player facing left (mirror of 3)
+  defSprite(4,
+    "00033200" +
+    "00032300" +
+    "00333000" +
+    "02333320" +
+    "33033300" +
+    "00033300" +
+    "00022100" +
+    "00200200"
+  );
+
+  // 10: Player bullet up
+  defSprite(10,
+    "00030000" +
+    "00030000" +
+    "00020000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+  // 11: Player bullet down
+  defSprite(11,
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00020000" +
+    "00030000" +
+    "00030000"
+  );
+  // 12: Player bullet right
+  defSprite(12,
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00023000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+  // 13: Player bullet left
+  defSprite(13,
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00032000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 20: Enemy soldier (standing)
+  defSprite(20,
+    "00111100" +
+    "00122100" +
+    "00011000" +
+    "01111110" +
+    "20111020" +
+    "00111000" +
+    "00100100" +
+    "00100100"
+  );
+  // 21: Enemy soldier walking
+  defSprite(21,
+    "00111100" +
+    "00122100" +
+    "00011000" +
+    "01111110" +
+    "20111020" +
+    "00111000" +
+    "00100100" +
+    "01000010"
+  );
+
+  // 30: Bunker (top half, 8x8)
+  defSprite(30,
+    "01111110" +
+    "12222221" +
+    "12111121" +
+    "12100121" +
+    "12100121" +
+    "12111121" +
+    "12222221" +
+    "01111110"
+  );
+
+  // 31: Truck (top-down, upper part)
+  defSprite(31,
+    "01111110" +
+    "12222221" +
+    "12333321" +
+    "12333321" +
+    "12222221" +
+    "13333331" +
+    "12222221" +
+    "01111110"
+  );
+
+  // 32: Truck lower part
+  defSprite(32,
+    "01111110" +
+    "12222221" +
+    "12222221" +
+    "13333331" +
+    "12222221" +
+    "12222221" +
+    "01200210" +
+    "01200210"
+  );
+
+  // 40: POW prisoner
+  defSprite(40,
+    "00333300" +
+    "00322300" +
+    "00033000" +
+    "00333000" +
+    "00333000" +
+    "00333000" +
+    "00300300" +
+    "00300300"
+  );
+  // 41: POW freed (running)
+  defSprite(41,
+    "00333300" +
+    "00322300" +
+    "00033000" +
+    "03333300" +
+    "00333030" +
+    "00333000" +
+    "00300300" +
+    "03000030"
+  );
+
+  // 50: Grenade
+  defSprite(50,
+    "00000000" +
+    "00000000" +
+    "00030000" +
+    "00232000" +
+    "00232000" +
+    "00030000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 51: Explosion frame 1
+  defSprite(51,
+    "00000000" +
+    "00020000" +
+    "00232000" +
+    "02333200" +
+    "00232000" +
+    "00020000" +
+    "00000000" +
+    "00000000"
+  );
+  // 52: Explosion frame 2
+  defSprite(52,
+    "00020000" +
+    "00232000" +
+    "02333200" +
+    "23333320" +
+    "02333200" +
+    "00232000" +
+    "00020000" +
+    "00000000"
+  );
+  // 53: Explosion frame 3
+  defSprite(53,
+    "20020020" +
+    "02232020" +
+    "02333200" +
+    "23333320" +
+    "02333200" +
+    "00232020" +
+    "20020020" +
+    "02000200"
+  );
+  // 54: Explosion frame 4 (fading)
+  defSprite(54,
+    "10010010" +
+    "00121000" +
+    "01222100" +
+    "12222210" +
+    "01222100" +
+    "00121010" +
+    "10010010" +
+    "01000100"
+  );
+
+  // 55: Enemy bullet
+  defSprite(55,
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00120000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 60: Tree/bush obstacle
+  defSprite(60,
+    "00111000" +
+    "01222100" +
+    "12222210" +
+    "12222210" +
+    "12222210" +
+    "01222100" +
+    "00121000" +
+    "00010000"
+  );
+
+  // 61: Sandbag/barricade
+  defSprite(61,
+    "00000000" +
+    "00000000" +
+    "01111110" +
+    "12222221" +
+    "12222221" +
+    "01111110" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 62: Trench horizontal
+  defSprite(62,
+    "00000000" +
+    "00000000" +
+    "11111111" +
+    "00000000" +
+    "00000000" +
+    "11111111" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 70: Boss tank (top-left quadrant)
+  defSprite(70,
+    "01111100" +
+    "12222210" +
+    "12333210" +
+    "12333210" +
+    "12333210" +
+    "12333210" +
+    "12222210" +
+    "12222210"
+  );
+  // 71: Boss tank (top-right)
+  defSprite(71,
+    "00111110" +
+    "01222221" +
+    "01233321" +
+    "01233321" +
+    "01233321" +
+    "01233321" +
+    "01222221" +
+    "01222221"
+  );
+  // 72: Boss tank (bottom-left) with cannon
+  defSprite(72,
+    "12222210" +
+    "12222210" +
+    "12333210" +
+    "12333210" +
+    "01111100" +
+    "00333000" +
+    "00333000" +
+    "00333000"
+  );
+  // 73: Boss tank (bottom-right)
+  defSprite(73,
+    "01222221" +
+    "01222221" +
+    "01233321" +
+    "01233321" +
+    "00111110" +
+    "00333000" +
+    "00333000" +
+    "00000000"
+  );
+
+  // 80: Life icon
+  defSprite(80,
+    "00000000" +
+    "00233200" +
+    "00322300" +
+    "00333000" +
+    "00333000" +
+    "00211200" +
+    "00000000" +
+    "00000000"
+  );
+
+  // 81: Grenade icon (for HUD)
+  defSprite(81,
+    "00000000" +
+    "00030000" +
+    "00232000" +
+    "00232000" +
+    "00030000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  );
+
+  // --- Game State ---
+  let state = "title";
+  let score = 0;
+  let highScore = 0;
+  let lives = 3;
+  let grenadeCount = 5;
+  let scrollY = 0; // world scroll offset (increases as player advances)
+  let scrollSpeed = 0.5;
+  let levelSection = 0;
+
+  // Player
+  let px = 240, py = 260;
+  let pdir = 0; // 0=up,1=right,2=down,3=left
+  let pInvuln = 0;
+  let pWalkFrame = 0;
+  let pDead = false;
+  let pDeadTimer = 0;
+
+  // Bullets
+  let bullets = []; // {x,y,dx,dy,owner:'p'|'e'}
+  // Grenades
+  let grenades = []; // {x,y,dx,dy,z,dz,timer}
+  // Explosions
+  let explosions = []; // {x,y,timer}
+
+  // Enemies
+  let enemies = []; // {x,y,type,hp,timer,dir,state,shootTimer}
+  // POWs
+  let pows = []; // {x,y,state:'waiting'|'freed'|'gone',timer}
+  // Obstacles (world coords)
+  let obstacles = []; // {x,wy,type,hp} wy = world Y
+  // Boss
+  let boss = null; // {x,y,hp,maxHp,timer,phase,shootTimer}
+  let bossActive = false;
+  let bossDefeated = false;
+
+  // Spawning
+  let spawnTimer = 0;
+  let nextObstacleY = 0;
+  let sectionLength = 0;
+  let gameOverTimer = 0;
+  let titleAnim = 0;
+
+  // Terrain features (parallax ground detail)
+  let groundDetails = []; // {x,wy,type}
+
+  function resetGame() {
+    score = 0;
+    lives = 3;
+    grenadeCount = 5;
+    scrollY = 0;
+    scrollSpeed = 0.5;
+    levelSection = 0;
+    px = 240; py = 260;
+    pdir = 0;
+    pInvuln = 0;
+    pDead = false;
+    pDeadTimer = 0;
+    bullets = [];
+    grenades = [];
+    explosions = [];
+    enemies = [];
+    pows = [];
+    obstacles = [];
+    boss = null;
+    bossActive = false;
+    bossDefeated = false;
+    spawnTimer = 0;
+    nextObstacleY = 400;
+    sectionLength = 0;
+    gameOverTimer = 0;
+    groundDetails = [];
+    // Pre-populate some ground details
+    for (let i = 0; i < 80; i++) {
+      groundDetails.push({
+        x: flr(rnd(W)),
+        wy: flr(rnd(600)),
+        type: flr(rnd(3))
+      });
+    }
+  }
+
+  function worldToScreen(wy) {
+    return wy - scrollY;
+  }
+
+  function spawnEnemy(x, wy, type) {
+    enemies.push({
+      x: x, y: wy, type: type || 0,
+      hp: type === 1 ? 2 : 1,
+      timer: 0, dir: 2, // face down initially
+      state: "idle",
+      shootTimer: flr(rnd(60)) + 30,
+      moveTimer: 0,
+      vx: 0, vy: 0
+    });
+  }
+
+  function spawnPOW(x, wy) {
+    pows.push({ x: x, y: wy, state: "waiting", timer: 0 });
+  }
+
+  function spawnObstacle(x, wy, type) {
+    obstacles.push({ x: x, wy: wy, type: type, hp: type === 1 ? 5 : (type === 2 ? 8 : 0) });
+  }
+
+  function addExplosion(x, y) {
+    explosions.push({ x: x, y: y, timer: 0 });
+    note(1, "C2", 0.1);
+  }
+
+  function shoot(x, y, dx, dy, owner) {
+    bullets.push({ x: x, y: y, dx: dx, dy: dy, owner: owner });
+  }
+
+  function throwGrenade() {
+    if (grenadeCount <= 0) return;
+    grenadeCount--;
+    let dx = 0, dy = -3;
+    if (pdir === 1) { dx = 3; dy = -1; }
+    else if (pdir === 2) { dx = 0; dy = 3; }
+    else if (pdir === 3) { dx = -3; dy = -1; }
+    grenades.push({ x: px + 4, y: py + 4, dx: dx, dy: dy, z: 0, dz: 4, timer: 0 });
+    note(0, "G4", 0.05);
+  }
+
+  function boxCollide(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
+  function generateSection() {
+    const baseY = scrollY + H + 50;
+
+    // Trees and bushes
+    for (let i = 0; i < 4; i++) {
+      let tx = flr(rnd(W - 16));
+      // Avoid center corridor sometimes
+      if (rnd(1) < 0.4) tx = tx < 240 ? flr(rnd(100)) : W - 100 + flr(rnd(80));
+      spawnObstacle(tx, baseY + flr(rnd(200)), 0);
+    }
+
+    // Sandbags / barricades
+    if (rnd(1) < 0.5) {
+      let bx = 80 + flr(rnd(300));
+      for (let j = 0; j < 3; j++) {
+        spawnObstacle(bx + j * 10, baseY + 80 + flr(rnd(40)), 3);
+      }
+    }
+
+    // Trenches
+    if (rnd(1) < 0.3) {
+      let tx = 60 + flr(rnd(300));
+      for (let j = 0; j < 5; j++) {
+        spawnObstacle(tx + j * 9, baseY + 150, 4);
+      }
+    }
+
+    // Enemies
+    let numEnemies = 3 + flr(levelSection * 0.5);
+    if (numEnemies > 10) numEnemies = 10;
+    for (let i = 0; i < numEnemies; i++) {
+      spawnEnemy(30 + flr(rnd(W - 60)), baseY + flr(rnd(250)), rnd(1) < 0.3 ? 1 : 0);
+    }
+
+    // Bunker
+    if (rnd(1) < 0.35) {
+      let bx = 60 + flr(rnd(W - 120));
+      spawnObstacle(bx, baseY + 120, 1);
+      // Guards near bunker
+      spawnEnemy(bx - 20, baseY + 130, 0);
+      spawnEnemy(bx + 20, baseY + 130, 0);
+    }
+
+    // Truck
+    if (rnd(1) < 0.25) {
+      let tx = 80 + flr(rnd(W - 160));
+      spawnObstacle(tx, baseY + 60, 2);
+      // Enemies around truck
+      for (let i = 0; i < 3; i++) {
+        spawnEnemy(tx + flr(rnd(30)) - 15, baseY + 80 + flr(rnd(20)), 0);
+      }
+    }
+
+    // POW
+    if (rnd(1) < 0.4) {
+      spawnPOW(60 + flr(rnd(W - 120)), baseY + 100 + flr(rnd(100)));
+    }
+
+    // More ground details
+    for (let i = 0; i < 10; i++) {
+      groundDetails.push({
+        x: flr(rnd(W)),
+        wy: baseY + flr(rnd(300)),
+        type: flr(rnd(3))
+      });
+    }
+
+    // Grenade pickup (random ammo)
+    if (rnd(1) < 0.3) {
+      pows.push({ x: 50 + flr(rnd(W - 100)), y: baseY + 180, state: "ammo", timer: 0 });
+    }
+
+    sectionLength = 300;
+    nextObstacleY = baseY + sectionLength;
+  }
+
+  function spawnBoss() {
+    bossActive = true;
+    boss = {
+      x: 200, y: scrollY - 40,
+      hp: 30, maxHp: 30,
+      timer: 0, phase: 0,
+      shootTimer: 0,
+      vx: 1
+    };
+    scrollSpeed = 0;
+  }
+
+  // --- UPDATE ---
+  function gameUpdate() {
+    if (state === "title") {
+      titleAnim++;
+      if (btnp("start")) {
+        state = "play";
+        resetGame();
+        note(0, "C5", 0.1);
+      }
+      return;
+    }
+
+    if (state === "gameover") {
+      gameOverTimer++;
+      if (gameOverTimer > 90 && btnp("start")) {
+        state = "title";
+      }
+      return;
+    }
+
+    // --- PLAY STATE ---
+
+    // Scroll
+    if (!bossActive) {
+      scrollY += scrollSpeed;
+    }
+
+    // Check if it's time for a new section
+    if (!bossActive && scrollY > nextObstacleY - H - 200) {
+      levelSection++;
+      generateSection();
+      // Boss every 5 sections
+      if (levelSection > 0 && levelSection % 5 === 0 && !bossActive) {
+        spawnBoss();
+      }
+    }
+
+    if (pDead) {
+      pDeadTimer++;
+      if (pDeadTimer > 60) {
+        lives--;
+        if (lives <= 0) {
+          state = "gameover";
+          gameOverTimer = 0;
+          if (score > highScore) highScore = score;
+        } else {
+          pDead = false;
+          pInvuln = 90;
+          px = 240; py = 260;
+          grenadeCount = 5;
+        }
+      }
+      goto_after_player: ;
+    }
+
+    if (!pDead) {
+      // Player movement
+      let mx = 0, my = 0;
+      if (btn("left")) { mx = -2; pdir = 3; }
+      if (btn("right")) { mx = 2; pdir = 1; }
+      if (btn("up")) { my = -2; pdir = 0; }
+      if (btn("down")) { my = 2; pdir = 2; }
+      // Diagonal normalize
+      if (mx !== 0 && my !== 0) {
+        mx = mx > 0 ? 1.4 : -1.4;
+        my = my > 0 ? 1.4 : -1.4;
+      }
+
+      let npx = px + mx;
+      let npy = py + my;
+
+      // Bounds
+      if (npx < 4) npx = 4;
+      if (npx > W - 12) npx = W - 12;
+      if (npy < 20) npy = 20;
+      if (npy > H - 16) npy = H - 16;
+
+      // Obstacle collision
+      let blocked = false;
+      for (const ob of obstacles) {
+        const osy = worldToScreen(ob.wy);
+        if (ob.type === 0 || ob.type === 1 || ob.type === 2) { // tree, bunker, truck
+          if (boxCollide(npx, npy, 8, 8, ob.x, osy, 8, ob.type === 2 ? 16 : 8)) {
+            blocked = true;
+          }
+        }
+      }
+      if (!blocked) {
+        px = npx;
+        py = npy;
+      }
+
+      if (mx !== 0 || my !== 0) pWalkFrame++;
+
+      // Shoot
+      if (btnp("a")) {
+        let bdx = 0, bdy = -5;
+        if (pdir === 1) { bdx = 5; bdy = 0; }
+        else if (pdir === 2) { bdx = 0; bdy = 5; }
+        else if (pdir === 3) { bdx = -5; bdy = 0; }
+        shoot(px + 3, py + 2, bdx, bdy, "p");
+        note(0, "E5", 0.05);
+      }
+
+      // Grenade
+      if (btnp("b")) {
+        throwGrenade();
+      }
+
+      if (pInvuln > 0) pInvuln--;
+    }
+
+    // Update bullets
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.x += b.dx;
+      b.y += b.dy;
+      // Off screen
+      if (b.x < -8 || b.x > W + 8 || b.y < -8 || b.y > H + 8) {
+        bullets.splice(i, 1);
+        continue;
+      }
+      if (b.owner === "p") {
+        // Hit enemies
+        let hit = false;
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const e = enemies[j];
+          const esy = worldToScreen(e.y);
+          if (boxCollide(b.x, b.y, 3, 3, e.x, esy, 8, 8)) {
+            e.hp--;
+            if (e.hp <= 0) {
+              addExplosion(e.x, esy);
+              enemies.splice(j, 1);
+              score += e.type === 1 ? 200 : 100;
+            }
+            hit = true;
+            break;
+          }
+        }
+        // Hit destructible obstacles (bunker, truck)
+        if (!hit) {
+          for (let j = obstacles.length - 1; j >= 0; j--) {
+            const ob = obstacles[j];
+            if (ob.type === 1 || ob.type === 2) {
+              const osy = worldToScreen(ob.wy);
+              if (boxCollide(b.x, b.y, 3, 3, ob.x, osy, 8, ob.type === 2 ? 16 : 8)) {
+                ob.hp--;
+                if (ob.hp <= 0) {
+                  addExplosion(ob.x, osy);
+                  obstacles.splice(j, 1);
+                  score += ob.type === 1 ? 500 : 300;
+                }
+                hit = true;
+                break;
+              }
+            }
+          }
+        }
+        // Hit boss
+        if (!hit && boss) {
+          const bsy = worldToScreen(boss.y);
+          if (boxCollide(b.x, b.y, 3, 3, boss.x, bsy, 16, 16)) {
+            boss.hp--;
+            hit = true;
+            if (boss.hp <= 0) {
+              addExplosion(boss.x, bsy);
+              addExplosion(boss.x + 8, bsy + 4);
+              addExplosion(boss.x + 4, bsy + 8);
+              score += 2000;
+              bossActive = false;
+              bossDefeated = true;
+              boss = null;
+              scrollSpeed = 0.5;
+            }
+          }
+        }
+        if (hit) {
+          bullets.splice(i, 1);
+        }
+      } else {
+        // Enemy bullet hits player
+        if (!pDead && pInvuln === 0 && boxCollide(b.x, b.y, 3, 3, px, py, 8, 8)) {
+          addExplosion(px, py);
+          pDead = true;
+          pDeadTimer = 0;
+          bullets.splice(i, 1);
+        }
+      }
+    }
+
+    // Update grenades
+    for (let i = grenades.length - 1; i >= 0; i--) {
+      const g = grenades[i];
+      g.x += g.dx;
+      g.y += g.dy;
+      g.z += g.dz;
+      g.dz -= 0.3;
+      g.timer++;
+      if (g.z <= 0 && g.timer > 5) {
+        // Explode
+        addExplosion(g.x - 4, g.y - 4);
+        addExplosion(g.x + 4, g.y + 4);
+        // Damage in radius
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const e = enemies[j];
+          const esy = worldToScreen(e.y);
+          const dist = Math.sqrt((e.x - g.x) ** 2 + (esy - g.y) ** 2);
+          if (dist < 24) {
+            addExplosion(e.x, esy);
+            enemies.splice(j, 1);
+            score += 100;
+          }
+        }
+        // Damage obstacles
+        for (let j = obstacles.length - 1; j >= 0; j--) {
+          const ob = obstacles[j];
+          if (ob.type === 1 || ob.type === 2) {
+            const osy = worldToScreen(ob.wy);
+            const dist = Math.sqrt((ob.x - g.x) ** 2 + (osy - g.y) ** 2);
+            if (dist < 24) {
+              ob.hp -= 3;
+              if (ob.hp <= 0) {
+                addExplosion(ob.x, osy);
+                obstacles.splice(j, 1);
+                score += ob.type === 1 ? 500 : 300;
+              }
+            }
+          }
+        }
+        // Damage boss
+        if (boss) {
+          const bsy = worldToScreen(boss.y);
+          const dist = Math.sqrt((boss.x + 8 - g.x) ** 2 + (bsy + 8 - g.y) ** 2);
+          if (dist < 24) {
+            boss.hp -= 5;
+            if (boss.hp <= 0) {
+              addExplosion(boss.x, bsy);
+              addExplosion(boss.x + 8, bsy + 4);
+              score += 2000;
+              bossActive = false;
+              bossDefeated = true;
+              boss = null;
+              scrollSpeed = 0.5;
+            }
+          }
+        }
+        grenades.splice(i, 1);
+        note(1, "C2", 0.15);
+      }
+    }
+
+    // Update explosions
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      explosions[i].timer++;
+      if (explosions[i].timer > 16) explosions.splice(i, 1);
+    }
+
+    // Update enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
+      const esy = worldToScreen(e.y);
+
+      // Remove if off screen far
+      if (esy > H + 60) {
+        enemies.splice(i, 1);
+        continue;
+      }
+
+      e.timer++;
+
+      // Only active when on screen
+      if (esy < -20 || esy > H + 20) continue;
+
+      // AI: move toward player sometimes
+      e.moveTimer++;
+      if (e.moveTimer > 30) {
+        e.moveTimer = 0;
+        const dx = px - e.x;
+        const dsy = py - esy;
+        const dist = Math.sqrt(dx * dx + dsy * dsy);
+        if (dist > 40) {
+          e.vx = (dx / dist) * 0.8;
+          e.vy = (dsy / dist) * 0.8;
+        } else {
+          // Strafe
+          e.vx = rnd(2) - 1;
+          e.vy = rnd(1) - 0.5;
+        }
+      }
+      e.x += e.vx;
+      e.y += e.vy; // world Y movement
+
+      // Clamp to screen
+      if (e.x < 4) e.x = 4;
+      if (e.x > W - 12) e.x = W - 12;
+
+      // Shoot at player
+      e.shootTimer--;
+      if (e.shootTimer <= 0 && !pDead) {
+        e.shootTimer = 40 + flr(rnd(40));
+        const dx = px - e.x;
+        const dy = py - esy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0 && dist < 200) {
+          shoot(e.x + 3, esy + 3, (dx / dist) * 3, (dy / dist) * 3, "e");
+        }
+      }
+
+      // Collide with player
+      if (!pDead && pInvuln === 0 && boxCollide(px, py, 7, 7, e.x, esy, 7, 7)) {
+        addExplosion(px, py);
+        addExplosion(e.x, esy);
+        pDead = true;
+        pDeadTimer = 0;
+        enemies.splice(i, 1);
+        score += 100;
+      }
+    }
+
+    // Update POWs
+    for (let i = pows.length - 1; i >= 0; i--) {
+      const p = pows[i];
+      const psy = worldToScreen(p.y);
+
+      if (psy > H + 40) {
+        pows.splice(i, 1);
+        continue;
+      }
+
+      if (p.state === "waiting" || p.state === "ammo") {
+        // Player touches POW
+        if (!pDead && boxCollide(px, py, 8, 8, p.x, psy, 8, 8)) {
+          if (p.state === "ammo") {
+            grenadeCount = min(grenadeCount + 3, 9);
+            note(0, "A5", 0.1);
+            pows.splice(i, 1);
+          } else {
+            p.state = "freed";
+            p.timer = 0;
+            score += 1000;
+            note(0, "G5", 0.1);
+            setTimeout(() => note(0, "A5", 0.1), 80);
+          }
+        }
+      } else if (p.state === "freed") {
+        p.timer++;
+        p.y += 1.5; // run down/away
+        if (p.timer > 60) pows.splice(i, 1);
+      }
+    }
+
+    // Update boss
+    if (boss) {
+      boss.timer++;
+      const bsy = worldToScreen(boss.y);
+
+      // Move boss into view
+      if (bsy < 30) {
+        boss.y += 0.5;
+      } else {
+        // Strafe
+        boss.x += boss.vx;
+        if (boss.x < 40 || boss.x > W - 60) boss.vx = -boss.vx;
+
+        // Shoot
+        boss.shootTimer++;
+        if (boss.shootTimer > 15) {
+          boss.shootTimer = 0;
+          const sby = worldToScreen(boss.y);
+          shoot(boss.x + 6, sby + 16, 0, 3, "e");
+          if (boss.timer % 60 < 30) {
+            shoot(boss.x + 6, sby + 16, -1.5, 2.5, "e");
+            shoot(boss.x + 6, sby + 16, 1.5, 2.5, "e");
+          }
+          note(1, "D3", 0.04);
+        }
+      }
+    }
+
+    // Gradually speed up
+    if (!bossActive && scrollSpeed < 1.0) {
+      scrollSpeed += 0.0001;
+    }
+  }
+
+  // --- DRAW ---
+  function gameDraw() {
+    if (state === "title") {
+      cls(0);
+
+      // Animated background
+      for (let i = 0; i < 30; i++) {
+        const yy = (titleAnim * 0.5 + i * 23) % H;
+        const xx = (i * 37 + flr(sin(titleAnim * 0.02 + i) * 10)) % W;
+        pix(xx, yy, 1);
+      }
+
+      // Title
+      const tx = 170;
+      rectf(tx - 10, 70, 160, 40, 0);
+      rect(tx - 10, 70, 160, 40, 2);
+      text("COMMANDO", tx, 80, 3);
+      text("GRAYBOX EDITION", tx + 8, 94, 1);
+
+      // Soldier graphic
+      sprT(1, 234, 130);
+      sprT(10, 234, 118);
+
+      text("PRESS ENTER TO START", 155, 170, 2);
+
+      text("ARROWS - MOVE", 170, 210, 1);
+      text("Z - SHOOT", 182, 222, 1);
+      text("X - GRENADE", 178, 234, 1);
+
+      if (highScore > 0) {
+        text("HIGH SCORE " + highScore, 175, 270, 2);
+      }
+
+      text("2026 GRAYBOX", 190, 300, 1);
+      return;
+    }
+
+    if (state === "gameover") {
+      cls(0);
+      text("GAME OVER", 195, 130, 3);
+      text("SCORE " + score, 200, 155, 2);
+      if (score >= highScore && score > 0) {
+        text("NEW HIGH SCORE!", 180, 175, 3);
+      }
+      if (gameOverTimer > 90) {
+        text("PRESS ENTER", 195, 210, (flr(gameOverTimer / 15) % 2 === 0) ? 2 : 0);
+      }
+      return;
+    }
+
+    // --- PLAY DRAW ---
+    // Background: dark ground
+    cls(0);
+
+    // Draw ground details (dirt patches, grass tufts)
+    for (const gd of groundDetails) {
+      const sy = worldToScreen(gd.wy);
+      if (sy < -4 || sy > H + 4) continue;
+      if (gd.type === 0) {
+        pix(gd.x, sy, 1); // dots
+        pix(gd.x + 1, sy, 1);
+      } else if (gd.type === 1) {
+        pix(gd.x, sy, 1);
+        pix(gd.x, sy - 1, 1);
+        pix(gd.x + 1, sy, 1);
+      } else {
+        // Tiny cross
+        pix(gd.x, sy, 1);
+        pix(gd.x - 1, sy, 1);
+        pix(gd.x + 1, sy, 1);
+        pix(gd.x, sy - 1, 1);
+      }
+    }
+
+    // Draw obstacles
+    for (const ob of obstacles) {
+      const osy = worldToScreen(ob.wy);
+      if (osy < -16 || osy > H + 16) continue;
+      if (ob.type === 0) {
+        sprT(60, ob.x, osy); // tree
+      } else if (ob.type === 1) {
+        sprT(30, ob.x, osy); // bunker
+      } else if (ob.type === 2) {
+        sprT(31, ob.x, osy); // truck top
+        sprT(32, ob.x, osy + 8); // truck bottom
+      } else if (ob.type === 3) {
+        sprT(61, ob.x, osy); // sandbag
+      } else if (ob.type === 4) {
+        sprT(62, ob.x, osy); // trench
+      }
+    }
+
+    // Draw POWs
+    for (const p of pows) {
+      const psy = worldToScreen(p.y);
+      if (psy < -8 || psy > H + 8) continue;
+      if (p.state === "ammo") {
+        // Grenade ammo pickup - blink
+        if (flr(API.frame / 8) % 2 === 0) {
+          sprT(81, p.x, psy);
+        }
+      } else if (p.state === "waiting") {
+        sprT(40, p.x, psy);
+        // Blink "HELP" indicator
+        if (flr(API.frame / 15) % 2 === 0) {
+          text("!", p.x + 2, psy - 8, 3);
+        }
+      } else if (p.state === "freed") {
+        sprT(41, p.x, psy);
+        text("+1000", p.x - 4, psy - 10, 3);
+      }
+    }
+
+    // Draw enemies
+    for (const e of enemies) {
+      const esy = worldToScreen(e.y);
+      if (esy < -8 || esy > H + 8) continue;
+      const sid = (flr(e.timer / 8) % 2 === 0) ? 20 : 21;
+      sprT(sid, e.x, esy);
+      if (e.type === 1) {
+        // Tougher enemy - mark with highlight
+        pix(e.x + 3, esy, 3);
+        pix(e.x + 4, esy, 3);
+      }
+    }
+
+    // Draw boss
+    if (boss) {
+      const bsy = worldToScreen(boss.y);
+      sprT(70, boss.x, bsy);
+      sprT(71, boss.x + 8, bsy);
+      sprT(72, boss.x, bsy + 8);
+      sprT(73, boss.x + 8, bsy + 8);
+      // HP bar
+      const barW = 32;
+      const hpRatio = boss.hp / boss.maxHp;
+      rectf(boss.x, bsy - 6, barW, 3, 1);
+      rectf(boss.x, bsy - 6, flr(barW * hpRatio), 3, 3);
+    }
+
+    // Draw player
+    if (!pDead) {
+      if (pInvuln > 0 && flr(pInvuln / 3) % 2 === 0) {
+        // flicker
+      } else {
+        let psid = 1;
+        if (pdir === 1) psid = 3;
+        else if (pdir === 2) psid = 2;
+        else if (pdir === 3) psid = 4;
+        sprT(psid, px, py);
+      }
+    }
+
+    // Draw bullets
+    for (const b of bullets) {
+      if (b.owner === "p") {
+        // Determine bullet sprite from direction
+        if (_abs(b.dy) > _abs(b.dx)) {
+          sprT(b.dy < 0 ? 10 : 11, b.x - 2, b.y - 2);
+        } else {
+          sprT(b.dx > 0 ? 12 : 13, b.x - 2, b.y - 2);
+        }
+      } else {
+        // Enemy bullet: small dot
+        rectf(flr(b.x), flr(b.y), 2, 2, 3);
+      }
+    }
+
+    // Draw grenades
+    for (const g of grenades) {
+      const gz = g.z > 0 ? g.z : 0;
+      sprT(50, g.x - 3, g.y - 3 - gz);
+      // Shadow
+      pix(flr(g.x), flr(g.y + 2), 1);
+    }
+
+    // Draw explosions
+    for (const ex of explosions) {
+      const t = ex.timer;
+      let sid;
+      if (t < 4) sid = 51;
+      else if (t < 8) sid = 52;
+      else if (t < 12) sid = 53;
+      else sid = 54;
+      sprT(sid, ex.x, ex.y);
+    }
+
+    // --- HUD ---
+    rectf(0, 0, W, 16, 0);
+    line(0, 16, W, 16, 1);
+
+    // Score
+    text("SCORE " + score, 4, 5, 3);
+
+    // Lives
+    for (let i = 0; i < lives; i++) {
+      sprT(80, 180 + i * 10, 4);
+    }
+
+    // Grenades
+    text("G", 260, 5, 2);
+    text("" + grenadeCount, 270, 5, 3);
+
+    // Section
+    text("AREA " + (levelSection + 1), 320, 5, 1);
+
+    // High score
+    text("HI " + highScore, 410, 5, 1);
+
+    // Boss warning
+    if (bossActive && boss && flr(API.frame / 10) % 2 === 0) {
+      text("WARNING - BOSS!", 180, 26, 3);
+    }
+  }
+
+  // --- Main Loop Setup ---
+  API._update = gameUpdate;
+  API._draw = gameDraw;
+
+  // Kickstart
+  resetGame();
+  state = "title";
+
+  setInterval(tick, 1000 / FPS);
+})();
+</script>
+</body>
+</html>
