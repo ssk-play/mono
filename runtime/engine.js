@@ -78,7 +78,7 @@ const GrayBox = (() => {
 
   // --- Font (4×6 built-in) ---
   const FONT_W = 4;
-  const FONT_H = 6;
+  const FONT_H = 7;
   const FONT = {};
   const fontData = {
     "A":"0110100110011111100110011001","B":"1110100110101110100110011110",

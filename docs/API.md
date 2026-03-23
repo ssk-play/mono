@@ -37,7 +37,7 @@ circf(cx: number, cy: number, r: number, color: Color): void
 // 원을 채워서 그린다
 
 text(str: string, x: number, y: number, color: Color): void
-// 내장 4×6 픽셀 폰트로 텍스트를 그린다 (대문자, 숫자, 기본 특수문자)
+// 내장 4×7 픽셀 폰트로 텍스트를 그린다 (대문자, 숫자, 기본 특수문자)
 ```
 
 ## 스프라이트
