@@ -385,7 +385,7 @@
     player.x = _max(0, min(W - 8, player.x));
     player.y = _max(75, min(H - 12, player.y));
     if (btnp("b") && dashCooldown <= 0) { dashTimer = 6; dashCooldown = 30; note(1, "G5", 0.05); addParticle(player.x + 4, player.y + 8, 1); }
-    if (btnp("a")) { bullets.push({ x: player.x + 3, y: player.y - 2, speed: -6 }); shootNote(); }
+    if (btnp("a")) { bullets.push({ x: player.x, y: player.y - 2, speed: -6 }); shootNote(); }
     for (let i = bullets.length - 1; i >= 0; i--) { bullets[i].y += bullets[i].speed; if (bullets[i].y < -8) bullets.splice(i, 1); }
     spawnTimer--;
     if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = _max(10, 40 - flr(diffLevel * 5)); }
@@ -393,11 +393,11 @@
       const e = enemies[i]; e.y += e.speed; e.wobble += 0.05;
       const wx = e.wobbleAmp * Math.sin(e.wobble);
       e.shootTimer--;
-      if (e.shootTimer <= 0 && e.y > 0 && e.y < H * 0.6) { eBullets.push({ x: e.x + 3 + wx, y: e.y + 8, speed: 2 + rnd(1) }); e.shootTimer = 50 + flr(rnd(40)); }
+      if (e.shootTimer <= 0 && e.y > 0 && e.y < H * 0.6) { eBullets.push({ x: e.x + wx, y: e.y + 8, speed: 2 + rnd(1) }); e.shootTimer = 50 + flr(rnd(40)); }
       if (e.y > H + 10) { enemies.splice(i, 1); continue; }
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.x > e.x + wx - 2 && b.x < e.x + wx + 10 && b.y > e.y - 2 && b.y < e.y + 10) {
+        if (b.x + 8 > e.x + wx && b.x < e.x + wx + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
           bullets.splice(j, 1); e.hp--;
           if (e.hp <= 0) { addParticle(e.x + wx + 4, e.y + 4); score += e.type === 3 ? 30 : 10; hitNote(); enemies.splice(i, 1); shakeTimer = 4; }
           else note(1, "A4", 0.03);
@@ -410,7 +410,7 @@
       if (eBullets[i].y > H + 8) { eBullets.splice(i, 1); continue; }
       if (dashTimer <= 0) {
         const b = eBullets[i];
-        if (b && b.x > player.x && b.x < player.x + 8 && b.y > player.y && b.y < player.y + 8) {
+        if (b && b.x + 8 > player.x && b.x < player.x + 8 && b.y + 8 > player.y && b.y < player.y + 8) {
           eBullets.splice(i, 1); lives--; shakeTimer = 8; addParticle(player.x + 4, player.y + 4, 2); deathNote();
           if (lives <= 0) { state = "gameover"; addParticle(player.x + 4, player.y + 4); addParticle(player.x + 4, player.y + 4); }
         }
