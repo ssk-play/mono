@@ -14,7 +14,6 @@ const GrayBox = (() => {
 
   const W = 480;
   const H = 320;
-  const SCALE = 2;
   const FPS = 30;
   const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
 
@@ -324,8 +323,15 @@ const GrayBox = (() => {
     canvas = document.getElementById(canvasId);
     canvas.width = W;
     canvas.height = H;
-    canvas.style.width = (W * SCALE) + "px";
-    canvas.style.height = (H * SCALE) + "px";
+    function fitCanvas() {
+      var maxW = window.innerWidth - 40;
+      var maxH = window.innerHeight - 60;
+      var s = Math.min(maxW / W, maxH / H);
+      canvas.style.width = (W * s) + "px";
+      canvas.style.height = (H * s) + "px";
+    }
+    fitCanvas();
+    window.addEventListener("resize", fitCanvas);
     ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
     buf = ctx.createImageData(W, H);
