@@ -509,6 +509,8 @@ function openPlayer(index) {
   player.classList.add("open");
   document.body.style.overflow = "hidden";
   updateNavButtons();
+  playerFrame.onload = () => playerFrame.focus();
+  playerFrame.focus();
 }
 
 function closePlayer() {
@@ -533,6 +535,13 @@ function updateNavButtons() {
 
 prevBtn.onclick = () => navPlayer(-1);
 nextBtn.onclick = () => navPlayer(1);
+
+// Keep iframe focused for keyboard input
+player.addEventListener("click", (e) => {
+  if (e.target !== prevBtn && e.target !== nextBtn && !prevBtn.contains(e.target) && !nextBtn.contains(e.target)) {
+    playerFrame.focus();
+  }
+});
 
 // ── Events ──
 search.addEventListener("input", render);
