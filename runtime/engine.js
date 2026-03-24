@@ -358,6 +358,16 @@ const GrayBox = (() => {
     if (bgmOsc[ch]) { try { bgmOsc[ch].stop(); } catch(e) {} bgmOsc[ch] = null; }
   }
 
+  // Count how many beats a note sustains (including following "-" ties)
+  function bgmNoteDuration(track, beatIdx) {
+    var count = 1;
+    for (var i = beatIdx + 1; i < track.length; i++) {
+      if (track[i] === "-") count++;
+      else break;
+    }
+    return count;
+  }
+
   function bgmTick() {
     if (!bgmPlaying || !bgmData) return;
     bgmTimer--;
@@ -371,8 +381,15 @@ const GrayBox = (() => {
       const track = bgmData.tracks[t];
       if (bgmBeat < track.length) {
         const entry = track[bgmBeat];
-        if (entry && entry !== "-" && entry !== ".") {
-          bgmNoteOn(t, entry, beatDur * 0.9);
+        if (entry === ".") {
+          // Explicit rest: silence this channel
+          bgmNoteOff(t);
+        } else if (entry === "-") {
+          // Sustain: do nothing, let previous note ring
+        } else if (entry) {
+          // New note: calculate duration including tied beats
+          var beats = bgmNoteDuration(track, bgmBeat);
+          bgmNoteOn(t, entry, beatDur * beats);
         }
       }
     }
@@ -391,8 +408,9 @@ const GrayBox = (() => {
     }
   }
 
-  // Parse track string: "C4 E4 G4 - C5 | D4 F4 A4 - D5"
-  // Notes separated by spaces, "|" = bar line (ignored), "-" = rest
+  // Parse track string: "C4 E4 G4 - C5 | D4 F4 A4 . D5"
+  // Notes separated by spaces, "|" = bar line (visual only, ignored)
+  // "-" = sustain (hold previous note), "." = rest (silence)
   function parseTrack(str) {
     return str.split(/\s+/).filter(s => s !== "|" && s !== "");
   }

@@ -52,7 +52,7 @@
   const W = GrayBox.WIDTH, H = GrayBox.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos, bgm, bgmStop } = GrayBox;
+          min, max: _max, sin, cos } = GrayBox;
 
   // --- Sprites ---
 
@@ -587,10 +587,6 @@
   GrayBox.scene(PLAY, {
     init() {
       resetGame();
-      bgm([
-        "E4 G4 A4 G4 E4 C4 D4 E4 | G4 A4 B4 A4 G4 E4 D4 C4 | E4 G4 A4 G4 E4 C4 D4 E4 | A4 B4 C5 - - - - -",
-        "C3 - E3 - G2 - E3 - | A2 - C3 - E2 - G2 - | C3 - E3 - G2 - E3 - | A2 - C3 - G2 - - -",
-      ], 200);
     },
     update() {
     // Scroll terrain always
