@@ -990,13 +990,13 @@ const Mono = (() => {
     if (paused) return;
     bgmTick();
     if (currentScene && currentScene.update) {
-      currentScene.update();
+      try { currentScene.update(); } catch(e) { console.error("Mono update error:", e); }
     }
   }
 
   function stepRender() {
     if (currentScene && currentScene.draw) {
-      currentScene.draw();
+      try { currentScene.draw(); } catch(e) { console.error("Mono draw error:", e); }
     }
 
     // Pause overlay
