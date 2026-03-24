@@ -899,13 +899,17 @@ function releaseBtn(b) {
   btnKeys(b).forEach(k => sendKey(k, "keyup"));
 }
 
-// Compute how far a touch is from button center (0 = center, 1 = edge)
+// Compute drift ratio against CURRENT hitbox (including expansion)
+// 0 = center, 0.5 = halfway, 1 = edge of expanded hitbox
 function touchDrift(btn, tx, ty) {
   const r = btn.getBoundingClientRect();
+  const st = btnState.get(btn);
   const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
-  const radius = Math.max(r.width, r.height) / 2;
+  // Current effective radius = base radius * (1 + expand)
+  const baseRadius = Math.max(r.width, r.height) / 2;
+  const effectiveRadius = baseRadius * (1 + st.expand);
   const dist = Math.sqrt((tx - cx) ** 2 + (ty - cy) ** 2);
-  return dist / radius; // 0 = dead center, 1 = edge, >1 = outside
+  return dist / effectiveRadius;
 }
 
 // Find the best button for a touch, considering adaptive expansion
@@ -940,21 +944,23 @@ function findBtnForTouch(tx, ty) {
 }
 
 // Common handler for both touch and mouse
+// drift > 50% of current hitbox → grow +10% (max 40%)
+// drift ≤ 50% → keep current size (no shrink)
 function handleActionDown(tx, ty) {
+  // Try direct hit first
   let hitBtn = null;
   actionBtns.forEach(btn => {
     const r = btn.getBoundingClientRect();
     if (tx >= r.left && tx <= r.right && ty >= r.top && ty <= r.bottom) hitBtn = btn;
   });
+  // If no direct hit, try expanded hitbox
+  if (!hitBtn) hitBtn = findBtnForTouch(tx, ty);
   if (hitBtn) {
     const drift = touchDrift(hitBtn, tx, ty);
     const st = btnState.get(hitBtn);
-    if (drift > 0.7) st.expand = Math.min(st.expand + 0.1, 0.4);
-    else if (drift < 0.3) st.expand = Math.max(st.expand - 0.15, 0);
+    if (drift > 0.5) st.expand = Math.min(st.expand + 0.1, 0.4);
+    // drift ≤ 0.5 → maintain current expand (no change)
     pressBtn(hitBtn);
-  } else {
-    const btn = findBtnForTouch(tx, ty);
-    if (btn) pressBtn(btn);
   }
 }
 function handleActionUp() {
