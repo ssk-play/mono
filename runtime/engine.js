@@ -272,8 +272,17 @@ const GrayBox = (() => {
     if(channels[ch]){try{channels[ch].stop();}catch(e){} channels[ch]=null;}
   };
 
+  // Seeded PRNG (Lehmer / Park-Miller)
+  let _seed = (Date.now() & 0x7FFFFFFF) || 1;
+  function _nextRand() {
+    _seed = (_seed * 16807) % 2147483647;
+    return (_seed - 1) / 2147483646;
+  }
+
   // Utilities
-  API.rnd = function(max) { return Math.random()*max; };
+  API.rnd = function(max) { return _nextRand() * max; };
+  API.seed = function(s) { _seed = (s & 0x7FFFFFFF) || 1; };
+  API.getSeed = function() { return _seed; };
   API.flr = Math.floor;
   API.abs = Math.abs;
   API.min = Math.min;
@@ -325,37 +334,44 @@ const GrayBox = (() => {
     return rec.length > 0 ? rec[rec.length - 1][0] : 0;
   }
 
+  let demoRecSeed = 1; // seed captured at recording start
+
   function saveDemoToStorage() {
-    if (demoRecording.length < 3) return; // too short
+    if (demoRecording.length < 3) return;
     try {
+      const payload = { seed: demoRecSeed, actions: demoRecording };
       const existing = localStorage.getItem(getDemoKey());
       if (existing) {
         const old = JSON.parse(existing);
-        if (demoTotalFrames(old) >= demoTotalFrames(demoRecording)) return;
+        if (demoTotalFrames(old.actions || old) >= demoTotalFrames(demoRecording)) return;
       }
-      localStorage.setItem(getDemoKey(), JSON.stringify(demoRecording));
+      localStorage.setItem(getDemoKey(), JSON.stringify(payload));
     } catch(e) {}
   }
 
   function loadDemoFromStorage() {
     try {
-      const data = localStorage.getItem(getDemoKey());
-      if (data) return JSON.parse(data);
+      const raw = localStorage.getItem(getDemoKey());
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      // Support new format {seed, actions} and legacy [actions]
+      if (data.actions) return data;
+      return { seed: 1, actions: data };
     } catch(e) {}
     return null;
   }
 
   function startDemoPlayback() {
-    demoPlaybackData = loadDemoFromStorage();
-    if (!demoPlaybackData || demoPlaybackData.length < 3) {
-      demoPlaybackData = null;
-      return false;
-    }
+    const loaded = loadDemoFromStorage();
+    if (!loaded || !loaded.actions || loaded.actions.length < 3) return false;
+    demoPlaybackData = loaded.actions;
     demoState = "playback";
     demoPlayIdx = 0;
     demoPlayFrame = 0;
     demoPlayBits = 0;
     API.frame = 0;
+    // Restore seed for deterministic replay
+    _seed = loaded.seed || 1;
     for (const k of KEY_BITS) { keys[k] = false; keysPrev[k] = false; }
     return true;
   }
@@ -383,10 +399,12 @@ const GrayBox = (() => {
       // Loop when recording ends
       if (demoPlayIdx >= demoPlaybackData.length &&
           demoPlayFrame > demoTotalFrames(demoPlaybackData) + 30) {
+        const loaded = loadDemoFromStorage();
         demoPlayIdx = 0;
         demoPlayFrame = 0;
         demoPlayBits = 0;
         API.frame = 0;
+        _seed = (loaded && loaded.seed) || 1; // restore seed for identical loop
         unpackKeys(0);
       }
     } else {
@@ -401,6 +419,7 @@ const GrayBox = (() => {
           demoRecording = [];
           demoRecFrame = 0;
           demoLastBits = 0;
+          demoRecSeed = _seed; // capture seed at recording start
         }
       } else {
         demoIdleFrames++;
