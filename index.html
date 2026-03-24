@@ -869,122 +869,133 @@ dpad.addEventListener("touchend", (e) => {
 });
 dpad.addEventListener("touchcancel", () => dpadRelease());
 
-// ── Action buttons (A/B) with adaptive hitbox ──
+// ── Action buttons (A/B) with drift-adaptive hitbox ──
+// Hitbox stays normal when touches land on-center.
+// Expands only when touches drift toward the edge — up to 40%,
+// but never past the midpoint between A and B.
 const actionBtns = document.querySelectorAll("[data-key]");
-const btnState = new Map(); // per-button state
+const btnState = new Map();
 
 actionBtns.forEach(btn => {
-  const key = btn.dataset.key;
-  const keys = key === "z" ? ["z", "Enter"] : [key];
-  btnState.set(btn, { lastTap: 0, expand: 0, pressed: false });
-
-  function press(b) {
-    const st = btnState.get(b);
-    if (st.pressed) return;
-    st.pressed = true;
-    b.classList.add("pressed");
-    const bKeys = b.dataset.key === "z" ? ["z", "Enter"] : [b.dataset.key];
-    bKeys.forEach(k => sendKey(k, "keydown"));
-    haptic();
-  }
-
-  function release(b) {
-    const st = btnState.get(b);
-    if (!st.pressed) return;
-    st.pressed = false;
-    b.classList.remove("pressed");
-    const bKeys = b.dataset.key === "z" ? ["z", "Enter"] : [b.dataset.key];
-    bKeys.forEach(k => sendKey(k, "keyup"));
-  }
-
-  btn.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    const now = Date.now();
-    const st = btnState.get(btn);
-    const dt = now - st.lastTap;
-    // Rapid tap: expand hitbox (max 40%)
-    if (dt < 300) st.expand = Math.min(st.expand + 0.1, 0.4);
-    else st.expand = 0;
-    st.lastTap = now;
-    press(btn);
-  }, { passive: false });
-
-  btn.addEventListener("touchend", (e) => {
-    e.preventDefault();
-    release(btn);
-  }, { passive: false });
-
-  btn.addEventListener("touchcancel", () => release(btn));
+  btnState.set(btn, { expand: 0, pressed: false });
 });
 
-// Catch touches that land outside buttons but within expanded hitbox
+function btnKeys(b) { return b.dataset.key === "z" ? ["z", "Enter"] : [b.dataset.key]; }
+function pressBtn(b) {
+  const st = btnState.get(b);
+  if (st.pressed) return;
+  st.pressed = true;
+  b.classList.add("pressed");
+  btnKeys(b).forEach(k => sendKey(k, "keydown"));
+  haptic();
+}
+function releaseBtn(b) {
+  const st = btnState.get(b);
+  if (!st.pressed) return;
+  st.pressed = false;
+  b.classList.remove("pressed");
+  btnKeys(b).forEach(k => sendKey(k, "keyup"));
+}
+
+// Compute how far a touch is from button center (0 = center, 1 = edge)
+function touchDrift(btn, tx, ty) {
+  const r = btn.getBoundingClientRect();
+  const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+  const radius = Math.max(r.width, r.height) / 2;
+  const dist = Math.sqrt((tx - cx) ** 2 + (ty - cy) ** 2);
+  return dist / radius; // 0 = dead center, 1 = edge, >1 = outside
+}
+
+// Find the best button for a touch, considering adaptive expansion
+function findBtnForTouch(tx, ty) {
+  let bestBtn = null, bestDist = Infinity;
+  const btnArr = [...actionBtns];
+
+  btnArr.forEach(btn => {
+    const r = btn.getBoundingClientRect();
+    const st = btnState.get(btn);
+    const expand = st.expand * Math.max(r.width, r.height);
+
+    // Expand in all directions except toward the other button
+    const other = btnArr.find(b => b !== btn);
+    const otherR = other ? other.getBoundingClientRect() : null;
+    let exL = r.left - expand, exR = r.right + expand;
+    let exT = r.top - expand, exB = r.bottom + expand;
+    if (otherR) {
+      const mid = (r.left + r.right + otherR.left + otherR.right) / 4;
+      const thisCX = (r.left + r.right) / 2;
+      if (thisCX < mid) exR = Math.min(exR, mid);
+      else exL = Math.max(exL, mid);
+    }
+
+    if (tx >= exL && tx <= exR && ty >= exT && ty <= exB) {
+      const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+      const d = (tx - cx) ** 2 + (ty - cy) ** 2;
+      if (d < bestDist) { bestDist = d; bestBtn = btn; }
+    }
+  });
+  return bestBtn;
+}
+
+// Handle touch on the action-btns container (catches both direct and near-miss)
 const actionBtnContainer = document.querySelector(".action-btns");
 if (actionBtnContainer) {
   actionBtnContainer.addEventListener("touchstart", (e) => {
-    // Already handled by a button directly?
-    if (e.target.dataset && e.target.dataset.key) return;
     e.preventDefault();
-
     const touch = e.changedTouches[0];
     const tx = touch.clientX, ty = touch.clientY;
-    let bestBtn = null, bestDist = Infinity;
 
+    // First try direct hit on a button
+    let hitBtn = null;
     actionBtns.forEach(btn => {
       const r = btn.getBoundingClientRect();
-      const st = btnState.get(btn);
-      const expand = st.expand * Math.max(r.width, r.height);
-      // Expanded rect (but don't expand toward the other button)
-      const otherBtn = [...actionBtns].find(b => b !== btn);
-      const otherR = otherBtn ? otherBtn.getBoundingClientRect() : null;
-
-      let exL = r.left - expand;
-      let exR = r.right + expand;
-      let exT = r.top - expand;
-      let exB = r.bottom + expand;
-
-      // Clamp: don't expand toward the other button
-      if (otherR) {
-        const otherCX = (otherR.left + otherR.right) / 2;
-        const thisCX = (r.left + r.right) / 2;
-        if (otherCX < thisCX) exL = Math.max(exL, (r.left + otherR.right) / 2);
-        else exR = Math.min(exR, (r.right + otherR.left) / 2);
-      }
-
-      if (tx >= exL && tx <= exR && ty >= exT && ty <= exB) {
-        const dx = tx - (r.left + r.right) / 2;
-        const dy = ty - (r.top + r.bottom) / 2;
-        const dist = dx * dx + dy * dy;
-        if (dist < bestDist) { bestDist = dist; bestBtn = btn; }
-      }
+      if (tx >= r.left && tx <= r.right && ty >= r.top && ty <= r.bottom) hitBtn = btn;
     });
 
-    if (bestBtn) {
-      const st = btnState.get(bestBtn);
-      const now = Date.now();
-      const dt = now - st.lastTap;
-      if (dt < 300) st.expand = Math.min(st.expand + 0.1, 0.4);
-      st.lastTap = now;
-      const bKeys = bestBtn.dataset.key === "z" ? ["z", "Enter"] : [bestBtn.dataset.key];
-      st.pressed = true;
-      bestBtn.classList.add("pressed");
-      bKeys.forEach(k => sendKey(k, "keydown"));
-      haptic();
+    if (hitBtn) {
+      // Direct hit — check drift and adjust expand for NEXT touch
+      const drift = touchDrift(hitBtn, tx, ty);
+      const st = btnState.get(hitBtn);
+      if (drift > 0.7) {
+        // Touch is near the edge — expand for next time (max 40%)
+        st.expand = Math.min(st.expand + 0.1, 0.4);
+      } else if (drift < 0.3) {
+        // Touch is near center — shrink back
+        st.expand = Math.max(st.expand - 0.15, 0);
+      }
+      pressBtn(hitBtn);
+    } else {
+      // Near-miss — find closest button with expanded hitbox
+      const btn = findBtnForTouch(tx, ty);
+      if (btn) pressBtn(btn);
     }
   }, { passive: false });
 
   actionBtnContainer.addEventListener("touchend", (e) => {
     e.preventDefault();
-    actionBtns.forEach(btn => {
-      const st = btnState.get(btn);
-      if (st.pressed) {
-        st.pressed = false;
-        btn.classList.remove("pressed");
-        const bKeys = btn.dataset.key === "z" ? ["z", "Enter"] : [btn.dataset.key];
-        bKeys.forEach(k => sendKey(k, "keyup"));
-      }
-    });
+    actionBtns.forEach(btn => releaseBtn(btn));
   }, { passive: false });
+
+  actionBtnContainer.addEventListener("touchcancel", () => {
+    actionBtns.forEach(btn => releaseBtn(btn));
+  });
 }
+
+// Also handle direct button touches (for non-container hits)
+actionBtns.forEach(btn => {
+  btn.addEventListener("touchstart", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const touch = e.changedTouches[0];
+    const drift = touchDrift(btn, touch.clientX, touch.clientY);
+    const st = btnState.get(btn);
+    if (drift > 0.7) st.expand = Math.min(st.expand + 0.1, 0.4);
+    else if (drift < 0.3) st.expand = Math.max(st.expand - 0.15, 0);
+    pressBtn(btn);
+  }, { passive: false });
+  btn.addEventListener("touchend", (e) => { e.preventDefault(); releaseBtn(btn); }, { passive: false });
+  btn.addEventListener("touchcancel", () => releaseBtn(btn));
+});
 
 // ── Init ──
 render();
