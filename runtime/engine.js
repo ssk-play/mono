@@ -37,7 +37,9 @@ const GrayBox = (() => {
   const keyMap = {
     "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
     "w": "up", "s": "down", "a": "left", "d": "right",
+    "p": "up", ";": "down", "l": "left", "'": "right",
     "ㅈ": "up", "ㄴ": "down", "ㅁ": "left", "ㅇ": "right",
+    "ㅔ": "up", "ㅂ": "left", "ㅎ": "down", "ㄹ": "right",
     "z": "a", "Z": "a", "x": "b", "X": "b", "ㅋ": "a", "ㅌ": "b",
     "Enter": "a", " ": "a"
   };
