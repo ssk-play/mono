@@ -937,64 +937,62 @@ function findBtnForTouch(tx, ty) {
   return bestBtn;
 }
 
-// Handle touch on the action-btns container (catches both direct and near-miss)
+// Common handler for both touch and mouse
+function handleActionDown(tx, ty) {
+  let hitBtn = null;
+  actionBtns.forEach(btn => {
+    const r = btn.getBoundingClientRect();
+    if (tx >= r.left && tx <= r.right && ty >= r.top && ty <= r.bottom) hitBtn = btn;
+  });
+  if (hitBtn) {
+    const drift = touchDrift(hitBtn, tx, ty);
+    const st = btnState.get(hitBtn);
+    if (drift > 0.7) st.expand = Math.min(st.expand + 0.1, 0.4);
+    else if (drift < 0.3) st.expand = Math.max(st.expand - 0.15, 0);
+    pressBtn(hitBtn);
+  } else {
+    const btn = findBtnForTouch(tx, ty);
+    if (btn) pressBtn(btn);
+  }
+}
+function handleActionUp() {
+  actionBtns.forEach(btn => releaseBtn(btn));
+}
+
+// Container: touch + mouse
 const actionBtnContainer = document.querySelector(".action-btns");
 if (actionBtnContainer) {
   actionBtnContainer.addEventListener("touchstart", (e) => {
     e.preventDefault();
-    const touch = e.changedTouches[0];
-    const tx = touch.clientX, ty = touch.clientY;
-
-    // First try direct hit on a button
-    let hitBtn = null;
-    actionBtns.forEach(btn => {
-      const r = btn.getBoundingClientRect();
-      if (tx >= r.left && tx <= r.right && ty >= r.top && ty <= r.bottom) hitBtn = btn;
-    });
-
-    if (hitBtn) {
-      // Direct hit — check drift and adjust expand for NEXT touch
-      const drift = touchDrift(hitBtn, tx, ty);
-      const st = btnState.get(hitBtn);
-      if (drift > 0.7) {
-        // Touch is near the edge — expand for next time (max 40%)
-        st.expand = Math.min(st.expand + 0.1, 0.4);
-      } else if (drift < 0.3) {
-        // Touch is near center — shrink back
-        st.expand = Math.max(st.expand - 0.15, 0);
-      }
-      pressBtn(hitBtn);
-    } else {
-      // Near-miss — find closest button with expanded hitbox
-      const btn = findBtnForTouch(tx, ty);
-      if (btn) pressBtn(btn);
-    }
+    const t = e.changedTouches[0];
+    handleActionDown(t.clientX, t.clientY);
   }, { passive: false });
+  actionBtnContainer.addEventListener("touchend", (e) => { e.preventDefault(); handleActionUp(); }, { passive: false });
+  actionBtnContainer.addEventListener("touchcancel", () => handleActionUp());
 
-  actionBtnContainer.addEventListener("touchend", (e) => {
+  actionBtnContainer.addEventListener("mousedown", (e) => {
     e.preventDefault();
-    actionBtns.forEach(btn => releaseBtn(btn));
-  }, { passive: false });
-
-  actionBtnContainer.addEventListener("touchcancel", () => {
-    actionBtns.forEach(btn => releaseBtn(btn));
+    handleActionDown(e.clientX, e.clientY);
   });
+  actionBtnContainer.addEventListener("mouseup", (e) => { e.preventDefault(); handleActionUp(); });
+  actionBtnContainer.addEventListener("mouseleave", () => handleActionUp());
 }
 
-// Also handle direct button touches (for non-container hits)
+// Direct button: touch + mouse
 actionBtns.forEach(btn => {
   btn.addEventListener("touchstart", (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    const touch = e.changedTouches[0];
-    const drift = touchDrift(btn, touch.clientX, touch.clientY);
-    const st = btnState.get(btn);
-    if (drift > 0.7) st.expand = Math.min(st.expand + 0.1, 0.4);
-    else if (drift < 0.3) st.expand = Math.max(st.expand - 0.15, 0);
-    pressBtn(btn);
+    e.stopPropagation(); e.preventDefault();
+    const t = e.changedTouches[0];
+    handleActionDown(t.clientX, t.clientY);
   }, { passive: false });
   btn.addEventListener("touchend", (e) => { e.preventDefault(); releaseBtn(btn); }, { passive: false });
   btn.addEventListener("touchcancel", () => releaseBtn(btn));
+
+  btn.addEventListener("mousedown", (e) => {
+    e.stopPropagation(); e.preventDefault();
+    handleActionDown(e.clientX, e.clientY);
+  });
+  btn.addEventListener("mouseup", (e) => { e.preventDefault(); releaseBtn(btn); });
 });
 
 // ── Init ──
