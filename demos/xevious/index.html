@@ -895,7 +895,7 @@
         for (let j = groundTargets.length - 1; j >= 0; j--) {
           const gt = groundTargets[j];
           if (!gt.alive) continue;
-          const screenY = gt.mapY - scrollY;
+          const screenY = scrollY - gt.mapY;
           if (_abs(b.targetX - gt.x) < 12 && _abs(b.targetY - screenY) < 12) {
             gt.hp--;
             if (gt.hp <= 0) {
@@ -999,7 +999,7 @@
     // Ground turrets shoot at player
     for (const gt of groundTargets) {
       if (!gt.alive || gt.type !== 2) continue; // only turrets shoot
-      const screenY = gt.mapY - scrollY;
+      const screenY = scrollY - gt.mapY;
       if (screenY < -10 || screenY > H + 10) continue;
       gt.shootTimer--;
       gt.angle = Math.atan2(player.y - screenY, player.x - gt.x);
@@ -1135,10 +1135,10 @@
     cls(0);
 
     // --- Draw terrain (parallax scrolling ground) ---
-    const tileOffY = scrollY % 8;
-    const mapRow = flr(scrollY / 8);
+    const tileOffY = -(scrollY % 8);
+    const mapRow = -flr(scrollY / 8);
     // Far layer (slower parallax - subtle dots)
-    const farOff = flr(scrollY * 0.3);
+    const farOff = -flr(scrollY * 0.3);
     for (let py = -1; py < H / 8 + 1; py++) {
       for (let px = 0; px < W / 8; px++) {
         const my = (flr(farOff / 8) + py) % TERRAIN_H;
@@ -1202,7 +1202,7 @@
     // --- Draw ground targets ---
     for (const gt of groundTargets) {
       if (!gt.alive) continue;
-      const screenY = gt.mapY - scrollY;
+      const screenY = scrollY - gt.mapY;
       if (screenY < 8 || screenY > H + 8) continue;
 
       if (gt.type === 2) {
