@@ -379,6 +379,39 @@
   .btn-b { left: 0; bottom: 0; }
   .btn-a { right: 0; top: 0; }
 
+  .center-btns {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    pointer-events: auto;
+    align-self: center;
+    margin-bottom: 10px;
+  }
+  .center-btn {
+    width: 52px;
+    height: 22px;
+    border-radius: 11px;
+    background: rgba(107,107,107,0.35);
+    border: 1.5px solid rgba(176,176,176,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(176,176,176,0.6);
+    font-family: inherit;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  .center-btn:active, .center-btn.pressed {
+    background: rgba(176,176,176,0.5);
+    border-color: rgba(232,232,232,0.6);
+    color: rgba(232,232,232,0.9);
+  }
+
   /* ── Responsive ── */
   @media (max-width: 600px) {
     header h1 { font-size: 28px; letter-spacing: 6px; }
@@ -444,6 +477,10 @@
     <div class="dpad-arrow dpad-arrow-left" id="dpadLeft">◀</div>
     <div class="dpad-arrow dpad-arrow-right" id="dpadRight">▶</div>
     <div class="dpad-knob" id="dpadKnob"></div>
+  </div>
+  <div class="center-btns">
+    <div class="center-btn" data-key=" ">SELECT</div>
+    <div class="center-btn" data-key="Enter">START</div>
   </div>
   <div class="action-btns">
     <div class="action-btn btn-b" data-key="x">B</div>
@@ -813,14 +850,13 @@ actionBtns.forEach(btn => {
   btnState.set(btn, { expand: 0, pressed: false });
 });
 
-function btnKeys(b) { return b.dataset.key === "z" ? ["z", "Enter"] : [b.dataset.key]; }
+function btnKeys(b) { return [b.dataset.key]; }
 function pressBtn(b) {
   const st = btnState.get(b);
   if (st.pressed) return;
   st.pressed = true;
   b.classList.add("pressed");
   btnKeys(b).forEach(k => sendKey(k, "keydown"));
-  haptic();
 }
 function releaseBtn(b) {
   const st = btnState.get(b);
@@ -917,8 +953,8 @@ if (actionBtnContainer) {
   actionBtnContainer.addEventListener("mouseleave", () => handleActionUp());
 }
 
-// Direct button: touch + mouse
-actionBtns.forEach(btn => {
+// Direct button: touch + mouse (A/B only)
+document.querySelectorAll(".action-btn").forEach(btn => {
   btn.addEventListener("touchstart", (e) => {
     e.stopPropagation(); e.preventDefault();
     const t = e.changedTouches[0];
@@ -931,6 +967,15 @@ actionBtns.forEach(btn => {
     e.stopPropagation(); e.preventDefault();
     handleActionDown(e.clientX, e.clientY);
   });
+  btn.addEventListener("mouseup", (e) => { e.preventDefault(); releaseBtn(btn); });
+});
+
+// Center buttons: SELECT / START (simple press/release)
+document.querySelectorAll(".center-btn").forEach(btn => {
+  btn.addEventListener("touchstart", (e) => { e.stopPropagation(); e.preventDefault(); pressBtn(btn); }, { passive: false });
+  btn.addEventListener("touchend", (e) => { e.preventDefault(); releaseBtn(btn); }, { passive: false });
+  btn.addEventListener("touchcancel", () => releaseBtn(btn));
+  btn.addEventListener("mousedown", (e) => { e.stopPropagation(); e.preventDefault(); pressBtn(btn); });
   btn.addEventListener("mouseup", (e) => { e.preventDefault(); releaseBtn(btn); });
 });
 
