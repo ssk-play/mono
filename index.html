@@ -496,11 +496,13 @@
   </div>
 </div>
 
-<!-- Haptic Feedback Slider -->
+<!-- Settings Panel -->
 <div class="haptic-panel" id="hapticPanel">
   <div class="haptic-label">HAPTIC</div>
   <div class="haptic-value" id="hapticValue">15ms</div>
   <input type="range" class="haptic-slider" id="hapticSlider" min="0" max="50" value="15" step="1">
+  <div style="height:8px"></div>
+  <div class="haptic-label" id="bgmToggle" style="cursor:pointer;padding:4px 8px;border:1px solid rgba(176,176,176,0.3);border-radius:4px;user-select:none">♪ BGM ON</div>
 </div>
 
 <footer>
@@ -753,11 +755,45 @@ function haptic() {
   if (hapticMs > 0 && navigator.vibrate) navigator.vibrate(hapticMs);
 }
 
+// ── BGM Toggle ──
+const bgmToggle = document.getElementById("bgmToggle");
+let bgmEnabled = localStorage.getItem("graybox_bgm") !== "off";
+function updateBgmToggle() {
+  bgmToggle.textContent = bgmEnabled ? "♪ BGM ON" : "♪ BGM OFF";
+  bgmToggle.style.color = bgmEnabled ? "rgba(232,232,232,0.8)" : "rgba(107,107,107,0.6)";
+  bgmToggle.style.borderColor = bgmEnabled ? "rgba(176,176,176,0.4)" : "rgba(107,107,107,0.3)";
+  // Mute/unmute iframe's BGM
+  try {
+    const gw = playerFrame.contentWindow;
+    if (gw && gw.GrayBox) {
+      if (bgmEnabled) { gw.GrayBox.bgmVol(0.08); }
+      else { gw.GrayBox.bgmStop(); gw.GrayBox.bgmVol(0); }
+    }
+  } catch(e) {}
+}
+updateBgmToggle();
+bgmToggle.addEventListener("click", () => {
+  bgmEnabled = !bgmEnabled;
+  localStorage.setItem("graybox_bgm", bgmEnabled ? "on" : "off");
+  updateBgmToggle();
+});
+// Apply mute when game loads in iframe
+playerFrame.addEventListener("load", () => {
+  if (!bgmEnabled) {
+    setTimeout(() => {
+      try {
+        const gw = playerFrame.contentWindow;
+        if (gw && gw.GrayBox) { gw.GrayBox.bgmVol(0); }
+      } catch(e) {}
+    }, 100);
+  }
+});
+
 function showGamepad() {
   if (isTouchDevice()) {
     gamepad.classList.add("show");
-    hapticPanel.classList.add("show");
   }
+  hapticPanel.classList.add("show"); // Settings panel always visible during play
 }
 function hideGamepad() {
   gamepad.classList.remove("show");
