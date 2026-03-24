@@ -292,16 +292,21 @@ const GrayBox = (() => {
   // Vibration (mobile)
   API.vibrate = function(ms) { if (navigator.vibrate) navigator.vibrate(ms || 0); };
 
-  // --- Attract Mode (input recording & playback) ---
+  // --- Attract Mode (action-based input recording & playback) ---
+  // Format: [[frame, bitmask], ...] — only stores when key state changes
+  // 6 keys packed as bitmask: up=1 down=2 left=4 right=8 a=16 b=32
   const KEY_BITS = ["up","down","left","right","a","b"];
   let demoState = "idle";       // idle | recording | playback
-  let demoRecording = [];       // array of per-frame 6-bit bitmasks
+  let demoRecording = [];       // [[frame, bits], ...] action-based
+  let demoRecFrame = 0;         // frame counter during recording
+  let demoLastBits = 0;         // last recorded bitmask
   let demoPlaybackData = null;  // loaded recording for playback
-  let demoPlaybackIdx = 0;
+  let demoPlayIdx = 0;          // current index in playback data
+  let demoPlayFrame = 0;        // frame counter during playback
+  let demoPlayBits = 0;         // current key state during playback
   let demoIdleFrames = 0;       // frames since last real input
   const DEMO_IDLE_THRESHOLD = 150; // 5 seconds at 30fps
-  const DEMO_MAX_FRAMES = 1800;   // 60 seconds max recording
-  let realKeyActive = false;    // any real key pressed this frame
+  const DEMO_MAX_SECONDS = 60;
   let gameId = "";              // derived from URL path
 
   function getDemoKey() { return "graybox_demo_" + gameId; }
@@ -316,16 +321,20 @@ const GrayBox = (() => {
     for (let i = 0; i < 6; i++) keys[KEY_BITS[i]] = !!(bits & (1 << i));
   }
 
+  function demoTotalFrames(rec) {
+    return rec.length > 0 ? rec[rec.length - 1][0] : 0;
+  }
+
   function saveDemoToStorage() {
-    if (demoRecording.length < 60) return; // too short, skip
+    if (demoRecording.length < 3) return; // too short
     try {
       const existing = localStorage.getItem(getDemoKey());
       if (existing) {
         const old = JSON.parse(existing);
-        if (old.length >= demoRecording.length) return; // keep longer recording
+        if (demoTotalFrames(old) >= demoTotalFrames(demoRecording)) return;
       }
       localStorage.setItem(getDemoKey(), JSON.stringify(demoRecording));
-    } catch(e) {} // localStorage full or unavailable
+    } catch(e) {}
   }
 
   function loadDemoFromStorage() {
@@ -338,14 +347,15 @@ const GrayBox = (() => {
 
   function startDemoPlayback() {
     demoPlaybackData = loadDemoFromStorage();
-    if (!demoPlaybackData || demoPlaybackData.length < 60) {
+    if (!demoPlaybackData || demoPlaybackData.length < 3) {
       demoPlaybackData = null;
       return false;
     }
     demoState = "playback";
-    demoPlaybackIdx = 0;
+    demoPlayIdx = 0;
+    demoPlayFrame = 0;
+    demoPlayBits = 0;
     API.frame = 0;
-    // Reset all keys
     for (const k of KEY_BITS) { keys[k] = false; keysPrev[k] = false; }
     return true;
   }
@@ -353,58 +363,71 @@ const GrayBox = (() => {
   function stopDemoPlayback() {
     demoState = "idle";
     demoPlaybackData = null;
-    demoPlaybackIdx = 0;
+    demoPlayIdx = 0;
+    demoPlayFrame = 0;
     demoIdleFrames = 0;
-    // Clear all keys to prevent ghost inputs
     for (const k of KEY_BITS) { keys[k] = false; keysPrev[k] = false; }
   }
 
   // --- Game loop ---
   function tick() {
-    // Attract mode logic
     if (demoState === "playback") {
-      // Playback: inject recorded keys
-      if (demoPlaybackIdx < demoPlaybackData.length) {
-        unpackKeys(demoPlaybackData[demoPlaybackIdx]);
-        demoPlaybackIdx++;
-      } else {
-        // Recording ended, restart from beginning
-        demoPlaybackIdx = 0;
+      // Advance to current frame's key state
+      while (demoPlayIdx < demoPlaybackData.length &&
+             demoPlaybackData[demoPlayIdx][0] <= demoPlayFrame) {
+        demoPlayBits = demoPlaybackData[demoPlayIdx][1];
+        demoPlayIdx++;
+      }
+      unpackKeys(demoPlayBits);
+      demoPlayFrame++;
+      // Loop when recording ends
+      if (demoPlayIdx >= demoPlaybackData.length &&
+          demoPlayFrame > demoTotalFrames(demoPlaybackData) + 30) {
+        demoPlayIdx = 0;
+        demoPlayFrame = 0;
+        demoPlayBits = 0;
         API.frame = 0;
         unpackKeys(0);
       }
     } else {
-      // Check if real input happened
-      realKeyActive = false;
+      // Check real input
+      let realKeyActive = false;
       for (const k of KEY_BITS) if (keys[k]) { realKeyActive = true; break; }
 
       if (realKeyActive) {
         demoIdleFrames = 0;
         if (demoState === "idle") {
-          // Start recording on first real input
           demoState = "recording";
           demoRecording = [];
+          demoRecFrame = 0;
+          demoLastBits = 0;
         }
       } else {
         demoIdleFrames++;
       }
 
-      // Recording: capture frame input
+      // Action-based recording: only store when key state changes
       if (demoState === "recording") {
-        demoRecording.push(packKeys());
+        const bits = packKeys();
+        if (bits !== demoLastBits) {
+          demoRecording.push([demoRecFrame, bits]);
+          demoLastBits = bits;
+        }
+        demoRecFrame++;
         if (!realKeyActive && demoIdleFrames > 90) {
-          // 3 seconds idle = stop recording & save
+          demoRecording.push([demoRecFrame, 0]); // final release
           saveDemoToStorage();
           demoState = "idle";
           demoIdleFrames = 0;
         }
-        if (demoRecording.length >= DEMO_MAX_FRAMES) {
+        if (demoRecFrame >= DEMO_MAX_SECONDS * FPS) {
+          demoRecording.push([demoRecFrame, 0]);
           saveDemoToStorage();
           demoState = "idle";
         }
       }
 
-      // Idle: start playback after threshold
+      // Start playback after idle threshold
       if (demoState === "idle" && demoIdleFrames >= DEMO_IDLE_THRESHOLD) {
         startDemoPlayback();
       }
@@ -416,11 +439,9 @@ const GrayBox = (() => {
     // Draw "DEMO" indicator during playback
     if (demoState === "playback") {
       const col = COLOR_U32[API.frame % 40 < 20 ? 3 : 2];
-      // Draw "DEMO" at top-right corner (small, non-intrusive)
       const dx = W - 26, dy = 2;
-      const demoText = "DEMO";
       let cx = dx;
-      for (const ch of demoText) {
+      for (const ch of "DEMO") {
         const glyph = FONT[ch];
         if (glyph) for (let py = 0; py < FONT_H; py++) for (let px = 0; px < FONT_W; px++)
           if (glyph[py * FONT_W + px]) {
