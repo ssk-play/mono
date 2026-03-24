@@ -388,8 +388,8 @@
       drawBalloons(180, by + 5, 1, 2);
       sprT(3, 184, by + 21, true, false);
 
-      if (blink) text("PRESS START", 133, 150, 3);
-      text("Z TO FLAP  ARROWS TO MOVE", 98, 172, 1);
+      if (blink) text("PRESS A", 133, 150, 3);
+      text("A TO FLAP  ARROWS TO MOVE", 98, 172, 1);
       text("POP ENEMY BALLOONS!", 113, 188, 2);
     }
   });
@@ -839,7 +839,7 @@
       text("GAME OVER", 138, 90, 3);
       text("SCORE  " + score, 130, 112, 2);
       const blink = (GrayBox.frame % 40) < 30;
-      if (blink) text("PRESS START", 133, 135, 3);
+      if (blink) text("PRESS A", 133, 135, 3);
     }
   });
 

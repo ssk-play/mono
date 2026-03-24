@@ -1486,12 +1486,12 @@
     // Subtitle
     text("SPY VS SPY IN A 30 FLOOR BUILDING", 72, 110, 2);
 
-    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS START", 130, 130, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A", 130, 130, 3);
 
     // Instructions
     text("ARROWS  MOVE/ELEVATOR", 93, 152, 2);
-    text("Z  SHOOT", 133, 164, 2);
-    text("X  JUMP/DUCK", 123, 176, 2);
+    text("A  SHOOT", 133, 164, 2);
+    text("B  JUMP/DUCK", 123, 176, 2);
     text("UP AT DOOR  ENTER", 109, 188, 2);
     text("COLLECT ALL DOCUMENTS", 93, 203, 1);
     text("ESCAPE IN THE CAR!", 101, 215, 1);
@@ -1505,7 +1505,7 @@
     text("GAME OVER", 130, 75, 3);
     text("SCORE: " + score, 127, 98, 2);
     text("DOCS: " + docsCollected + "/" + docsTotal, 123, 111, 2);
-    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS START", 127, 150, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A", 127, 150, 3);
   }
 
   function drawWin() {
@@ -1539,7 +1539,7 @@
     else if (score > 3000) rating = "B";
     text(rating, 147, flr(ty) + 90, 3);
 
-    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS START", 127, 185, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A", 127, 185, 3);
   }
 
   GrayBox.go(TITLE);

@@ -730,7 +730,7 @@
     sprT(13, cx - 78 + gOff, cy - 4);
 
     if (GrayBox.frame % 40 < 28) {
-      text("PRESS ENTER TO START", W / 2 - 50, 142, 3);
+      text("PRESS A TO START", W / 2 - 50, 142, 3);
     }
 
     text("ARROW KEYS TO MOVE", W / 2 - 45, 172, 2);
@@ -746,7 +746,7 @@
     text("GAME OVER", W / 2 - 23, 82, 3);
     text("SCORE: " + score, W / 2 - 25, 109, 2);
     if (score >= hiScore && score > 0) text("NEW HIGH SCORE!", W / 2 - 38, 126, 3);
-    if (GrayBox.frame % 40 < 28) text("PRESS ENTER", W / 2 - 28, 158, 2);
+    if (GrayBox.frame % 40 < 28) text("PRESS A", W / 2 - 28, 158, 2);
   }
 
   function drawPlay() {

@@ -423,10 +423,10 @@
       const ballAnimY = 124 + _abs(sin(GrayBox.frame * 0.12)) * -20;
       spr(1, ballAnimX - 4, ballAnimY - 4);
       if (flr(GrayBox.frame / 20) % 2 === 0) {
-        text("PRESS Z OR ENTER", W / 2 - 40, 158, 3);
+        text("PRESS A", W / 2 - 40, 158, 3);
       }
       text("LEFT/RIGHT: MOVE", W / 2 - 40, 186, 1);
-      text("Z: LAUNCH BALL", W / 2 - 35, 196, 1);
+      text("A: LAUNCH BALL", W / 2 - 35, 196, 1);
       drawParticles();
     }
   });
@@ -697,7 +697,7 @@
       text("SCORE: " + score, W / 2 - 25, H / 2, 2);
       text("LEVEL: " + level, W / 2 - 18, H / 2 + 12, 2);
       if (flr(GrayBox.frame / 20) % 2 === 0) {
-        text("PRESS Z TO CONTINUE", W / 2 - 48, H / 2 + 36, 1);
+        text("PRESS A TO CONTINUE", W / 2 - 48, H / 2 + 36, 1);
       }
       drawParticles();
     }
@@ -781,9 +781,9 @@
       const bx = paddle.x + pw / 2 - BALL_SIZE / 2;
       const by = PADDLE_Y - BALL_SIZE - 1;
       spr(1, flr(bx) + sx, flr(by) + sy);
-      // Blinking "PRESS Z" hint
+      // Blinking "PRESS A" hint
       if (flr(GrayBox.frame / 15) % 2 === 0) {
-        text("PRESS Z", W / 2 - 17, PADDLE_Y - 16, 2);
+        text("PRESS A", W / 2 - 17, PADDLE_Y - 16, 2);
       }
     }
 

@@ -763,7 +763,7 @@
       sprT(17, 180, by - 2 + sin(titleAnim * 0.06 + 2) * 3);
       sprT(18, 200, by + sin(titleAnim * 0.06 + 3) * 2);
       sprT(20, 107, by + 2 + sin(titleAnim * 0.06 + 4) * 2);
-      if (flr(titleAnim / 20) % 2 === 0) drawText("PRESS START", 133, 135, 3);
+      if (flr(titleAnim / 20) % 2 === 0) drawText("PRESS A", 133, 135, 3);
       drawText("Z:JUMP  X:THROW  ARROWS:MOVE", 88, 158, 2);
       drawText("3 LIVES  2-HIT ARMOR  4 WEAPONS", 80, 169, 1);
       drawText("GRAYBOX DEMO V0.1", 116, 229, 1);
@@ -787,7 +787,7 @@
       for (const p of particles) pix(flr(p.x - cx), flr(p.y), p.color);
       drawText("GAME OVER", 138, 83, 3);
       drawText("SCORE: " + score, 127, 105, 2);
-      if (flr(titleAnim / 20) % 2 === 0) drawText("PRESS START", 133, 150, 3);
+      if (flr(titleAnim / 20) % 2 === 0) drawText("PRESS A", 133, 150, 3);
     }
   });
 
@@ -806,7 +806,7 @@
       drawText("ARTHUR RESCUED", 126, 120, 2);
       drawText("THE PRINCESS!", 128, 131, 2);
       drawText("SCORE: " + score, 127, 158, 3);
-      if (flr(titleAnim / 20) % 2 === 0) drawText("PRESS START", 133, 188, 3);
+      if (flr(titleAnim / 20) % 2 === 0) drawText("PRESS A", 133, 188, 3);
       drawText("GRAYBOX DEMO V0.1", 116, 229, 1);
     }
   });

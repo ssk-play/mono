@@ -504,9 +504,9 @@
       for (const s of stars) { pix(s.x % W, s.y % H, s.bright); }
       text("BOSCONIAN", W / 2 - 22, 52, 3);
       text("SPACE PATROL", W / 2 - 30, 64, 2);
-      if (flr(titleBlink / 20) % 2 === 0) text("PRESS START", W / 2 - 27, 120, 3);
+      if (flr(titleBlink / 20) % 2 === 0) text("PRESS A", W / 2 - 27, 120, 3);
       text("ARROWS  MOVE", W / 2 - 30, 157, 1);
-      text("Z  SHOOT FRONT+BACK", W / 2 - 50, 167, 1);
+      text("A  SHOOT FRONT+BACK", W / 2 - 50, 167, 1);
       text("DESTROY ALL STATIONS", W / 2 - 50, 187, 2);
       const cx = W / 2, cy = 98;
       spr(6, cx - 4, cy - 4);
@@ -871,7 +871,7 @@
       for (const p of particles) { pix(p.x % W, p.y % H, p.color); }
       text("GAME OVER", W / 2 - 22, 98, 3);
       text("SCORE " + score, W / 2 - 33, 116, 2);
-      if (flr(titleBlink / 20) % 2 === 0) text("PRESS START", W / 2 - 27, 142, 3);
+      if (flr(titleBlink / 20) % 2 === 0) text("PRESS A", W / 2 - 27, 142, 3);
     }
   });
 

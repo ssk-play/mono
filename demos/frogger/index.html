@@ -871,7 +871,7 @@
 
     // Blink prompt
     if (GrayBox.frame % 40 < 28) {
-      text("PRESS ENTER TO START", W / 2 - 50, 180, 3);
+      text("PRESS A TO START", W / 2 - 50, 180, 3);
     }
 
     if (hiScore > 0) {
@@ -897,7 +897,7 @@
       text("NEW HIGH SCORE!", bx + 23, by + 30, 3);
     }
     if (gameOverTimer > 60 && GrayBox.frame % 40 < 28) {
-      text("PRESS ENTER", bx + 33, by + 40, 2);
+      text("PRESS A", bx + 33, by + 40, 2);
     }
   }
 

@@ -691,8 +691,8 @@
       text("TANK GAME", 138, 75, 2);
       spr(1, 147, 98); spr(10, 160, 98); spr(12, 173, 98);
       if (flr(titleBlink/20) % 2 === 0)
-        text("PRESS ENTER TO START", 110, 135, 3);
-      text("ARROWS: MOVE  Z: SHOOT", 103, 165, 1);
+        text("PRESS A TO START", 110, 135, 3);
+      text("ARROWS: MOVE  A: SHOOT", 103, 165, 1);
       text("DESTROY ALL ENEMY TANKS", 103, 180, 1);
       text("PROTECT YOUR BASE!", 115, 192, 2);
       text("GRAYBOX DEMO", 131, 225, 1);
@@ -862,7 +862,7 @@
       text("SCORE: " + score, 130, 116, 2);
       text("LEVEL: " + level, 130, 128, 2);
       if (gameOverTimer <= 0 && flr(titleBlink/15)%2 === 0)
-        text("PRESS ENTER", 133, 139, 1);
+        text("PRESS A", 133, 139, 1);
     }
   });
 

@@ -1196,14 +1196,14 @@
     // Controls
     text("CONTROLS:", W / 2 - 22, 120, 3);
     text("ARROWS  MOVE/JUMP/CROUCH", W / 2 - 60, 131, 2);
-    text("Z  PUNCH    X  KICK", W / 2 - 50, 143, 2);
-    text("UP+Z  JUMP KICK", W / 2 - 40, 154, 2);
-    text("DOWN+Z  CROUCH PUNCH", W / 2 - 52, 165, 2);
+    text("A  PUNCH    B  KICK", W / 2 - 50, 143, 2);
+    text("UP+A  JUMP KICK", W / 2 - 40, 154, 2);
+    text("DOWN+A  CROUCH PUNCH", W / 2 - 52, 165, 2);
 
-    // Blink "PRESS START"
+    // Blink "PRESS A"
     titleBlink = (titleBlink || 0) + 1;
     if (titleBlink % 40 < 25) {
-      text("PRESS ENTER TO START", W / 2 - 50, 195, 3);
+      text("PRESS A TO START", W / 2 - 50, 195, 3);
     }
 
     // Hi-Score
@@ -1228,7 +1228,7 @@
     text("SCORE " + String(score).padStart(7, "0"), W / 2 - 30, H / 2, 2);
 
     if (gameOverTimer <= 60 && GrayBox.frame % 30 < 20) {
-      text("PRESS ENTER", W / 2 - 27, H / 2 + 12, 3);
+      text("PRESS A", W / 2 - 27, H / 2 + 12, 3);
     }
   }
 
@@ -1248,7 +1248,7 @@
     sprT(6, W / 2 - 4, 143, false, false);
 
     if (gameOverTimer <= 60 && GrayBox.frame % 30 < 20) {
-      text("PRESS ENTER", W / 2 - 27, 165, 3);
+      text("PRESS A", W / 2 - 27, 165, 3);
     }
   }
 

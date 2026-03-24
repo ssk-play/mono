@@ -502,7 +502,7 @@
       spr2x(PLAYER_SPR[3], cx - 3 * TS - 8 + pOff * TS, sy);
       spr2x(4, cx - 2 * TS - 8 + pOff * TS, sy);
       spr2x(3, cx + 2 * TS - 8, sy);
-      if (flr(animTimer / 20) % 2 === 0) textCenter("PRESS ENTER", 150, 2);
+      if (flr(animTimer / 20) % 2 === 0) textCenter("PRESS A", 150, 2);
       textCenter("PUSH ALL BOXES ONTO TARGETS", 180, 1);
       textCenter("ARROWS:MOVE  X:UNDO  Z:RESTART", 195, 1);
     }
@@ -577,7 +577,7 @@
     for (const t of targets) { if (boxAt(t.x, t.y) >= 0) done++; }
     const prog = done + "/" + targets.length;
     text(prog, W - prog.length * 5 - 4, 2, done === targets.length ? 3 : 2);
-    text("X:UNDO Z:RESET", 4, H - 10, 1);
+    text("B:UNDO A:RESET", 4, H - 10, 1);
     if (history.length > 0) text("UNDO:" + history.length, W - 37, H - 10, 1);
   }
 
@@ -657,7 +657,7 @@
       }
       const pd = flr(animTimer / 15) % 4;
       spr2x(PLAYER_SPR[pd], cx - 8, cy - 8);
-      if (flr(animTimer / 20) % 2 === 0) textCenter("PRESS ENTER", 195, 2);
+      if (flr(animTimer / 20) % 2 === 0) textCenter("PRESS A", 195, 2);
       textCenter("THANKS FOR PLAYING!", 214, 1);
     }
   });

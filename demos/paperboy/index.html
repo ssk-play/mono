@@ -710,13 +710,13 @@
       drawText("GRAYBOX EDITION", 123, ty + 18, 2);
 
       if (flr(GrayBox.frame / 20) % 2 === 0) {
-        drawText("PRESS START", 133, 173, 3);
+        drawText("PRESS A", 133, 173, 3);
       }
 
       // Controls
       drawText("UP/DOWN  CHANGE LANE", 111, 195, 2);
-      drawText("Z  THROW NEWSPAPER", 113, 204, 2);
-      drawText("X  JUMP OBSTACLE", 118, 213, 2);
+      drawText("A  THROW NEWSPAPER", 113, 204, 2);
+      drawText("B  JUMP OBSTACLE", 118, 213, 2);
       drawText("7 DAYS TO DELIVER!", 113, 225, 1);
     }
   }
@@ -732,7 +732,7 @@
     }
     drawText("FINAL SCORE: " + score, 115, 109, 2);
     drawText("DAYS COMPLETED: " + (day >= 7 ? 7 : day - 1), 113, 120, 2);
-    if (flr(GrayBox.frame / 20) % 2 === 0) drawText("PRESS START", 133, 158, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) drawText("PRESS A", 133, 158, 3);
   }
 
   function drawDayResultScreen() {
@@ -767,7 +767,7 @@
         drawText("DAY " + (day + 1) + " NEXT...", 128, 180, 2);
       }
       if (resultTimer > 120 && flr(GrayBox.frame / 15) % 2 === 0) {
-        drawText("PRESS START", 133, 210, 3);
+        drawText("PRESS A", 133, 210, 3);
       }
   }
 

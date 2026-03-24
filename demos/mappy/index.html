@@ -891,8 +891,8 @@
     spr(5, W / 2 + 27, 146);
 
     // Instructions
-    text("PRESS ENTER TO START", W / 2 - 50, 165, (flr(t / 15) % 2 === 0) ? 3 : 2);
-    text("ARROWS MOVE   Z OPEN DOOR", W / 2 - 64, 180, 1);
+    text("PRESS A TO START", W / 2 - 50, 165, (flr(t / 15) % 2 === 0) ? 3 : 2);
+    text("ARROWS MOVE   A OPEN DOOR", W / 2 - 64, 180, 1);
     text("COLLECT ALL STOLEN ITEMS", W / 2 - 60, 189, 1);
     text("MATCHING PAIRS = BONUS!", W / 2 - 58, 198, 1);
     text("DOORS PUSH BACK CATS", W / 2 - 52, 207, 1);
@@ -904,7 +904,7 @@
     text("FINAL SCORE", W / 2 - 28, H / 2 - 15, 2);
     text(String(score).padStart(7, "0"), W / 2 - 18, H / 2 - 5, 3);
     text("LEVEL " + level, W / 2 - 15, H / 2 + 11, 2);
-    text("PRESS ENTER", W / 2 - 28, H / 2 + 30, (flr((titleBounce || 0) / 15) % 2 === 0) ? 3 : 2);
+    text("PRESS A", W / 2 - 28, H / 2 + 30, (flr((titleBounce || 0) / 15) % 2 === 0) ? 3 : 2);
     spr(22, W / 2 - 4, H / 2 + 45);
   }
 

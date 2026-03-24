@@ -1051,7 +1051,7 @@
     drawBlock12(cx - 48, flr(ty) + 17, 14);
     drawBlock12(cx + 37, flr(ty) + 17, 14);
 
-    const startMsg = "PRESS Z TO START";
+    const startMsg = "PRESS A TO START";
     const startX = W / 2 - flr((startMsg.length * (FONT_W + 1)) / 2);
     if (flr(GrayBox.frame / 20) % 2 === 0) text(startMsg, startX, 108, 3);
 
@@ -1060,7 +1060,7 @@
     text(htpMsg, W / 2 - flr((htpMsg.length * (FONT_W + 1)) / 2), 124, 2);
     const m1 = "ARROWS   MOVE PENGO";
     text(m1, W / 2 - flr((m1.length * (FONT_W + 1)) / 2), 136, 2);
-    const m2 = "Z   PUSH OR BREAK ICE";
+    const m2 = "A   PUSH OR BREAK ICE";
     text(m2, W / 2 - flr((m2.length * (FONT_W + 1)) / 2), 146, 2);
     const m3 = "CRUSH ENEMIES WITH BLOCKS";
     text(m3, W / 2 - flr((m3.length * (FONT_W + 1)) / 2), 156, 2);
@@ -1088,7 +1088,7 @@
     text(scMsg, W / 2 - flr((scMsg.length * (FONT_W + 1)) / 2), 98, 2);
     const lvMsg = "LEVEL: " + level;
     text(lvMsg, W / 2 - flr((lvMsg.length * (FONT_W + 1)) / 2), 111, 2);
-    const cMsg = "PRESS Z TO CONTINUE";
+    const cMsg = "PRESS A TO CONTINUE";
     if (flr(GrayBox.frame / 20) % 2 === 0) text(cMsg, W / 2 - flr((cMsg.length * (FONT_W + 1)) / 2), 158, 3);
   }
 

@@ -452,7 +452,7 @@
     spr(5, bx + 40, flr(ty) + 38 + sin(GrayBox.frame * 0.07 + 2) * 2);
     spr(4, bx + 60, flr(ty) + 39 + sin(GrayBox.frame * 0.07 + 3) * 2);
     spr(2, bx + 80, flr(ty) + 38 + sin(GrayBox.frame * 0.07 + 4) * 2);
-    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS Z TO START", 118, 143, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A TO START", 118, 143, 3);
     text("-SCORE TABLE-", 126, 165, 2);
     spr(2, 127, 176); text("  LANDER  150 PTS", 133, 177, 2);
     spr(3, 127, 186); text("  MUTANT  400 PTS", 133, 188, 2);
@@ -468,7 +468,7 @@
     text("GAME OVER", 138, 90, 3);
     text("SCORE: " + score, 127, 109, 2);
     text("WAVE: " + wave, 137, 120, 2);
-    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS Z TO CONTINUE", 111, 158, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A TO CONTINUE", 111, 158, 3);
   }
 
   GrayBox.scene(PLAY, {

@@ -926,7 +926,7 @@
 
     // Blink prompt
     if (flr(GrayBox.frame / 20) % 2 === 0) {
-      text("PRESS Z TO START", W/2 - 40, 135, 3);
+      text("PRESS A TO START", W/2 - 40, 135, 3);
     }
 
     // Era list
@@ -937,7 +937,7 @@
     }
 
     // Controls info
-    text("ARROWS:ROTATE/THRUST  Z:FIRE", W/2 - 70, 218, 1);
+    text("ARROWS:ROTATE/THRUST  A:FIRE", W/2 - 70, 218, 1);
     text("GRAYBOX DEMO V0.1", W/2 - 45, 231, 1);
   }
 
@@ -954,7 +954,7 @@
     text("ERA: " + ERAS[era].name, W/2 - 15, 113, 2);
 
     if (flr(GrayBox.frame / 20) % 2 === 0) {
-      text("PRESS Z TO CONTINUE", W/2 - 50, 150, 3);
+      text("PRESS A TO CONTINUE", W/2 - 50, 150, 3);
     }
   }
 

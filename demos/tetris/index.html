@@ -487,15 +487,15 @@
 
     // Blinking start text
     if (flr(t / 15) % 2 === 0) {
-      text("PRESS ENTER TO START", flr(W / 2) - 50, 120, 3);
+      text("PRESS A TO START", flr(W / 2) - 50, 120, 3);
     }
 
     // Controls
     text("LEFT/RIGHT  MOVE", flr(W / 2) - 45, 150, 1);
     text("DOWN  SOFT DROP", flr(W / 2) - 45, 162, 1);
     text("UP  HARD DROP", flr(W / 2) - 45, 174, 1);
-    text("Z  ROTATE CW", flr(W / 2) - 45, 186, 1);
-    text("X  ROTATE CCW", flr(W / 2) - 45, 198, 1);
+    text("A  ROTATE CW", flr(W / 2) - 45, 186, 1);
+    text("B  ROTATE CCW", flr(W / 2) - 45, 198, 1);
 
     // Bottom
     text("(C) GRAYBOX 2026", flr(W / 2) - 40, H - 16, 1);
@@ -701,7 +701,7 @@
       text("NEW HIGH SCORE!", bx + 8, by + 34, 3);
     }
     if (gameOverTimer > 60 && flr(gameOverTimer / 12) % 2 === 0) {
-      text("PRESS ENTER", bx + 18, by + 46, 2);
+      text("PRESS A", bx + 18, by + 46, 2);
     }
   }
 

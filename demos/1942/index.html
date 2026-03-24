@@ -1126,12 +1126,12 @@
     spr(10, bbx, flr(ty) + 80);
     spr(11, bbx + 8, flr(ty) + 80);
 
-    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS Z TO START", (320 - 16 * 5) / 2, 142, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A TO START", (320 - 16 * 5) / 2, 142, 3);
 
     // Controls
     text("ARROWS  MOVE", (320 - 12 * 5) / 2, 158, 2);
-    text("Z  SHOOT", (320 - 8 * 5) / 2, 168, 2);
-    text("X  LOOP (DODGE)", (320 - 15 * 5) / 2, 178, 2);
+    text("A  SHOOT", (320 - 8 * 5) / 2, 168, 2);
+    text("B  LOOP (DODGE)", (320 - 15 * 5) / 2, 178, 2);
 
     // Score table
     text("-SCORE TABLE-", (320 - 13 * 5) / 2, 192, 1);
@@ -1158,7 +1158,7 @@
     if (score >= hiScore && score > 0) {
       text("NEW HIGH SCORE!", (320 - 15 * 5) / 2, 139, 3);
     }
-    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS Z TO CONTINUE", (320 - 20 * 5) / 2, 165, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A TO CONTINUE", (320 - 20 * 5) / 2, 165, 3);
   }
 
   GrayBox.go(TITLE);

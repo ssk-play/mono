@@ -452,8 +452,8 @@
       for (let i = 0; i < 6; i++) spr(1, 53 + i * 37, 150);
       rectf(0, 158, W, 2, 1);
       for (let i = 0; i < 5; i++) { const mx = 40 + i * 60; const my = 75 + sin(titleFlash * 0.05 + i) * 22; line(mx, my - 15, mx + 3, my, 2); }
-      if (flr(titleFlash / 20) % 2 === 0) text("PRESS START", W / 2 - 27, 109, 3);
-      text("ARROWS:AIM  Z:FIRE  X:FAST AIM", W / 2 - 77, 188, 1);
+      if (flr(titleFlash / 20) % 2 === 0) text("PRESS A", W / 2 - 27, 109, 3);
+      text("ARROWS:AIM  A:FIRE  B:FAST AIM", W / 2 - 77, 188, 1);
       text("DEFEND YOUR CITIES!", W / 2 - 47, 203, 2);
     }
   });

@@ -716,7 +716,7 @@
       spr(1, bx, by); spr(1, bx + 8, by); spr(3, bx + 6, by - 6); spr(2, bx - 2, by + 6); spr(2, bx + 10, by + 6);
       const u1x = (GrayBox.frame * 2) % (W + 40) - 20; const u1y = 75 + sin(GrayBox.frame * 0.07) * 6; spr(4, flr(u1x), flr(u1y));
       const u2x = ((GrayBox.frame * 2) + 120) % (W + 40) - 20; const u2y = 90 + sin(GrayBox.frame * 0.09 + 2) * 5; spr(4, flr(u2x), flr(u2y));
-      if (flr(GrayBox.frame / 20) % 2 === 0) drawText("PRESS START", 132, 195, 3);
+      if (flr(GrayBox.frame / 20) % 2 === 0) drawText("PRESS A", 132, 195, 3);
       drawText("-HOW TO PLAY-", 127, 210, 2); drawText("Z:JUMP  X:SHOOT  LR:SPEED", 95, 219, 2);
       drawText("GRAYBOX DEMO V0.1", 118, 232, 1);
     }
@@ -743,7 +743,7 @@
       drawText("GAME OVER", 138, 75, 3); drawText("SCORE: " + score, 130, 94, 2);
       drawText("CHECKPOINT: " + String.fromCharCode(65 + min(checkpoint, 25)), 117, 106, 2);
       drawText("DISTANCE: " + flr(distance), 117, 118, 1);
-      if (flr(GrayBox.frame / 20) % 2 === 0) drawText("PRESS START", 132, 150, 3);
+      if (flr(GrayBox.frame / 20) % 2 === 0) drawText("PRESS A", 132, 150, 3);
     }
   });
 

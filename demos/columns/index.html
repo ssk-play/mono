@@ -602,7 +602,7 @@
     text("IN ANY DIRECTION!", cx - 55, 119, 2);
 
     if (flr(t / 18) % 2 === 0) {
-      text("PRESS ENTER TO START", cx - 65, 146, 3);
+      text("PRESS A TO START", cx - 65, 146, 3);
     }
 
     if (hiScore > 0) {
@@ -610,7 +610,7 @@
     }
 
     text("ARROWS: MOVE / DROP", cx - 60, 201, 1);
-    text("Z: CYCLE JEWEL ORDER", cx - 63, 213, 1);
+    text("A: CYCLE JEWEL ORDER", cx - 63, 213, 1);
     text("UP: HARD DROP", cx - 43, 225, 1);
   }
 
@@ -646,7 +646,7 @@
       text("GAME OVER", gx, gy, 3);
       text("SCORE: " + score, gx - 2, gy + 10, 2);
       if (flr(GrayBox.frame / 18) % 2 === 0) {
-        text("PRESS ENTER", gx - 2, gy + 21, 2);
+        text("PRESS A", gx - 2, gy + 21, 2);
       }
     }
   }

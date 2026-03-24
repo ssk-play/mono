@@ -371,10 +371,10 @@
       spr(5, cx+20, flr(ty)+22 + sin(GrayBox.frame*0.1+1)*3);
       spr(2, cx+40, flr(ty)+20 + sin(GrayBox.frame*0.1+2)*3);
       spr(9, cx+60, flr(ty)+20);
-      if (flr(GrayBox.frame/20)%2===0) text("PRESS Z TO START", 120, 128, 3);
+      if (flr(GrayBox.frame/20)%2===0) text("PRESS A TO START", 120, 128, 3);
       text("COLLECT ALL FLAGS", 117, 149, 2);
       text("AVOID ENEMY CARS", 120, 159, 2);
-      text("Z = DEPLOY SMOKE SCREEN", 102, 170, 2);
+      text("A = DEPLOY SMOKE SCREEN", 102, 170, 2);
       text("ARROWS = STEER CAR", 115, 180, 2);
       text("-SCORING-", 137, 197, 2);
       spr(9, 127, 206); text("  FLAG    100 PTS", 133, 207, 2);
@@ -571,7 +571,7 @@
       text("GAME OVER", 137, 75, 3);
       text("SCORE: " + score, 130, 98, 2);
       text("LEVEL: " + level, 135, 111, 2);
-      if (flr(GrayBox.frame/20)%2===0) text("PRESS Z TO CONTINUE", 110, 150, 3);
+      if (flr(GrayBox.frame/20)%2===0) text("PRESS A TO CONTINUE", 110, 150, 3);
     }
   });
 

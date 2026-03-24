@@ -1134,11 +1134,11 @@
 
       // Blink start text
       if (flr(titleBlink / 18) % 2 === 0) {
-        text("PRESS START", 133, 158, 3);
+        text("PRESS A", 133, 158, 3);
       }
 
       // Controls
-      text("Z=PUNCH  X=KICK  UP+Z=JUMP KICK", 80, 188, 2);
+      text("A=PUNCH  B=KICK  UP+A=JUMP KICK", 80, 188, 2);
       text("ARROWS=MOVE", 133, 197, 2);
 
       // Credits
@@ -1156,7 +1156,7 @@
     text("SECTION: " + (section + 1), 130, 111, 2);
 
     if (flr(titleBlink / 18) % 2 === 0) {
-      text("PRESS START", 133, 150, 3);
+      text("PRESS A", 133, 150, 3);
     }
   }
 
@@ -1172,7 +1172,7 @@
     sprT(1, 153, 128 + sin(GrayBox.frame * 0.1) * 2);
 
     if (flr(titleBlink / 18) % 2 === 0) {
-      text("PRESS START", 133, 173, 3);
+      text("PRESS A", 133, 173, 3);
     }
   }
 

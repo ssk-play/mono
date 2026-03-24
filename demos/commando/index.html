@@ -1008,11 +1008,11 @@
     sprT(1, 156, 98);
     sprT(10, 156, 89);
 
-    text("PRESS ENTER TO START", 110, 128, 2);
+    text("PRESS A TO START", 110, 128, 2);
 
     text("ARROWS - MOVE", 128, 158, 1);
     text("Z - SHOOT", 138, 167, 1);
-    text("X - GRENADE", 133, 176, 1);
+    text("B - GRENADE", 133, 176, 1);
 
     if (highScore > 0) {
       text("HIGH SCORE " + highScore, 120, 203, 2);
@@ -1030,7 +1030,7 @@
       text("NEW HIGH SCORE!", 123, 131, 3);
     }
     if (gameOverTimer > 90) {
-      text("PRESS ENTER", 133, 158, (flr(gameOverTimer / 15) % 2 === 0) ? 2 : 0);
+      text("PRESS A", 133, 158, (flr(gameOverTimer / 15) % 2 === 0) ? 2 : 0);
     }
   }
 

@@ -902,9 +902,9 @@
       spr(1, 173, flr(ty) + 25);
       spr(2, 187, flr(ty) + 25);
 
-      if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS START", 133, 120, 3);
+      if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A", 133, 120, 3);
 
-      text("DIG LEFT: Z   DIG RIGHT: X", 93, 146, 2);
+      text("DIG LEFT: A   DIG RIGHT: B", 93, 146, 2);
       text("COLLECT ALL GOLD TO ESCAPE", 96, 158, 2);
       text("TRAP ENEMIES IN HOLES", 108, 169, 2);
 
@@ -925,7 +925,7 @@
     text("GAME OVER", 138, 90, 3);
     text("SCORE: " + score, 130, 113, 2);
     text("LEVEL: " + (level + 1), 138, 124, 2);
-    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS START", 133, 158, 3);
+    if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A", 133, 158, 3);
   }
 
   function drawPlayScene() {
