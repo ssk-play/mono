@@ -452,7 +452,7 @@
     score = 0;
     lives = 3;
     grenadeCount = 5;
-    scrollY = 0;
+    scrollY = 450;
     scrollSpeed = 0.5;
     levelSection = 0;
     px = 160; py = 195;
@@ -470,7 +470,7 @@
     bossActive = false;
     bossDefeated = false;
     spawnTimer = 0;
-    nextObstacleY = 300;
+    nextObstacleY = 900;
     sectionLength = 0;
     gameOverTimer = 0;
     groundDetails = [];
@@ -485,7 +485,7 @@
   }
 
   function worldToScreen(wy) {
-    return wy - scrollY;
+    return scrollY - wy;
   }
 
   function spawnEnemy(x, wy, type) {
@@ -891,7 +891,7 @@
         }
       }
       e.x += e.vx;
-      e.y += e.vy; // world Y movement
+      e.y -= e.vy; // world Y movement (negated: screen up = world forward)
 
       // Clamp to screen
       if (e.x < 4) e.x = 4;
@@ -947,7 +947,7 @@
         }
       } else if (p.state === "freed") {
         p.timer++;
-        p.y += 1.5; // run down/away
+        p.y -= 1.5; // run down/away (world Y decreases = screen Y increases)
         if (p.timer > 60) pows.splice(i, 1);
       }
     }
@@ -959,7 +959,7 @@
 
       // Move boss into view
       if (bsy < 23) {
-        boss.y += 0.5;
+        boss.y -= 0.5;
       } else {
         // Strafe
         boss.x += boss.vx;

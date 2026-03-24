@@ -966,10 +966,10 @@
     const sy2 = flr(scrollY2) % 8;
     for (let ty = -1; ty < H / 8 + 2; ty++) {
       for (let tx = 0; tx < W / 8 + 1; tx++) {
-        const wy = ty + flr(scrollY2 / 8);
+        const wy = ty - flr(scrollY2 / 8);
         const hash = pseudoRand(tx * 1317 + wy * 7919 + terrainSeed) & 0xff;
         if (hash < 18) {
-          pix(tx * 8 + (hash % 7), ty * 8 - sy2 + (hash % 5), 1);
+          pix(tx * 8 + (hash % 7), ty * 8 + sy2 + (hash % 5), 1);
         }
       }
     }
@@ -978,11 +978,11 @@
     const sy1 = flr(scrollY) % 8;
     for (let ty = -1; ty < H / 8 + 2; ty++) {
       for (let tx = 0; tx < W / 8 + 1; tx++) {
-        const wy = ty + flr(scrollY / 8);
+        const wy = ty - flr(scrollY / 8);
         const hash = pseudoRand(tx * 2377 + wy * 5309 + terrainSeed * 3) & 0xfff;
         if (hash < 5) {
           const sprId = (hash % 2 === 0) ? 21 : 22;
-          spr(sprId, tx * 8, ty * 8 - sy1);
+          spr(sprId, tx * 8, ty * 8 + sy1);
         }
       }
     }
