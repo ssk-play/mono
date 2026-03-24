@@ -20,13 +20,35 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, sprT, text: drawText, btn, btnp, note, stop, rnd, flr,
-          abs: _abs, min, max: _max, sin, cos } = Mono;
-  const sprExt = sprT; // all calls use transparent=0, same as sprT
+          abs: _abs, min, max: _max, sin, cos, overlap, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 -> 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Circle collision helper ---
+  function circHit(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    return dx * dx + dy * dy < (ar + br) * (ar + br);
+  }
+
+  // Sprite size constant
+  const S = 16;
+
+  // --- Sprites (8x8 data upscaled to 16x16) ---
 
   // 1: Paperboy on bicycle - frame 1 (pedal down)
-  defSprite(1,
+  defSprite(1, up(
     "00330000" +
     "00230000" +
     "00332000" +
@@ -35,9 +57,9 @@
     "01200210" +
     "02010120" +
     "01000010"
-  );
+  ));
   // 2: Paperboy on bicycle - frame 2 (pedal up)
-  defSprite(2,
+  defSprite(2, up(
     "00330000" +
     "00230000" +
     "00332000" +
@@ -46,9 +68,9 @@
     "00211200" +
     "01200210" +
     "10000001"
-  );
+  ));
   // 3: Paperboy jumping
-  defSprite(3,
+  defSprite(3, up(
     "00330000" +
     "00230000" +
     "00332000" +
@@ -57,9 +79,9 @@
     "01022010" +
     "10200201" +
     "00000000"
-  );
+  ));
   // 4: Newspaper (in flight)
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "00000000" +
     "00333000" +
@@ -68,9 +90,9 @@
     "00333000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 5: House - subscriber (with flag mailbox)
-  defSprite(5,
+  defSprite(5, up(
     "00033000" +
     "00322300" +
     "03222230" +
@@ -79,9 +101,9 @@
     "02233220" +
     "02233220" +
     "02233220"
-  );
+  ));
   // 6: House - non-subscriber (darker)
-  defSprite(6,
+  defSprite(6, up(
     "00011000" +
     "00100100" +
     "01000040" +
@@ -90,9 +112,9 @@
     "01100110" +
     "01100110" +
     "01100110"
-  );
+  ));
   // 7: Mailbox (subscriber - flag up)
-  defSprite(7,
+  defSprite(7, up(
     "00000300" +
     "00000300" +
     "00333300" +
@@ -101,9 +123,9 @@
     "00030000" +
     "00030000" +
     "00030000"
-  );
+  ));
   // 8: Mailbox (non-subscriber - no flag)
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00000000" +
     "00111100" +
@@ -112,9 +134,9 @@
     "00010000" +
     "00010000" +
     "00010000"
-  );
+  ));
   // 9: Dog
-  defSprite(9,
+  defSprite(9, up(
     "00000000" +
     "33000000" +
     "23100000" +
@@ -123,9 +145,9 @@
     "30303030" +
     "00303000" +
     "00000000"
-  );
+  ));
   // 10: Car (front view, facing left)
-  defSprite(10,
+  defSprite(10, up(
     "00000000" +
     "01111100" +
     "13333310" +
@@ -134,9 +156,9 @@
     "11111110" +
     "02000200" +
     "00000000"
-  );
+  ));
   // 11: Skater
-  defSprite(11,
+  defSprite(11, up(
     "00300000" +
     "00200000" +
     "00320000" +
@@ -145,9 +167,9 @@
     "00201000" +
     "01000100" +
     "03333300"
-  );
+  ));
   // 12: Lawn mower
-  defSprite(12,
+  defSprite(12, up(
     "00000000" +
     "00000000" +
     "01111100" +
@@ -156,9 +178,9 @@
     "11111110" +
     "02000200" +
     "00000000"
-  );
+  ));
   // 13: Broken window overlay
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -167,9 +189,9 @@
     "01030110" +
     "01310110" +
     "01010100"
-  );
+  ));
   // 14: Tree
-  defSprite(14,
+  defSprite(14, up(
     "00222000" +
     "02222200" +
     "22212220" +
@@ -178,9 +200,9 @@
     "00010000" +
     "00010000" +
     "00010000"
-  );
+  ));
   // 15: Fence segment
-  defSprite(15,
+  defSprite(15, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -189,9 +211,9 @@
     "20202020" +
     "20202020" +
     "00000000"
-  );
+  ));
   // 16: Life icon (small bike)
-  defSprite(16,
+  defSprite(16, up(
     "00000000" +
     "00320000" +
     "00231000" +
@@ -200,9 +222,9 @@
     "02010120" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 17: Newspaper icon (for HUD)
-  defSprite(17,
+  defSprite(17, up(
     "00000000" +
     "00000000" +
     "00333000" +
@@ -211,9 +233,9 @@
     "00333000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 18: Explosion/crash
-  defSprite(18,
+  defSprite(18, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -222,9 +244,9 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
   // 19: Sidewalk tile
-  defSprite(19,
+  defSprite(19, up(
     "22222222" +
     "22222222" +
     "22222222" +
@@ -233,9 +255,9 @@
     "22222222" +
     "22222222" +
     "11111111"
-  );
+  ));
   // 20: Road tile
-  defSprite(20,
+  defSprite(20, up(
     "11111111" +
     "11111111" +
     "11111111" +
@@ -244,9 +266,9 @@
     "11111111" +
     "11111111" +
     "11111111"
-  );
+  ));
   // 21: Grass tile
-  defSprite(21,
+  defSprite(21, up(
     "00000000" +
     "00100010" +
     "00000000" +
@@ -255,9 +277,9 @@
     "00010001" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 22: Curb
-  defSprite(22,
+  defSprite(22, up(
     "22222222" +
     "11111111" +
     "00000000" +
@@ -266,9 +288,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 23: Driveway
-  defSprite(23,
+  defSprite(23, up(
     "22222222" +
     "22222222" +
     "21212121" +
@@ -277,9 +299,9 @@
     "12121212" +
     "21212121" +
     "11111111"
-  );
+  ));
   // 24: Puddle
-  defSprite(24,
+  defSprite(24, up(
     "00000000" +
     "00000000" +
     "00111000" +
@@ -288,15 +310,25 @@
     "00111000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
-  // --- Game Constants ---
-  const LANE_Y = [75, 105, 135, 165]; // 4 lanes: top sidewalk, upper road, lower road, bottom sidewalk
+  // --- Game Constants (scaled x2 for 16x16 sprites) ---
+  const LANE_Y = [60, 100, 140, 176]; // 4 lanes: top sidewalk, upper road, lower road, bottom sidewalk
   const SCROLL_SPEED = 2;
-  const HOUSE_SPACING = 53; // distance between houses
+  const HOUSE_SPACING = 80; // distance between houses (scaled up)
   const HOUSES_PER_DAY = 8;
   const PAPERS_PER_DAY = 12;
-  const DAY_LENGTH = HOUSES_PER_DAY * HOUSE_SPACING + 133; // pixels per day
+  const DAY_LENGTH = HOUSES_PER_DAY * HOUSE_SPACING + 200; // pixels per day
+
+  // Collision radii
+  const PLAYER_R = 6;
+  const DOG_R = 5;
+  const CAR_R = 8;
+  const SKATER_R = 5;
+  const MOWER_R = 6;
+  const PAPER_R = 4;
+  const MAILBOX_R = 6;
+  const WINDOW_R = 10;
 
   // --- Game State ---
   const { TITLE, PLAY, CLEAR, GAMEOVER } = Mono.SCENE;
@@ -350,8 +382,7 @@
 
     // Generate houses along the route
     for (let i = 0; i < HOUSES_PER_DAY; i++) {
-      const hx = 133 + i * HOUSE_SPACING;
-      // Alternate top and bottom side of street
+      const hx = 200 + i * HOUSE_SPACING;
       const side = i % 2 === 0 ? "top" : "bottom";
       houses.push({
         x: hx,
@@ -372,7 +403,7 @@
     const numObs = 6 + day * 2;
     for (let i = 0; i < numObs; i++) {
       const type = flr(rnd(4)); // 0:dog, 1:car, 2:skater, 3:mower
-      const ox = 200 + flr(rnd(dayLength - 200));
+      const ox = 260 + flr(rnd(dayLength - 260));
       let lane;
       if (type === 1) { // cars on road lanes
         lane = flr(rnd(2)) + 1; // lanes 1 or 2
@@ -428,7 +459,7 @@
     screenShake = 10;
     invTimer = 60;
     crashSound();
-    addParticles(player.x + 4, player.y + 4, 12, 2);
+    addParticles(player.x + 8, player.y + 8, 12, 2);
     if (lives <= 0) {
       Mono.go(GAMEOVER); return;
     }
@@ -436,6 +467,14 @@
 
   function worldToScreen(wx) {
     return wx - scrollX;
+  }
+
+  // Obstacle collision radius by type
+  function obsRadius(type) {
+    if (type === 0) return DOG_R;
+    if (type === 1) return CAR_R;
+    if (type === 2) return SKATER_R;
+    return MOWER_R;
   }
 
   resetGame();
@@ -453,8 +492,6 @@
   }
 
   function updatePlayLogic() {
-    // --- Play state ---
-
     // Scroll
     scrollX += SCROLL_SPEED;
     dayProgress += SCROLL_SPEED;
@@ -491,7 +528,7 @@
     }
     if (jumpTimer > 0) {
       jumpTimer--;
-      jumpHeight = sin(jumpTimer / 20 * Math.PI) * 20;
+      jumpHeight = sin(jumpTimer / 20 * Math.PI) * 24;
     } else {
       jumpHeight = 0;
     }
@@ -504,8 +541,8 @@
       papersLeft--;
       throwSound();
       papers.push({
-        x: player.x + 8 + scrollX,
-        y: player.y - jumpHeight,
+        x: player.x + S + scrollX,
+        y: player.y - jumpHeight + 4,
         vx: 3,
         vy: -3,
         gravity: 0.2,
@@ -521,50 +558,55 @@
       p.y += p.vy;
 
       const sx = worldToScreen(p.x);
+      const pcx = sx + 8;
+      const pcy = p.y + 8;
 
-      // Check if paper hit a house/mailbox
+      // Check if paper hit a house/mailbox (circle collision)
       let hitSomething = false;
       for (const h of houses) {
         if (h.delivered || h.broken) continue;
         const hsx = worldToScreen(h.x);
-        const hy = h.side === "top" ? 52 : 188;
-        const mailboxY = h.side === "top" ? 71 : 176;
+        const hy = h.side === "top" ? 36 : 180;
+        const mailboxY = h.side === "top" ? 62 : 168;
+        const mbcx = hsx + 12;
+        const mbcy = mailboxY + 8;
 
-        // Mailbox hit zone
-        if (sx > hsx - 4 && sx < hsx + 16 && p.y > mailboxY - 8 && p.y < mailboxY + 8) {
+        // Mailbox hit zone (circle)
+        dbgC(mbcx, mbcy, MAILBOX_R);
+        if (circHit(pcx, pcy, PAPER_R, mbcx, mbcy, MAILBOX_R)) {
           if (h.subscriber) {
-            // Delivered to subscriber!
             h.delivered = true;
             score += 100;
             hitMailbox();
-            addParticles(sx + 4, mailboxY, 6, 3);
+            addParticles(mbcx, mbcy, 6, 3);
             hitSomething = true;
           } else {
-            // Hit non-subscriber window - break it!
             h.broken = true;
             brokenWindows[h.index] = true;
             score += 50;
             breakWindow();
-            addParticles(sx + 4, hy + 20, 8, 2);
+            addParticles(mbcx, mbcy, 8, 2);
             hitSomething = true;
           }
           break;
         }
 
-        // Window hit zone (wider, for non-subscribers)
-        if (sx > hsx - 2 && sx < hsx + 18 && p.y > hy && p.y < hy + 30) {
+        // Window hit zone (circle, larger area on house)
+        const wincx = hsx + S;
+        const wincy = hy + S;
+        dbgC(wincx, wincy, WINDOW_R);
+        if (circHit(pcx, pcy, PAPER_R, wincx, wincy, WINDOW_R)) {
           if (!h.subscriber) {
             h.broken = true;
             brokenWindows[h.index] = true;
             score += 50;
             breakWindow();
-            addParticles(sx + 4, hy + 15, 8, 2);
+            addParticles(wincx, wincy, 8, 2);
             hitSomething = true;
           } else {
-            // Hit subscriber house (not mailbox) - still counts as delivery but less points
             h.delivered = true;
             score += 50;
-            addParticles(sx + 4, hy + 15, 4, 2);
+            addParticles(wincx, wincy, 4, 2);
             hitSomething = true;
           }
           break;
@@ -577,10 +619,14 @@
       }
 
       // Remove if off screen or hit ground
-      if (p.y > 210 || sx > W + 20 || sx < -20) {
+      if (p.y > 220 || sx > W + 20 || sx < -20) {
         papers.splice(i, 1);
       }
     }
+
+    // Player center for collision
+    const plcx = player.x + 8;
+    const plcy = player.y - jumpHeight + 8;
 
     // Update obstacles
     for (const o of obstacles) {
@@ -593,23 +639,31 @@
       } else if (o.type === 2) { // Skaters move along sidewalk
         o.x += o.dir * o.speed;
       }
-      // Dogs and mowers are mostly stationary/slow
 
       const osx = worldToScreen(o.x);
       if (osx < -40 || osx > W + 40) continue;
 
-      // Collision with player
-      const oy = LANE_Y[o.lane];
+      // Obstacle center
+      const oly = LANE_Y[o.lane];
+      const ocx = osx + 8;
+      const ocy = oly + 8;
+      const oR = obsRadius(o.type);
+
+      // Debug: show obstacle hitbox
+      dbgC(ocx, ocy, oR);
+
+      // Circle collision with player
       if (invTimer <= 0 && jumpTimer <= 3 &&
-          _abs(player.x - osx) < 10 &&
-          _abs(player.y - oy) < 12) {
+          circHit(plcx, plcy, PLAYER_R, ocx, ocy, oR)) {
         playerHit();
       }
     }
 
+    // Debug: show player hitbox
+    dbgC(plcx, plcy, PLAYER_R);
+
     // Check day completion
     if (dayProgress >= dayLength) {
-      // Check for missed subscribers
       let delivered = 0;
       let missed = 0;
       for (const h of houses) {
@@ -618,7 +672,6 @@
             delivered++;
           } else {
             missed++;
-            // Subscriber becomes non-subscriber if missed
             subscribers[h.index] = false;
             loseSubSound();
           }
@@ -628,115 +681,107 @@
       dayResults = { delivered, missed, broken: Object.keys(brokenWindows).length };
       resultTimer = 0;
       dayCompleteSound();
-      Mono.go(CLEAR); return;
 
-      // Bonus points for perfect delivery
       if (missed === 0) {
         score += 500;
       }
+
+      Mono.go(CLEAR); return;
     }
   }
 
   function drawTitleScreen() {
     cls(0);
-    {
-      // Sky
-      rectf(0, 0, W, 60, 0);
-      // Grass
-      rectf(0, 60, W, 90, 0);
-      // Road
-      rectf(0, 98, W, 45, 1);
-      // Bottom grass
-      rectf(0, 143, W, 97, 0);
 
-      // Draw some houses
-      for (let i = 0; i < 6; i++) {
-        const hx = 20 + i * 50;
-        spr(5, hx, 51);
-        spr(5, hx + 8, 51);
-        spr(7, hx + 4, 66);
-      }
+    // Road
+    rectf(0, 90, W, 60, 1);
 
-      // Road markings
-      for (let i = 0; i < 20; i++) {
-        const lx = (i * 20 + flr(Mono.frame * 0.5)) % (W + 20) - 10;
-        rectf(lx, 119, 12, 2, 2);
-      }
-
-      // Animated paperboy riding across
-      const bikeX = ((Mono.frame * 2) % (W + 40)) - 20;
-      const bikeY = 107 + sin(Mono.frame * 0.1) * 2;
-      const bikeFrame = flr(Mono.frame / 4) % 2 === 0 ? 1 : 2;
-      sprExt(bikeFrame, bikeX, bikeY, false, false, 0);
-
-      // Title text
-      const ty = 15 + flr(titleBounce);
-      drawText("PAPERBOY", 140, ty, 3);
-      drawText("PAPERBOY", 141, ty + 1, 1);
-      rectf(113, ty + 10, 93, 1, 2);
-
-      drawText("MONO EDITION", 123, ty + 18, 2);
-
-      if (flr(Mono.frame / 20) % 2 === 0) {
-        drawText("PRESS START", 133, 173, 3);
-      }
-
-      // Controls
-      drawText("UP/DOWN  CHANGE LANE", 111, 195, 2);
-      drawText("A  THROW NEWSPAPER", 113, 204, 2);
-      drawText("B  JUMP OBSTACLE", 118, 213, 2);
-      drawText("7 DAYS TO DELIVER!", 113, 225, 1);
+    // Draw some houses
+    for (let i = 0; i < 5; i++) {
+      const hx = 10 + i * 64;
+      sprT(5, hx, 60);
+      sprT(5, hx + S, 60);
+      sprT(7, hx + 8, 78);
     }
+
+    // Road markings
+    for (let i = 0; i < 20; i++) {
+      const lx = (i * 24 + flr(Mono.frame * 0.5)) % (W + 24) - 12;
+      rectf(lx, 118, 14, 2, 2);
+    }
+
+    // Animated paperboy riding across
+    const bikeX = ((Mono.frame * 2) % (W + 40)) - 20;
+    const bikeY = 100 + sin(Mono.frame * 0.1) * 3;
+    const bikeFrame = flr(Mono.frame / 4) % 2 === 0 ? 1 : 2;
+    sprT(bikeFrame, bikeX, bikeY);
+
+    // Title text
+    const ty = 15 + flr(titleBounce);
+    drawText("PAPERBOY", 120, ty, 3);
+    drawText("PAPERBOY", 121, ty + 1, 1);
+    rectf(95, ty + 10, 130, 1, 2);
+
+    drawText("MONO EDITION", 105, ty + 18, 2);
+
+    if (flr(Mono.frame / 20) % 2 === 0) {
+      drawText("PRESS START", 120, 170, 3);
+    }
+
+    // Controls
+    drawText("UP/DOWN  CHANGE LANE", 90, 195, 2);
+    drawText("A  THROW NEWSPAPER", 95, 205, 2);
+    drawText("B  JUMP OBSTACLE", 100, 215, 2);
+    drawText("7 DAYS TO DELIVER!", 95, 228, 1);
   }
 
   function drawGameOverScreen() {
     cls(0);
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
     if (day >= 7 && lives > 0) {
-      drawText("CONGRATULATIONS!", 121, 75, 3);
-      drawText("YOU SURVIVED THE WEEK!", 106, 90, 2);
+      drawText("CONGRATULATIONS!", 95, 75, 3);
+      drawText("YOU SURVIVED THE WEEK!", 80, 90, 2);
     } else {
-      drawText("GAME OVER", 138, 75, 3);
+      drawText("GAME OVER", 120, 75, 3);
     }
-    drawText("FINAL SCORE: " + score, 115, 109, 2);
-    drawText("DAYS COMPLETED: " + (day >= 7 ? 7 : day - 1), 113, 120, 2);
-    if (flr(Mono.frame / 20) % 2 === 0) drawText("PRESS START", 133, 158, 3);
+    drawText("FINAL SCORE: " + score, 95, 109, 2);
+    drawText("DAYS COMPLETED: " + (day >= 7 ? 7 : day - 1), 90, 120, 2);
+    if (flr(Mono.frame / 20) % 2 === 0) drawText("PRESS START", 120, 158, 3);
   }
 
   function drawDayResultScreen() {
-      cls(0);
-      drawText("DAY " + day + " COMPLETE!", 123, 45, 3);
+    cls(0);
+    drawText("DAY " + day + " COMPLETE!", 105, 45, 3);
 
-      rectf(93, 64, 133, 1, 2);
+    rectf(80, 62, 160, 1, 2);
 
-      drawText("DELIVERED: " + dayResults.delivered, 131, 75, 3);
-      drawText("MISSED: " + dayResults.missed, 138, 89, dayResults.missed > 0 ? 1 : 2);
-      drawText("WINDOWS: " + dayResults.broken, 136, 102, 2);
+    drawText("DELIVERED: " + dayResults.delivered, 110, 75, 3);
+    drawText("MISSED: " + dayResults.missed, 120, 89, dayResults.missed > 0 ? 1 : 2);
+    drawText("WINDOWS: " + dayResults.broken, 118, 102, 2);
 
-      if (dayResults.missed === 0) {
-        drawText("PERFECT BONUS +500!", 111, 124, 3);
-      }
-      if (dayResults.missed > 0) {
-        drawText("LOST " + dayResults.missed + " SUBSCRIBER" + (dayResults.missed > 1 ? "S" : "") + "!", 106, 124, 1);
-      }
+    if (dayResults.missed === 0) {
+      drawText("PERFECT BONUS +500!", 90, 124, 3);
+    }
+    if (dayResults.missed > 0) {
+      drawText("LOST " + dayResults.missed + " SUBSCRIBER" + (dayResults.missed > 1 ? "S" : "") + "!", 80, 124, 1);
+    }
 
-      drawText("SCORE: " + score, 131, 146, 2);
+    drawText("SCORE: " + score, 115, 146, 2);
 
-      // Count remaining subscribers
-      let subCount = 0;
-      for (let i = 0; i < subscribers.length; i++) { if (subscribers[i]) subCount++; }
-      drawText("SUBSCRIBERS: " + subCount + "/" + HOUSES_PER_DAY, 121, 161, 2);
-      if (subCount === 0) {
-        drawText("NO SUBSCRIBERS LEFT!", 108, 180, 1);
-        drawText("YOU ARE FIRED!", 126, 191, 3);
-      } else if (day >= 7) {
-        drawText("WEEK COMPLETE!", 126, 180, 3);
-      } else {
-        drawText("DAY " + (day + 1) + " NEXT...", 128, 180, 2);
-      }
-      if (resultTimer > 120 && flr(Mono.frame / 15) % 2 === 0) {
-        drawText("PRESS START", 133, 210, 3);
-      }
+    let subCount = 0;
+    for (let i = 0; i < subscribers.length; i++) { if (subscribers[i]) subCount++; }
+    drawText("SUBSCRIBERS: " + subCount + "/" + HOUSES_PER_DAY, 100, 161, 2);
+    if (subCount === 0) {
+      drawText("NO SUBSCRIBERS LEFT!", 85, 180, 1);
+      drawText("YOU ARE FIRED!", 105, 191, 3);
+    } else if (day >= 7) {
+      drawText("WEEK COMPLETE!", 105, 180, 3);
+    } else {
+      drawText("DAY " + (day + 1) + " NEXT...", 110, 180, 2);
+    }
+    if (resultTimer > 120 && flr(Mono.frame / 15) % 2 === 0) {
+      drawText("PRESS START", 120, 210, 3);
+    }
   }
 
   function drawPlayScene() {
@@ -746,92 +791,84 @@
     const ox = shakeX;
     const oy = shakeY;
 
-    // Sky gradient (top area)
-    rectf(ox, oy, W, 49, 0);
+    // Sky (top area)
+    rectf(ox, oy, W, 36, 0);
 
     // Top houses area (lawn)
-    rectf(ox, 49 + oy, W, 23, 0);
+    rectf(ox, 36 + oy, W, 30, 0);
     // Top sidewalk
-    for (let tx = -1; tx < 41; tx++) {
-      const tileX = tx * 8 - (scrollX % 8) + ox;
-      rectf(tileX, 72 + oy, 8, 8, 2);
+    for (let tx = -1; tx < 21; tx++) {
+      const tileX = tx * S - (scrollX % S) + ox;
+      rectf(tileX, 66 + oy, S, S, 2);
     }
     // Curb
-    rectf(ox, 80 + oy, W, 2, 1);
+    rectf(ox, 82 + oy, W, 4, 1);
 
     // Road
-    rectf(ox, 82 + oy, W, 75, 1);
+    rectf(ox, 86 + oy, W, 80, 1);
 
     // Road lane markings (dashed center line)
-    for (let i = 0; i < 30; i++) {
-      const lx = (i * 24 - (scrollX % 24)) + ox;
-      rectf(lx, 118 + oy, 12, 2, 2);
+    for (let i = 0; i < 20; i++) {
+      const lx = (i * 28 - (scrollX % 28)) + ox;
+      rectf(lx, 124 + oy, 14, 2, 2);
     }
 
     // Bottom curb
-    rectf(ox, 157 + oy, W, 2, 1);
+    rectf(ox, 166 + oy, W, 4, 1);
     // Bottom sidewalk
-    for (let tx = -1; tx < 41; tx++) {
-      const tileX = tx * 8 - (scrollX % 8) + ox;
-      rectf(tileX, 159 + oy, 8, 8, 2);
+    for (let tx = -1; tx < 21; tx++) {
+      const tileX = tx * S - (scrollX % S) + ox;
+      rectf(tileX, 170 + oy, S, S, 2);
     }
     // Bottom houses area (lawn)
-    rectf(ox, 167 + oy, W, 38, 0);
+    rectf(ox, 186 + oy, W, 34, 0);
 
     // Bottom strip
-    rectf(ox, 205 + oy, W, 35, 0);
+    rectf(ox, 220 + oy, W, 20, 0);
 
     // Draw grass details
-    for (let tx = -1; tx < 41; tx++) {
-      const tileX = tx * 8 - (scrollX % 8) + ox;
-      // Top grass
-      const seed1 = ((tx * 7 + flr(scrollX / 8)) * 13) % 37;
-      if (seed1 % 5 === 0) pix(tileX + 3, 54 + oy, 1);
-      if (seed1 % 7 === 0) pix(tileX + 6, 59 + oy, 1);
-      // Bottom grass
-      const seed2 = ((tx * 11 + flr(scrollX / 8)) * 17) % 41;
-      if (seed2 % 5 === 0) pix(tileX + 2, 169 + oy, 1);
-      if (seed2 % 7 === 0) pix(tileX + 5, 176 + oy, 1);
+    for (let tx = -1; tx < 21; tx++) {
+      const tileX = tx * S - (scrollX % S) + ox;
+      const seed1 = ((tx * 7 + flr(scrollX / S)) * 13) % 37;
+      if (seed1 % 5 === 0) pix(tileX + 5, 42 + oy, 1);
+      if (seed1 % 7 === 0) pix(tileX + 11, 50 + oy, 1);
+      const seed2 = ((tx * 11 + flr(scrollX / S)) * 17) % 41;
+      if (seed2 % 5 === 0) pix(tileX + 4, 190 + oy, 1);
+      if (seed2 % 7 === 0) pix(tileX + 10, 198 + oy, 1);
     }
 
     // Draw houses
     for (const h of houses) {
       const hsx = worldToScreen(h.x) + ox;
-      if (hsx < -20 || hsx > W + 20) continue;
+      if (hsx < -32 || hsx > W + 32) continue;
 
-      const hy = h.side === "top" ? 47 + oy : 173 + oy;
-      const mailboxY = h.side === "top" ? 66 + oy : 161 + oy;
+      const hy = h.side === "top" ? 36 + oy : 186 + oy;
+      const mailboxY = h.side === "top" ? 62 + oy : 168 + oy;
 
       if (h.subscriber) {
-        // Subscriber house - brighter
-        spr(5, hsx, hy);
-        spr(5, hsx + 8, hy);
-        // Mailbox with flag
-        sprExt(7, hsx + 4, mailboxY, false, false, 0);
+        sprT(5, hsx, hy);
+        sprT(5, hsx + S, hy);
+        sprT(7, hsx + 8, mailboxY);
         if (h.delivered) {
-          // Show delivered indicator
-          drawText("OK", hsx + 2, mailboxY - 8, 3);
+          drawText("OK", hsx + 4, mailboxY - 10, 3);
         }
       } else {
-        // Non-subscriber house - darker
-        spr(6, hsx, hy);
-        spr(6, hsx + 8, hy);
-        // Mailbox without flag
-        sprExt(8, hsx + 4, mailboxY, false, false, 0);
+        sprT(6, hsx, hy);
+        sprT(6, hsx + S, hy);
+        sprT(8, hsx + 8, mailboxY);
         if (h.broken) {
-          // Show broken window
-          sprExt(13, hsx + 2, hy + 16, false, false, 0);
+          sprT(13, hsx + 4, hy + S);
         }
       }
     }
 
     // Draw trees (decorative, between houses)
     for (let i = 0; i < HOUSES_PER_DAY - 1; i++) {
-      const tx = 160 + i * HOUSE_SPACING + ox;
+      const tx = 240 + i * HOUSE_SPACING + ox;
       const tsx = worldToScreen(tx);
-      if (tsx > -10 && tsx < W + 10) {
-        sprExt(14, tsx, 44 + oy, false, false, 0);
-        sprExt(14, tsx, 174 + oy, false, false, 0);
+      if (tsx > -S && tsx < W + S) {
+        sprT(14, tsx, 34 + oy);
+        sprT(14, tsx, 188 + oy);
       }
     }
 
@@ -839,23 +876,23 @@
     for (const o of obstacles) {
       if (!o.alive) continue;
       const osx = worldToScreen(o.x) + ox;
-      if (osx < -10 || osx > W + 10) continue;
+      if (osx < -S || osx > W + S) continue;
       const oly = LANE_Y[o.lane] + oy;
       const flipX = o.dir < 0;
 
       switch (o.type) {
         case 0: // Dog
-          sprExt(9, osx, oly, (flr(o.animT / 6) % 2 === 0), false, 0);
+          sprT(9, osx, oly, (flr(o.animT / 6) % 2 === 0), false);
           break;
         case 1: // Car
-          sprExt(10, osx, oly, flipX, false, 0);
-          sprExt(10, osx + 8, oly, flipX, false, 0);
+          sprT(10, osx, oly, flipX, false);
+          sprT(10, osx + S, oly, flipX, false);
           break;
         case 2: // Skater
-          sprExt(11, osx, oly, flipX, false, 0);
+          sprT(11, osx, oly, flipX, false);
           break;
         case 3: // Lawn mower
-          sprExt(12, osx, oly, (flr(o.animT / 8) % 2 === 0), false, 0);
+          sprT(12, osx, oly, (flr(o.animT / 8) % 2 === 0), false);
           break;
       }
     }
@@ -864,19 +901,19 @@
     for (const p of papers) {
       const psx = worldToScreen(p.x) + ox;
       const rotation = Mono.frame % 2;
-      sprExt(4, psx, p.y + oy, rotation === 1, false, 0);
+      sprT(4, psx, p.y + oy, rotation === 1, false);
     }
 
     // Draw player
     if (invTimer <= 0 || flr(Mono.frame / 3) % 2 === 0) {
       const py = player.y - jumpHeight + oy;
       const sprId = jumpTimer > 0 ? 3 : (pedalFrame === 0 ? 1 : 2);
-      sprExt(sprId, player.x + ox, py, false, false, 0);
+      sprT(sprId, player.x + ox, py);
 
       // Shadow when jumping
       if (jumpHeight > 3) {
-        const shadowW = 8 - flr(jumpHeight / 5);
-        rectf(player.x + ox + (8 - shadowW) / 2, player.y + 6 + oy, shadowW, 2, 1);
+        const shadowW = S - flr(jumpHeight / 4);
+        rectf(player.x + ox + (S - shadowW) / 2, player.y + 12 + oy, shadowW, 3, 1);
       }
     }
 
@@ -884,38 +921,38 @@
     for (const p of particles) pix(flr(p.x) + ox, flr(p.y) + oy, p.color);
 
     // --- HUD ---
-    rectf(0, 0, W, 14, 0);
-    rectf(0, 14, W, 1, 1);
+    rectf(0, 0, W, 18, 0);
+    rectf(0, 18, W, 1, 1);
 
     // Score
-    drawText("SCORE:" + score, 4, 4, 3);
+    drawText("SCORE:" + score, 4, 5, 3);
 
     // Day
-    drawText("DAY " + day + "/7", W / 2 - 20, 4, 2);
+    drawText("DAY " + day + "/7", W / 2 - 22, 5, 2);
 
     // Papers remaining
-    sprExt(17, W - 67, 2, false, false, 0);
-    drawText("X" + papersLeft, W - 57, 4, 3);
+    sprT(17, W - 80, 1, false, false);
+    drawText("X" + papersLeft, W - 62, 5, 3);
 
     // Lives
     for (let i = 0; i < lives; i++) {
-      sprExt(16, W - 24 + i * 10, 3, false, false, 0);
+      sprT(16, W - 34 + i * 12, 1, false, false);
     }
 
     // Progress bar at bottom
-    rectf(0, H - 6, W, 6, 0);
-    rectf(2, H - 4, W - 4, 2, 1);
+    rectf(0, H - 8, W, 8, 0);
+    rectf(2, H - 6, W - 4, 4, 1);
     const prog = min(dayProgress / dayLength, 1);
-    rectf(2, H - 4, flr((W - 4) * prog), 2, 3);
+    rectf(2, H - 6, flr((W - 4) * prog), 4, 3);
 
     // Lane indicators (subtle)
     for (let i = 0; i < 4; i++) {
-      const ly = LANE_Y[i] + 3;
+      const ly = LANE_Y[i] + 6;
       if (i === player.lane) {
-        pix(8, ly, 3);
-        pix(9, ly, 3);
+        pix(10, ly, 3);
+        pix(11, ly, 3);
       } else {
-        pix(8, ly, 1);
+        pix(10, ly, 1);
       }
     }
   }
@@ -967,7 +1004,7 @@
     init() {},
     update() {
       updateCommon();
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() { drawGameOverScreen(); }
   });

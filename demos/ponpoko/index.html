@@ -11,7 +11,7 @@
   <canvas id="screen"></canvas>
 </div>
 <div id="controls">
-  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>A</span> JUMP
+  <span>ARROWS</span> MOVE/CLIMB &nbsp;&nbsp; <span>A</span> JUMP
 </div>
 <script src="../../runtime/engine.js"></script>
 <script>
@@ -22,9 +22,24 @@
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
           min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 → 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (16x16 via up()) ---
+
   // 1: Raccoon standing right
-  defSprite(1,
+  defSprite(1, up(
     "00222000" +
     "02332200" +
     "23033020" +
@@ -33,9 +48,9 @@
     "02232200" +
     "00200200" +
     "00200200"
-  );
+  ));
   // 2: Raccoon walking right frame 2
-  defSprite(2,
+  defSprite(2, up(
     "00222000" +
     "02332200" +
     "23033020" +
@@ -44,9 +59,9 @@
     "02232200" +
     "02000020" +
     "02000020"
-  );
+  ));
   // 3: Raccoon climbing
-  defSprite(3,
+  defSprite(3, up(
     "00222000" +
     "02332200" +
     "23033020" +
@@ -55,9 +70,9 @@
     "02232200" +
     "20020002" +
     "20020002"
-  );
+  ));
   // 4: Raccoon jump
-  defSprite(4,
+  defSprite(4, up(
     "00222000" +
     "02332200" +
     "23033020" +
@@ -66,9 +81,9 @@
     "22232220" +
     "00200200" +
     "02000020"
-  );
+  ));
   // 10: Platform block
-  defSprite(10,
+  defSprite(10, up(
     "33333333" +
     "21212121" +
     "12121212" +
@@ -77,9 +92,9 @@
     "21212121" +
     "12121212" +
     "11111111"
-  );
+  ));
   // 11: Ladder
-  defSprite(11,
+  defSprite(11, up(
     "20000002" +
     "20000002" +
     "22222222" +
@@ -88,9 +103,9 @@
     "22222222" +
     "20000002" +
     "20000002"
-  );
+  ));
   // 12: Ladder top (with platform)
-  defSprite(12,
+  defSprite(12, up(
     "33333333" +
     "21212121" +
     "20000002" +
@@ -99,9 +114,9 @@
     "20000002" +
     "20000002" +
     "22222222"
-  );
+  ));
   // 20: Snake enemy
-  defSprite(20,
+  defSprite(20, up(
     "00000000" +
     "03300000" +
     "32230000" +
@@ -110,9 +125,9 @@
     "00023000" +
     "00230000" +
     "03300000"
-  );
+  ));
   // 21: Bird enemy frame 1
-  defSprite(21,
+  defSprite(21, up(
     "00000000" +
     "30000003" +
     "03000030" +
@@ -121,9 +136,9 @@
     "00333300" +
     "00033000" +
     "00000000"
-  );
+  ));
   // 22: Bird enemy frame 2
-  defSprite(22,
+  defSprite(22, up(
     "30000003" +
     "03000030" +
     "00300300" +
@@ -132,9 +147,9 @@
     "00333300" +
     "00033000" +
     "00000000"
-  );
+  ));
   // 23: Falling rock
-  defSprite(23,
+  defSprite(23, up(
     "00111000" +
     "01221100" +
     "12112210" +
@@ -143,9 +158,9 @@
     "01221100" +
     "00111000" +
     "00000000"
-  );
+  ));
   // 30: Apple (food item)
-  defSprite(30,
+  defSprite(30, up(
     "00020000" +
     "00332000" +
     "03333300" +
@@ -154,9 +169,9 @@
     "33333330" +
     "03333300" +
     "00333000"
-  );
+  ));
   // 31: Cherry
-  defSprite(31,
+  defSprite(31, up(
     "00000200" +
     "00002000" +
     "00320300" +
@@ -165,9 +180,9 @@
     "33333330" +
     "03330330" +
     "00300000"
-  );
+  ));
   // 32: Fish
-  defSprite(32,
+  defSprite(32, up(
     "00000000" +
     "00230000" +
     "02333200" +
@@ -176,9 +191,9 @@
     "02333200" +
     "00230000" +
     "00000000"
-  );
+  ));
   // 33: Rice ball (onigiri)
-  defSprite(33,
+  defSprite(33, up(
     "00030000" +
     "00333000" +
     "03333300" +
@@ -187,9 +202,9 @@
     "01111100" +
     "01111100" +
     "00111000"
-  );
+  ));
   // 34: Star bonus
-  defSprite(34,
+  defSprite(34, up(
     "00030000" +
     "00030000" +
     "03333300" +
@@ -198,9 +213,9 @@
     "03030300" +
     "03000300" +
     "30000030"
-  );
+  ));
   // 40: Explosion frame 1
-  defSprite(40,
+  defSprite(40, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -209,9 +224,9 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
   // 41: Explosion frame 2
-  defSprite(41,
+  defSprite(41, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -220,9 +235,9 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
   // 42: Life icon (small raccoon face)
-  defSprite(42,
+  defSprite(42, up(
     "00000000" +
     "00222000" +
     "02332200" +
@@ -231,32 +246,65 @@
     "00222000" +
     "00000000" +
     "00000000"
-  );
+  ));
+
+  // --- Hitbox / collision constants (16x16 sprites) ---
+  // Player hitbox (inset from 16x16 sprite)
+  const PL_HBX = 3, PL_HBY = 2, PL_HBW = 10, PL_HBH = 14;
+  const PL_CX = 8, PL_CY = 8, PL_R = 6; // circle for stomp check
+
+  // Snake hitbox
+  const SN_HBX = 2, SN_HBY = 2, SN_HBW = 12, SN_HBH = 12;
+
+  // Bird hitbox (circle — birds are round)
+  const BD_CX = 8, BD_CY = 8, BD_R = 6;
+
+  // Falling rock hitbox (circle — rocks are round)
+  const RK_CX = 8, RK_CY = 7, RK_R = 6;
+
+  // Item hitbox (circle — items are roughly round)
+  const IT_CX = 8, IT_CY = 8, IT_R = 6;
+
+  // Star goal hitbox (circle)
+  const ST_CX = 8, ST_CY = 8, ST_R = 7;
+
+  // --- Collision helpers ---
+  // Rect vs rect
+  function hitRR(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax + aw > bx && ax < bx + bw && ay + ah > by && ay < by + bh;
+  }
+  // Circle vs circle
+  function hitCC(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = ar + br;
+    return dx * dx + dy * dy < dist * dist;
+  }
+  // Circle vs rect
+  function hitCR(cx, cy, cr, rx, ry, rw, rh) {
+    const nearX = _max(rx, min(cx, rx + rw));
+    const nearY = _max(ry, min(cy, ry + rh));
+    const dx = cx - nearX, dy = cy - nearY;
+    return dx * dx + dy * dy < cr * cr;
+  }
 
   // --- Game constants ---
   const GRAVITY = 0.35;
   const JUMP_FORCE = -5.5;
   const MOVE_SPEED = 2.0;
   const CLIMB_SPEED = 1.5;
-  const PLAT_H = 8;  // platform tile height in px
+  const TILE = 16; // tile size in px
 
   // --- Stage data ---
-  // Each stage defines platforms, ladders, items, enemies
-  // Platform: {x, y, w} in tiles (8px each) - y is row from top
-  // Ladder: {x, y1, y2} tile col, from row y1 to y2
-  // Item: {x, y, type} pixel coords, type=sprite id
-
-  const NUM_FLOORS = 7;
-  const FLOOR_Y = []; // pixel Y for each floor (0=top, 6=bottom/ground)
+  const NUM_FLOORS = 6;
+  const FLOOR_Y = []; // pixel Y for each floor (0=top, 5=bottom/ground)
   for (let i = 0; i < NUM_FLOORS; i++) {
-    FLOOR_Y[i] = 27 + i * 33;
+    FLOOR_Y[i] = 30 + i * 40;
   }
 
   // --- Game state ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
   let player, enemies, items, fallingObjs, particles;
   let score, lives, stage, stageTimer;
-  let camY; // camera scroll offset
   let platforms, ladders;
   let goalItem; // item at top to collect
   let invTimer; // invincibility frames after hit
@@ -277,39 +325,29 @@
     const difficulty = min(stageNum, 10);
 
     // Generate floors - each floor is a row of platform tiles
-    // Floor 0 = top (goal), Floor NUM_FLOORS-1 = ground
     for (let f = 0; f < NUM_FLOORS; f++) {
       const y = FLOOR_Y[f];
-      // Full width platform with gaps for ladders
-      // Each platform is defined by pixel coords
       const gapCount = 1 + flr(rnd(2));
       const gaps = [];
       for (let g = 0; g < gapCount; g++) {
-        gaps.push(27 + flr(rnd(W - 67)));
+        gaps.push(32 + flr(rnd(W - 80)));
       }
-
-      // Build segments avoiding gaps
-      let segments = [];
-      let sx = 8;
-      // Sort gaps
       gaps.sort((a, b) => a - b);
 
-      if (f === NUM_FLOORS - 1) {
-        // Ground floor - solid
-        segments.push({ x: 0, y: y, w: W });
-      } else if (f === 0) {
-        // Top floor - solid with goal
+      let segments = [];
+      if (f === NUM_FLOORS - 1 || f === 0) {
+        // Ground and top floor - solid
         segments.push({ x: 0, y: y, w: W });
       } else {
-        // Middle floors have gaps for falling/jumping
+        // Middle floors have gaps
         let cx = 0;
         for (const gx of gaps) {
-          if (gx - cx > 16) {
+          if (gx - cx > 20) {
             segments.push({ x: cx, y: y, w: gx - cx });
           }
-          cx = gx + 16; // gap width
+          cx = gx + 20; // gap width
         }
-        if (W - cx > 11) {
+        if (W - cx > 16) {
           segments.push({ x: cx, y: y, w: W - cx });
         }
       }
@@ -322,12 +360,11 @@
     for (let f = 0; f < NUM_FLOORS - 1; f++) {
       const numLadders = 2 + flr(rnd(2));
       for (let l = 0; l < numLadders; l++) {
-        const lx = 20 + flr(rnd(W - 53));
-        // Check that ladder position sits on a platform on both floors
+        const lx = 24 + flr(rnd(W - 64));
         const topY = FLOOR_Y[f];
         const botY = FLOOR_Y[f + 1];
-        const onTop = platforms.some(p => p.y === topY && lx >= p.x && lx + 8 <= p.x + p.w);
-        const onBot = platforms.some(p => p.y === botY && lx >= p.x && lx + 8 <= p.x + p.w);
+        const onTop = platforms.some(p => p.y === topY && lx >= p.x && lx + TILE <= p.x + p.w);
+        const onBot = platforms.some(p => p.y === botY && lx >= p.x && lx + TILE <= p.x + p.w);
         if (onTop && onBot) {
           ladders.push({ x: lx, y1: topY, y2: botY });
         }
@@ -338,13 +375,12 @@
     for (let f = 0; f < NUM_FLOORS - 1; f++) {
       const hasLadder = ladders.some(l => l.y1 === FLOOR_Y[f] && l.y2 === FLOOR_Y[f + 1]);
       if (!hasLadder) {
-        // Find a valid x position
         const topY = FLOOR_Y[f];
         const botY = FLOOR_Y[f + 1];
-        for (let attempt = 0; attempt < 20; attempt++) {
-          const lx = 20 + flr(rnd(W - 53));
-          const onTop = platforms.some(p => p.y === topY && lx >= p.x && lx + 8 <= p.x + p.w);
-          const onBot = platforms.some(p => p.y === botY && lx >= p.x && lx + 8 <= p.x + p.w);
+        for (let attempt = 0; attempt < 30; attempt++) {
+          const lx = 24 + flr(rnd(W - 64));
+          const onTop = platforms.some(p => p.y === topY && lx >= p.x && lx + TILE <= p.x + p.w);
+          const onBot = platforms.some(p => p.y === botY && lx >= p.x && lx + TILE <= p.x + p.w);
           if (onTop && onBot) {
             ladders.push({ x: lx, y1: topY, y2: botY });
             break;
@@ -358,10 +394,9 @@
     for (let f = 1; f < NUM_FLOORS - 1; f++) {
       const numItems = 1 + flr(rnd(2 + difficulty * 0.3));
       for (let i = 0; i < numItems; i++) {
-        const ix = 13 + flr(rnd(W - 40));
-        const iy = FLOOR_Y[f] - 9;
-        // Check on a platform
-        const onPlat = platforms.some(p => p.y === FLOOR_Y[f] && ix >= p.x && ix + 8 <= p.x + p.w);
+        const ix = 16 + flr(rnd(W - 48));
+        const iy = FLOOR_Y[f] - TILE;
+        const onPlat = platforms.some(p => p.y === FLOOR_Y[f] && ix >= p.x && ix + TILE <= p.x + p.w);
         if (onPlat) {
           items.push({
             x: ix, y: iy,
@@ -374,8 +409,8 @@
 
     // Goal item at top
     goalItem = {
-      x: W / 2 - 4,
-      y: FLOOR_Y[0] - 9,
+      x: W / 2 - 8,
+      y: FLOOR_Y[0] - TILE,
       type: 34, // star
       collected: false
     };
@@ -385,8 +420,8 @@
       const numEnemies = min(1 + flr(difficulty * 0.4), 3);
       for (let e = 0; e < numEnemies; e++) {
         if (rnd(1) < 0.3 + difficulty * 0.05) {
-          const ex = 20 + flr(rnd(W - 53));
-          const ey = FLOOR_Y[f] - 8;
+          const ex = 24 + flr(rnd(W - 64));
+          const ey = FLOOR_Y[f] - TILE;
           const etype = rnd(1) < 0.5 ? "snake" : "bird";
           enemies.push({
             x: ex, y: ey,
@@ -402,8 +437,8 @@
     }
 
     // Place player at ground floor
-    player.x = W / 2 - 4;
-    player.y = FLOOR_Y[NUM_FLOORS - 1] - 9;
+    player.x = W / 2 - 8;
+    player.y = FLOOR_Y[NUM_FLOORS - 1] - TILE;
     player.vy = 0;
     player.onGround = true;
     player.climbing = false;
@@ -414,7 +449,7 @@
 
   function resetGame() {
     player = {
-      x: W / 2 - 4, y: 0,
+      x: W / 2 - 8, y: 0,
       vx: 0, vy: 0,
       onGround: false,
       climbing: false,
@@ -432,10 +467,9 @@
   }
 
   function isOnPlatform(x, y, w, h) {
-    // Check if entity at (x,y) with size (w,h) is standing on a platform
     const footY = y + h;
     for (const p of platforms) {
-      if (footY >= p.y && footY <= p.y + 4 &&
+      if (footY >= p.y && footY <= p.y + 6 &&
           x + w > p.x + 2 && x < p.x + p.w - 2) {
         return p.y;
       }
@@ -444,10 +478,10 @@
   }
 
   function isOnLadder(x, y) {
-    const cx = x + 4; // center of player
+    const cx = x + 8;
     for (const l of ladders) {
-      if (cx >= l.x - 2 && cx <= l.x + 10 &&
-          y + 8 >= l.y1 && y <= l.y2) {
+      if (cx >= l.x - 3 && cx <= l.x + TILE + 3 &&
+          y + TILE >= l.y1 && y <= l.y2) {
         return l;
       }
     }
@@ -455,10 +489,10 @@
   }
 
   function canClimbUp(x, y) {
-    const cx = x + 4;
+    const cx = x + 8;
     for (const l of ladders) {
-      if (cx >= l.x - 2 && cx <= l.x + 10 &&
-          y + 8 >= l.y1 && y + 4 <= l.y2) {
+      if (cx >= l.x - 3 && cx <= l.x + TILE + 3 &&
+          y + TILE >= l.y1 && y + 4 <= l.y2) {
         return l;
       }
     }
@@ -466,10 +500,10 @@
   }
 
   function canClimbDown(x, y) {
-    const cx = x + 4;
+    const cx = x + 8;
     for (const l of ladders) {
-      if (cx >= l.x - 2 && cx <= l.x + 10 &&
-          y + 8 >= l.y1 - 4 && y + 8 <= l.y2) {
+      if (cx >= l.x - 3 && cx <= l.x + TILE + 3 &&
+          y + TILE >= l.y1 - 6 && y + TILE <= l.y2) {
         return l;
       }
     }
@@ -526,33 +560,40 @@
     },
     draw() {
       cls(0);
+      // Background dots
       for (let y = 0; y < H; y += 16) {
         for (let x = 0; x < W; x += 16) {
           if ((x + y) % 32 === 0) pix(x, y, 1);
         }
       }
-      const ty = 38 + sin(titleAnim * 0.06) * 3;
+      const ty = 30 + sin(titleAnim * 0.06) * 3;
       text("PONPOKO", flr(W / 2 - 7 * 2.5), flr(ty), 3);
       text("PONPOKO", flr(W / 2 - 7 * 2.5) + 1, flr(ty) + 1, 1);
-      text("- RACCOON -", flr(W / 2 - 11 * 2.5), flr(ty) + 11, 2);
-      rectf(W / 2 - 40, flr(ty) + 18, 80, 1, 2);
-      const rx = W / 2 - 4;
+      text("- RACCOON -", flr(W / 2 - 11 * 2.5), flr(ty) + 12, 2);
+      rectf(W / 2 - 40, flr(ty) + 21, 80, 1, 2);
+
+      // Animated raccoon
+      const rx = W / 2 - 8;
       const walkFrame = flr(titleAnim / 8) % 2 === 0 ? 1 : 2;
-      spr(walkFrame, flr(rx + sin(titleAnim * 0.08) * 20), flr(ty) + 26);
-      spr(30, W / 2 - 27, flr(ty) + 27 + flr(sin(titleAnim * 0.1) * 3));
-      spr(31, W / 2 + 21, flr(ty) + 29 + flr(sin(titleAnim * 0.1 + 1) * 3));
-      spr(32, W / 2 - 37, flr(ty) + 26 + flr(sin(titleAnim * 0.1 + 2) * 3));
-      spr(33, W / 2 + 32, flr(ty) + 27 + flr(sin(titleAnim * 0.1 + 3) * 3));
+      spr(walkFrame, flr(rx + sin(titleAnim * 0.08) * 24), flr(ty) + 28);
+
+      // Floating items around raccoon
+      spr(30, W / 2 - 36, flr(ty) + 30 + flr(sin(titleAnim * 0.1) * 3));
+      spr(31, W / 2 + 24, flr(ty) + 32 + flr(sin(titleAnim * 0.1 + 1) * 3));
+      spr(32, W / 2 - 48, flr(ty) + 28 + flr(sin(titleAnim * 0.1 + 2) * 3));
+      spr(33, W / 2 + 36, flr(ty) + 30 + flr(sin(titleAnim * 0.1 + 3) * 3));
+
       if (flr(titleAnim / 20) % 2 === 0) {
-        text("PRESS START", flr(W / 2 - 16 * 2.5), 146, 3);
+        text("PRESS START", flr(W / 2 - 16 * 2.5), 140, 3);
       }
-      text("ARROWS: MOVE/CLIMB", flr(W / 2 - 18 * 2.5), 169, 2);
-      text("A: JUMP", flr(W / 2 - 7 * 2.5), 178, 2);
-      text("REACH THE STAR!", flr(W / 2 - 15 * 2.5), 191, 2);
-      spr(20, W / 2 - 33, 203); text("SNAKE  200", W / 2 - 24, 205, 2);
-      spr(21, W / 2 - 33, 213); text("BIRD   200", W / 2 - 24, 215, 2);
-      spr(34, W / 2 - 33, 224); text("STAR   500+", W / 2 - 24, 226, 2);
-      text("MONO DEMO V0.1", flr(W / 2 - 17 * 2.5), 234, 1);
+      text("ARROWS: MOVE/CLIMB", flr(W / 2 - 18 * 2.5), 160, 2);
+      text("A: JUMP", flr(W / 2 - 7 * 2.5), 170, 2);
+      text("REACH THE STAR!", flr(W / 2 - 15 * 2.5), 184, 2);
+
+      // Enemy/item legend
+      spr(20, W / 2 - 40, 198); text("SNAKE  200", W / 2 - 22, 202, 2);
+      spr(21, W / 2 - 40, 216); text("BIRD   200", W / 2 - 22, 220, 2);
+      text("MONO DEMO V0.2", flr(W / 2 - 17 * 2.5), 234, 1);
     }
   });
 
@@ -560,7 +601,6 @@
   Mono.scene(PLAY, {
     init() { resetGame(); },
     update() {
-    // --- Play state ---
     stageTimer++;
 
     if (stageComplete) {
@@ -598,13 +638,11 @@
       if (!curLadder) {
         pl.climbing = false;
       } else {
-        // Climb up/down
         if (btn("up")) {
           pl.y -= CLIMB_SPEED;
           pl.animTimer++;
-          // Check if reached top of ladder
-          if (pl.y + 8 < curLadder.y1 + 4) {
-            pl.y = curLadder.y1 - 8;
+          if (pl.y + TILE < curLadder.y1 + 6) {
+            pl.y = curLadder.y1 - TILE;
             pl.climbing = false;
             pl.onGround = true;
           }
@@ -612,14 +650,12 @@
         if (btn("down")) {
           pl.y += CLIMB_SPEED;
           pl.animTimer++;
-          // Check if reached bottom of ladder
-          if (pl.y + 8 > curLadder.y2) {
-            pl.y = curLadder.y2 - 8;
+          if (pl.y + TILE > curLadder.y2) {
+            pl.y = curLadder.y2 - TILE;
             pl.climbing = false;
             pl.onGround = true;
           }
         }
-        // Can move left/right off ladder
         if (btn("left")) { pl.x -= 1; pl.dir = -1; }
         if (btn("right")) { pl.x += 1; pl.dir = 1; }
 
@@ -630,12 +666,11 @@
           pl.onGround = false;
           jumpSound();
         }
-        pl.vy = 0; // no gravity while climbing
+        pl.vy = 0;
       }
     }
 
     if (!pl.climbing) {
-      // Horizontal movement
       if (btn("left")) {
         pl.x -= MOVE_SPEED;
         pl.dir = -1;
@@ -660,9 +695,9 @@
 
       // Platform collision (only when falling)
       if (pl.vy >= 0) {
-        const platY = isOnPlatform(pl.x, pl.y, 8, 9);
+        const platY = isOnPlatform(pl.x + PL_HBX, pl.y, PL_HBW, TILE);
         if (platY >= 0) {
-          pl.y = platY - 9;
+          pl.y = platY - TILE;
           pl.vy = 0;
           pl.onGround = true;
         } else {
@@ -674,18 +709,18 @@
     }
 
     // Screen bounds
-    pl.x = _max(0, min(W - 8, pl.x));
-    if (pl.y > H + 10) {
+    pl.x = _max(0, min(W - TILE, pl.x));
+    if (pl.y > H + 16) {
       // Fell off screen
       lives--;
       invTimer = 60;
       if (lives <= 0) {
-        Mono.go(GAMEOVER); return;
-        addParticles(pl.x + 4, pl.y, 20, 3);
         deathSound();
+        addParticles(pl.x + 8, pl.y, 20, 3);
+        Mono.go(GAMEOVER); return;
       } else {
-        pl.x = W / 2 - 4;
-        pl.y = FLOOR_Y[NUM_FLOORS - 1] - 9;
+        pl.x = W / 2 - 8;
+        pl.y = FLOOR_Y[NUM_FLOORS - 1] - TILE;
         pl.vy = 0;
         pl.onGround = true;
         pl.climbing = false;
@@ -693,28 +728,31 @@
       }
     }
 
-    // --- Item collection ---
+    // --- Item collection (circle collision) ---
+    const plCx = pl.x + PL_CX, plCy = pl.y + PL_CY;
     for (const item of items) {
-      if (!item.collected &&
-          pl.x + 7 > item.x && pl.x < item.x + 8 &&
-          pl.y + 8 > item.y && pl.y < item.y + 8) {
-        item.collected = true;
-        score += 100;
-        addParticles(item.x + 4, item.y + 4, 6, 3);
-        collectSound();
+      if (!item.collected) {
+        const icx = item.x + IT_CX, icy = item.y + IT_CY;
+        if (hitCC(plCx, plCy, PL_R, icx, icy, IT_R)) {
+          item.collected = true;
+          score += 100;
+          addParticles(item.x + 8, item.y + 8, 6, 3);
+          collectSound();
+        }
       }
     }
 
-    // Goal item
-    if (!goalItem.collected &&
-        pl.x + 7 > goalItem.x && pl.x < goalItem.x + 8 &&
-        pl.y + 8 > goalItem.y && pl.y < goalItem.y + 8) {
-      goalItem.collected = true;
-      score += 500 + stage * 100;
-      stageComplete = true;
-      stageCompleteTimer = 0;
-      addParticles(goalItem.x + 4, goalItem.y + 4, 15, 3);
-      stageClearSound();
+    // Goal item (circle collision)
+    if (!goalItem.collected) {
+      const gcx = goalItem.x + ST_CX, gcy = goalItem.y + ST_CY;
+      if (hitCC(plCx, plCy, PL_R, gcx, gcy, ST_R)) {
+        goalItem.collected = true;
+        score += 500 + stage * 100;
+        stageComplete = true;
+        stageCompleteTimer = 0;
+        addParticles(goalItem.x + 8, goalItem.y + 8, 15, 3);
+        stageClearSound();
+      }
     }
 
     // --- Enemy update ---
@@ -725,62 +763,68 @@
       e.animTimer++;
 
       if (e.type === "snake") {
-        // Snakes patrol on their floor
         e.x += e.dir * e.speed;
-        // Reverse at platform edges
         const floorY = FLOOR_Y[e.floor];
         const onPlat = platforms.some(p =>
-          p.y === floorY && e.x + 4 >= p.x && e.x + 4 <= p.x + p.w
+          p.y === floorY && e.x + 8 >= p.x && e.x + 8 <= p.x + p.w
         );
-        if (!onPlat || e.x < 4 || e.x > W - 12) {
+        if (!onPlat || e.x < 4 || e.x > W - TILE - 4) {
           e.dir *= -1;
           e.x += e.dir * 2;
         }
       } else if (e.type === "bird") {
-        // Birds fly horizontally with slight wave
         e.x += e.dir * e.speed * 1.2;
-        e.y = FLOOR_Y[e.floor] - 11 + sin(e.animTimer * 0.1) * 5;
-        if (e.x < -10) { e.x = W + 10; }
-        if (e.x > W + 10) { e.x = -10; }
+        e.y = FLOOR_Y[e.floor] - TILE - 4 + sin(e.animTimer * 0.1) * 6;
+        if (e.x < -20) { e.x = W + 16; }
+        if (e.x > W + 16) { e.x = -20; }
       }
 
       // Enemy-player collision
-      if (invTimer <= 0 &&
-          pl.x + 6 > e.x && pl.x < e.x + 7 &&
-          pl.y + 7 > e.y && pl.y < e.y + 7) {
-        // Check if player is jumping on top of enemy
-        if (pl.vy > 0 && pl.y + 8 < e.y + 5) {
-          // Stomp enemy
-          e.active = false;
-          score += 200;
-          pl.vy = JUMP_FORCE * 0.6;
-          addParticles(e.x + 4, e.y + 4, 8, 2);
-          note(1, "E4", 0.06);
-          setTimeout(() => note(1, "G4", 0.06), 50);
+      if (invTimer <= 0) {
+        let hit = false;
+        if (e.type === "snake") {
+          // Snake uses rect hitbox
+          hit = hitRR(
+            pl.x + PL_HBX, pl.y + PL_HBY, PL_HBW, PL_HBH,
+            e.x + SN_HBX, e.y + SN_HBY, SN_HBW, SN_HBH
+          );
         } else {
-          // Player hit
-          lives--;
-          invTimer = 60;
-          addParticles(pl.x + 4, pl.y + 4, 8, 3);
-          if (lives <= 0) {
-            Mono.go(GAMEOVER); return;
-            deathSound();
+          // Bird uses circle hitbox
+          hit = hitCC(plCx, plCy, PL_R, e.x + BD_CX, e.y + BD_CY, BD_R);
+        }
+
+        if (hit) {
+          // Check if player is jumping on top of enemy (stomp)
+          if (pl.vy > 0 && pl.y + TILE < e.y + 8) {
+            e.active = false;
+            score += 200;
+            pl.vy = JUMP_FORCE * 0.6;
+            addParticles(e.x + 8, e.y + 8, 8, 2);
+            note(1, "E4", 0.06);
+            setTimeout(() => note(1, "G4", 0.06), 50);
           } else {
-            hitSound();
-            pl.vy = JUMP_FORCE * 0.5;
-            pl.x += (pl.x < e.x) ? -13 : 13;
+            lives--;
+            invTimer = 60;
+            addParticles(pl.x + 8, pl.y + 8, 8, 3);
+            if (lives <= 0) {
+              deathSound();
+              Mono.go(GAMEOVER); return;
+            } else {
+              hitSound();
+              pl.vy = JUMP_FORCE * 0.5;
+              pl.x += (pl.x < e.x) ? -16 : 16;
+            }
           }
         }
       }
     }
 
     // --- Falling objects ---
-    // Spawn falling rocks periodically
     const fallRate = _max(40, 120 - stage * 10);
     if (stageTimer % fallRate === 0 && fallingObjs.length < 4 + stage) {
-      const fx = 13 + flr(rnd(W - 27));
+      const fx = 16 + flr(rnd(W - 32));
       fallingObjs.push({
-        x: fx, y: -8,
+        x: fx, y: -TILE,
         vy: 1.5 + rnd(1) + stage * 0.15,
         active: true
       });
@@ -791,35 +835,33 @@
       obj.y += obj.vy;
       // Bounce off platforms slightly
       for (const p of platforms) {
-        if (obj.y + 7 >= p.y && obj.y + 7 <= p.y + 3 &&
-            obj.x + 7 > p.x && obj.x < p.x + p.w &&
+        if (obj.y + 14 >= p.y && obj.y + 14 <= p.y + 4 &&
+            obj.x + 14 > p.x && obj.x < p.x + p.w &&
             obj.vy > 0) {
-          // 50% chance to break through, 50% chance to stop
           if (rnd(1) < 0.4) {
             obj.vy *= 0.5;
           }
-          // Otherwise fall through
         }
       }
-      if (obj.y > H + 10) {
+      if (obj.y > H + 16) {
         fallingObjs.splice(i, 1);
         continue;
       }
 
-      // Hit player
-      if (invTimer <= 0 && obj.active &&
-          pl.x + 6 > obj.x && pl.x < obj.x + 7 &&
-          pl.y + 7 > obj.y && pl.y < obj.y + 7) {
-        obj.active = false;
-        fallingObjs.splice(i, 1);
-        lives--;
-        invTimer = 60;
-        addParticles(pl.x + 4, pl.y + 4, 8, 2);
-        if (lives <= 0) {
-          deathSound();
-          Mono.go(GAMEOVER); return;
-        } else {
-          hitSound();
+      // Hit player (circle collision — rock is round)
+      if (invTimer <= 0 && obj.active) {
+        if (hitCC(plCx, plCy, PL_R, obj.x + RK_CX, obj.y + RK_CY, RK_R)) {
+          obj.active = false;
+          fallingObjs.splice(i, 1);
+          lives--;
+          invTimer = 60;
+          addParticles(pl.x + 8, pl.y + 8, 8, 2);
+          if (lives <= 0) {
+            deathSound();
+            Mono.go(GAMEOVER); return;
+          } else {
+            hitSound();
+          }
         }
       }
     }
@@ -834,26 +876,22 @@
     draw() {
     cls(0);
 
-    // --- Play state rendering ---
-
-    // Draw platforms
+    // Draw platforms (tiled 16x16 blocks)
     for (const p of platforms) {
-      // Draw as tiled blocks
-      for (let tx = p.x; tx < p.x + p.w; tx += 8) {
-        const drawW = min(8, p.x + p.w - tx);
-        if (drawW >= 8) {
+      for (let tx = p.x; tx < p.x + p.w; tx += TILE) {
+        const drawW = min(TILE, p.x + p.w - tx);
+        if (drawW >= TILE) {
           spr(10, tx, p.y);
         } else {
-          // Partial platform edge
-          rectf(tx, p.y, drawW, 8, 1);
-          rectf(tx, p.y, drawW, 1, 3);
+          rectf(tx, p.y, drawW, TILE, 1);
+          rectf(tx, p.y, drawW, 2, 3);
         }
       }
     }
 
     // Draw ladders
     for (const l of ladders) {
-      for (let ly = l.y1; ly < l.y2; ly += 8) {
+      for (let ly = l.y1; ly < l.y2; ly += TILE) {
         if (ly === l.y1) {
           spr(12, l.x, ly);
         } else {
@@ -862,47 +900,53 @@
       }
     }
 
-    // Draw items
+    // Draw items + debug circles
     for (const item of items) {
       if (!item.collected) {
         spr(item.type, flr(item.x), flr(item.y));
+        Mono.dbgC(flr(item.x) + IT_CX, flr(item.y) + IT_CY, IT_R);
       }
     }
 
-    // Draw goal item (pulsing)
+    // Draw goal item (pulsing) + debug circle
     if (!goalItem.collected) {
       const pulse = sin(Mono.frame * 0.15) * 2;
-      spr(goalItem.type, flr(goalItem.x), flr(goalItem.y + pulse));
+      const gx = flr(goalItem.x), gy = flr(goalItem.y + pulse);
+      spr(goalItem.type, gx, gy);
+      Mono.dbgC(gx + ST_CX, gy + ST_CY, ST_R);
       // Arrow pointing to goal
       if (Mono.frame % 30 < 20) {
-        const arrowY = goalItem.y - 10 + sin(Mono.frame * 0.2) * 3;
-        pix(goalItem.x + 3, flr(arrowY), 3);
-        pix(goalItem.x + 2, flr(arrowY) - 1, 3);
-        pix(goalItem.x + 4, flr(arrowY) - 1, 3);
-        pix(goalItem.x + 1, flr(arrowY) - 2, 3);
+        const arrowY = goalItem.y - 12 + sin(Mono.frame * 0.2) * 3;
+        pix(goalItem.x + 7, flr(arrowY), 3);
+        pix(goalItem.x + 6, flr(arrowY) - 1, 3);
+        pix(goalItem.x + 8, flr(arrowY) - 1, 3);
         pix(goalItem.x + 5, flr(arrowY) - 2, 3);
+        pix(goalItem.x + 9, flr(arrowY) - 2, 3);
       }
     }
 
-    // Draw falling objects
+    // Draw falling objects + debug circles
     for (const obj of fallingObjs) {
       if (obj.active) {
         spr(23, flr(obj.x), flr(obj.y));
+        Mono.dbgC(flr(obj.x) + RK_CX, flr(obj.y) + RK_CY, RK_R);
       }
     }
 
-    // Draw enemies
+    // Draw enemies + debug hitboxes
     for (const e of enemies) {
       if (!e.active) continue;
       if (e.type === "snake") {
         spr(20, flr(e.x), flr(e.y), e.dir < 0);
+        Mono.dbg(flr(e.x) + SN_HBX, flr(e.y) + SN_HBY, SN_HBW, SN_HBH);
       } else if (e.type === "bird") {
         const birdFrame = flr(e.animTimer / 6) % 2 === 0 ? 21 : 22;
         spr(birdFrame, flr(e.x), flr(e.y), e.dir < 0);
+        Mono.dbgC(flr(e.x) + BD_CX, flr(e.y) + BD_CY, BD_R);
       }
     }
 
-    // Draw player
+    // Draw player + debug hitbox
     const pl = player;
     if (invTimer <= 0 || flr(Mono.frame / 3) % 2 === 0) {
       let sprId;
@@ -917,6 +961,8 @@
       }
       spr(sprId, flr(pl.x), flr(pl.y), pl.dir < 0);
     }
+    // Player hitbox debug (always register, even during blink)
+    Mono.dbg(flr(pl.x) + PL_HBX, flr(pl.y) + PL_HBY, PL_HBW, PL_HBH);
 
     // Draw particles
     for (const p of particles) {
@@ -924,19 +970,21 @@
     }
 
     // --- HUD ---
-    rectf(0, 0, W, 14, 0);
-    line(0, 14, W, 14, 1);
-    text("SCORE:" + score, 4, 4, 3);
-    text("STAGE:" + stage, W / 2 - 17, 4, 2);
-    for (let i = 0; i < lives; i++) spr(42, W - 27 + i * 10, 3);
+    rectf(0, 0, W, 18, 0);
+    line(0, 18, W, 18, 1);
+    text("SCORE:" + score, 4, 5, 3);
+    text("STAGE:" + stage, flr(W / 2 - 30), 5, 2);
+    // Lives — capped display to prevent overflow (max 5 icons shown)
+    const maxLivesShown = min(lives, 5);
+    for (let i = 0; i < maxLivesShown; i++) spr(42, W - 24 - (maxLivesShown - 1 - i) * 18, 1);
 
     // Stage complete message
     if (stageComplete) {
       const msgY = 105 + sin(stageCompleteTimer * 0.1) * 3;
-      rectf(W / 2 - 47, flr(msgY) - 4, 94, 23, 0);
-      rect(W / 2 - 47, flr(msgY) - 4, 94, 23, 3);
+      rectf(W / 2 - 55, flr(msgY) - 6, 110, 28, 0);
+      rect(W / 2 - 55, flr(msgY) - 6, 110, 28, 3);
       text("STAGE CLEAR!", flr(W / 2 - 12 * 2.5), flr(msgY), 3);
-      text("BONUS: " + (500 + stage * 100), flr(W / 2 - 12 * 2.5), flr(msgY) + 9, 2);
+      text("BONUS: " + (500 + stage * 100), flr(W / 2 - 12 * 2.5), flr(msgY) + 10, 2);
     }
     }
   });
@@ -950,7 +998,7 @@
         p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);

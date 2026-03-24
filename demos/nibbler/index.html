@@ -17,14 +17,27 @@
 <script>
 (() => {
   "use strict";
-  const W = Mono.WIDTH, H = Mono.HEIGHT;
+  const W = Mono.WIDTH, H = Mono.HEIGHT;          // 320x240
+  const FPS = 30;
+  const TILE = 16;                                  // 16x16 pixel tiles
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, sprT, text, btn, btnp, note, stop, rnd, flr,
-          abs: _abs, min, max: _max, sin, cos } = Mono;
+          abs: _abs, min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 16x16 upscale helper (8x8 data -> 16x16 string) ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) { const ch = d[r * 8 + c]; row += ch + ch; }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (8x8 art upscaled to engine-native 16x16) ---
   // 1: Wall block
-  defSprite(1,
+  defSprite(1, up(
     "33333333" +
     "32222223" +
     "32111123" +
@@ -33,9 +46,9 @@
     "32111123" +
     "32222223" +
     "33333333"
-  );
+  ));
   // 2: Snake head up
-  defSprite(2,
+  defSprite(2, up(
     "00333300" +
     "03333330" +
     "33233230" +
@@ -44,9 +57,9 @@
     "33333330" +
     "03333300" +
     "00000000"
-  );
+  ));
   // 3: Snake body
-  defSprite(3,
+  defSprite(3, up(
     "00000000" +
     "02222200" +
     "02333200" +
@@ -55,9 +68,9 @@
     "02333200" +
     "02222200" +
     "00000000"
-  );
+  ));
   // 4: Snake tail
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "00222000" +
     "00233000" +
@@ -66,9 +79,9 @@
     "00222000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 5: Food pellet
-  defSprite(5,
+  defSprite(5, up(
     "00000000" +
     "00333000" +
     "03323300" +
@@ -77,9 +90,9 @@
     "00333000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 6: Snake head right
-  defSprite(6,
+  defSprite(6, up(
     "00033000" +
     "02233300" +
     "23333330" +
@@ -88,9 +101,9 @@
     "23333330" +
     "02233300" +
     "00033000"
-  );
+  ));
   // 7: Bonus food (diamond)
-  defSprite(7,
+  defSprite(7, up(
     "00030000" +
     "00323000" +
     "03232300" +
@@ -99,9 +112,9 @@
     "00323000" +
     "00030000" +
     "00000000"
-  );
+  ));
   // 8: Life icon (small snake head)
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00333000" +
     "03233300" +
@@ -110,9 +123,9 @@
     "00333000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 9: Corner body piece
-  defSprite(9,
+  defSprite(9, up(
     "00000000" +
     "02222200" +
     "02333200" +
@@ -121,9 +134,9 @@
     "02222220" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 10: Death/explosion frame 1
-  defSprite(10,
+  defSprite(10, up(
     "30000030" +
     "03000300" +
     "00303000" +
@@ -132,9 +145,9 @@
     "03000300" +
     "30000030" +
     "00000000"
-  );
+  ));
   // 11: Death/explosion frame 2
-  defSprite(11,
+  defSprite(11, up(
     "00300300" +
     "30000003" +
     "00000000" +
@@ -143,18 +156,18 @@
     "03000030" +
     "00300300" +
     "20020020"
-  );
+  ));
 
   // --- Game Constants ---
-  const MAZE_W = 38; // maze tiles wide (304px in 320px viewport, centered with 8px border)
-  const MAZE_H = 27; // maze tiles tall (216px in 240px viewport)
-  const MAZE_OX = 8; // pixel offset X
-  const MAZE_OY = 12; // pixel offset Y (leave room for HUD at top)
-  const HUD_Y = 2;
-  const TIMER_Y = H - 10;
+  // 320/16 = 20 cols, top HUD 16px + maze + bottom HUD 16px = 208px / 16 = 13 rows
+  const MAZE_W = 20;
+  const MAZE_H = 13;
+  const MAZE_OX = 0;     // flush left (20*16=320)
+  const MAZE_OY = 16;    // below HUD bar
+  const HUD_Y = 3;
+  const FONT_W = 4, FONT_H = 7;
 
   const { TITLE, PLAY, CLEAR, GAMEOVER } = Mono.SCENE;
-  // Internal sub-states for play
   const SUB_READY = 1, SUB_PLAY = 2, SUB_DYING = 3;
 
   // Directions: 0=up, 1=right, 2=down, 3=left
@@ -164,10 +177,10 @@
   // Game state
   let subState, stateTimer;
   let score, lives, level;
-  let snake; // array of {x, y}
+  let snake;   // array of {x, y} in tile coords
   let dir, nextDir;
   let moveTimer, moveDelay;
-  let maze; // 2D array: 0=path, 1=wall
+  let maze;    // 2D array: 0=path, 1=wall
   let foodX, foodY, foodEaten, foodTotal;
   let bonusX, bonusY, bonusActive, bonusTimer;
   let timeLeft, timeTick;
@@ -178,8 +191,6 @@
   let levelUpAnim = 0;
 
   // ---- Maze Definitions ----
-  // Each maze is a string grid. '#' = wall, '.' = path, 'S' = start
-  // Mazes are 38x27 tiles
   function createMaze(idx) {
     const m = [];
     for (let y = 0; y < MAZE_H; y++) {
@@ -187,195 +198,152 @@
       for (let x = 0; x < MAZE_W; x++) m[y][x] = 0;
     }
     // Border walls
-    for (let x = 0; x < MAZE_W; x++) { m[0][x] = 1; m[MAZE_H-1][x] = 1; }
-    for (let y = 0; y < MAZE_H; y++) { m[y][0] = 1; m[y][MAZE_W-1] = 1; }
+    for (let x = 0; x < MAZE_W; x++) { m[0][x] = 1; m[MAZE_H - 1][x] = 1; }
+    for (let y = 0; y < MAZE_H; y++) { m[y][0] = 1; m[y][MAZE_W - 1] = 1; }
 
     const pat = idx % 6;
 
     if (pat === 0) {
-      // Classic grid maze with corridors
-      // Horizontal internal walls with gaps
-      for (let y = 4; y < MAZE_H-4; y += 6) {
-        for (let x = 2; x < MAZE_W-2; x++) {
-          if ((x % 10 < 3) || (x % 14 > 10)) continue; // gaps
+      // Grid corridors
+      for (let y = 4; y < MAZE_H - 3; y += 4) {
+        for (let x = 2; x < MAZE_W - 2; x++) {
+          if (x % 5 < 2) continue;
           m[y][x] = 1;
         }
       }
-      // Vertical internal walls with gaps
-      for (let x = 8; x < MAZE_W-4; x += 10) {
-        for (let y = 2; y < MAZE_H-2; y++) {
-          if ((y % 8 < 3) || (y % 12 > 9)) continue;
+      for (let x = 6; x < MAZE_W - 3; x += 6) {
+        for (let y = 2; y < MAZE_H - 2; y++) {
+          if (y % 4 < 2) continue;
           m[y][x] = 1;
         }
       }
       // Central chamber
-      for (let x = 16; x < 22; x++) { m[11][x] = 1; m[16][x] = 1; }
-      for (let y = 11; y < 17; y++) { m[y][16] = 1; m[y][21] = 1; }
-      m[13][16] = 0; m[13][21] = 0; // entrances
+      const cx = flr(MAZE_W / 2), cy = flr(MAZE_H / 2);
+      m[cy - 1][cx - 1] = 1; m[cy - 1][cx] = 1; m[cy - 1][cx + 1] = 1;
+      m[cy + 1][cx - 1] = 1; m[cy + 1][cx] = 1; m[cy + 1][cx + 1] = 1;
+      m[cy][cx - 1] = 1; m[cy][cx + 1] = 1;
+      m[cy][cx] = 0; // center open
+      m[cy - 1][cx] = 0; // top entrance
+      m[cy + 1][cx] = 0; // bottom entrance
     }
     else if (pat === 1) {
-      // Spiral-ish maze
-      // Outer ring
-      for (let x = 4; x < MAZE_W-4; x++) { m[4][x] = 1; m[MAZE_H-5][x] = 1; }
-      for (let y = 4; y < MAZE_H-4; y++) { m[y][4] = 1; m[y][MAZE_W-5] = 1; }
-      // Gaps in outer ring
-      m[4][19] = 0; m[MAZE_H-5][19] = 0;
-      m[13][4] = 0; m[13][MAZE_W-5] = 0;
+      // Outer ring + inner ring
+      for (let x = 3; x < MAZE_W - 3; x++) { m[3][x] = 1; m[MAZE_H - 4][x] = 1; }
+      for (let y = 3; y < MAZE_H - 3; y++) { m[y][3] = 1; m[y][MAZE_W - 4] = 1; }
+      m[3][10] = 0; m[MAZE_H - 4][10] = 0;
+      m[6][3] = 0; m[6][MAZE_W - 4] = 0;
       // Inner ring
-      for (let x = 10; x < MAZE_W-10; x++) { m[9][x] = 1; m[MAZE_H-10][x] = 1; }
-      for (let y = 9; y < MAZE_H-9; y++) { m[y][10] = 1; m[y][MAZE_W-11] = 1; }
-      m[9][13] = 0; m[MAZE_H-10][25] = 0;
-      m[11][10] = 0; m[16][MAZE_W-11] = 0;
-      // Center cross
-      for (let x = 14; x < 24; x++) m[13][x] = 1;
-      for (let y = 10; y < 18; y++) m[y][19] = 1;
-      m[13][19] = 0; // cross center open
-      m[13][14] = 0; m[13][23] = 0;
-      m[10][19] = 0; m[17][19] = 0;
+      for (let x = 7; x < MAZE_W - 7; x++) { m[5][x] = 1; m[MAZE_H - 6][x] = 1; }
+      for (let y = 5; y < MAZE_H - 5; y++) { m[y][7] = 1; m[y][MAZE_W - 8] = 1; }
+      m[5][10] = 0; m[MAZE_H - 6][10] = 0;
+      m[6][7] = 0; m[6][MAZE_W - 8] = 0;
     }
     else if (pat === 2) {
       // Diamond pattern
-      const cx = Math.floor(MAZE_W/2);
-      const cy = Math.floor(MAZE_H/2);
-      // Diamond walls
-      for (let i = 0; i < 8; i++) {
-        m[cy-i][cx-i] = 1; m[cy-i][cx+i] = 1;
-        m[cy+i][cx-i] = 1; m[cy+i][cx+i] = 1;
+      const cx = flr(MAZE_W / 2), cy = flr(MAZE_H / 2);
+      for (let i = 1; i < 5; i++) {
+        if (cy - i > 0 && cx - i > 0) m[cy - i][cx - i] = 1;
+        if (cy - i > 0 && cx + i < MAZE_W - 1) m[cy - i][cx + i] = 1;
+        if (cy + i < MAZE_H - 1 && cx - i > 0) m[cy + i][cx - i] = 1;
+        if (cy + i < MAZE_H - 1 && cx + i < MAZE_W - 1) m[cy + i][cx + i] = 1;
       }
-      // Gaps
-      m[cy][cx-7] = 0; m[cy][cx+7] = 0;
-      m[cy-8][cx] = 0; m[cy+8][cx] = 0;
-      // Inner diamond
-      for (let i = 0; i < 4; i++) {
-        if (i < MAZE_H && cy-i >= 0 && cy+i < MAZE_H && cx-i >= 0 && cx+i < MAZE_W) {
-          m[cy-i][cx-i+8] = 1; m[cy-i][cx+i-8] = 0;
-        }
-      }
+      m[cy][cx - 4] = 0; m[cy][cx + 4] = 0;
       // Horizontal corridors
-      for (let x = 2; x < MAZE_W-2; x++) {
-        if (x > cx-3 && x < cx+3) continue;
-        m[6][x] = 1; m[MAZE_H-7][x] = 1;
+      for (let x = 2; x < MAZE_W - 2; x++) {
+        if (x > cx - 2 && x < cx + 2) continue;
+        m[3][x] = 1; m[MAZE_H - 4][x] = 1;
       }
-      // Vertical corridors
-      for (let y = 2; y < MAZE_H-2; y++) {
-        if (y > cy-3 && y < cy+3) continue;
-        m[y][9] = 1; m[y][MAZE_W-10] = 1;
+      for (let y = 2; y < MAZE_H - 2; y++) {
+        if (y > cy - 2 && y < cy + 2) continue;
+        m[y][5] = 1; m[y][MAZE_W - 6] = 1;
       }
-      m[6][9] = 0; m[6][MAZE_W-10] = 0;
-      m[MAZE_H-7][9] = 0; m[MAZE_H-7][MAZE_W-10] = 0;
+      m[3][5] = 0; m[3][MAZE_W - 6] = 0;
+      m[MAZE_H - 4][5] = 0; m[MAZE_H - 4][MAZE_W - 6] = 0;
     }
     else if (pat === 3) {
-      // Rooms and corridors
+      // Rooms
       const rooms = [
-        [2,2,8,6], [13,2,11,6], [27,2,10,6],
-        [2,11,9,6], [15,10,9,7], [28,11,9,6],
-        [2,19,8,5], [13,18,11,5], [27,19,10,5],
+        [2, 2, 5, 4], [8, 2, 5, 4], [14, 2, 5, 4],
+        [2, 7, 5, 4], [8, 7, 5, 4], [14, 7, 5, 4],
       ];
-      for (const [rx,ry,rw,rh] of rooms) {
-        for (let x = rx; x < rx+rw && x < MAZE_W; x++) {
+      for (const [rx, ry, rw, rh] of rooms) {
+        for (let x = rx; x < rx + rw && x < MAZE_W; x++) {
           if (ry < MAZE_H) m[ry][x] = 1;
-          if (ry+rh-1 < MAZE_H) m[ry+rh-1][x] = 1;
+          if (ry + rh - 1 < MAZE_H) m[ry + rh - 1][x] = 1;
         }
-        for (let y = ry; y < ry+rh && y < MAZE_H; y++) {
+        for (let y = ry; y < ry + rh && y < MAZE_H; y++) {
           if (rx < MAZE_W) m[y][rx] = 1;
-          if (rx+rw-1 < MAZE_W) m[y][rx+rw-1] = 1;
+          if (rx + rw - 1 < MAZE_W) m[y][rx + rw - 1] = 1;
         }
         // Doors
-        const dx1 = rx + Math.floor(rw/2);
-        const dy1 = ry;
-        const dy2 = ry + rh - 1;
-        if (dx1 < MAZE_W) { m[dy1][dx1] = 0; m[dy2][dx1] = 0; }
-        const dy3 = ry + Math.floor(rh/2);
-        if (dy3 < MAZE_H) { m[dy3][rx] = 0; if(rx+rw-1<MAZE_W) m[dy3][rx+rw-1] = 0; }
+        const dx1 = rx + flr(rw / 2);
+        if (dx1 < MAZE_W) { m[ry][dx1] = 0; if (ry + rh - 1 < MAZE_H) m[ry + rh - 1][dx1] = 0; }
+        const dy3 = ry + flr(rh / 2);
+        if (dy3 < MAZE_H) { m[dy3][rx] = 0; if (rx + rw - 1 < MAZE_W) m[dy3][rx + rw - 1] = 0; }
       }
     }
     else if (pat === 4) {
       // Zigzag corridors
-      for (let y = 4; y < MAZE_H-4; y += 5) {
-        const startX = (Math.floor(y/5) % 2 === 0) ? 2 : 10;
-        for (let x = startX; x < MAZE_W-2; x++) {
-          m[y][x] = 1;
-        }
-        // Gaps every 8 tiles
-        for (let g = startX+4; g < MAZE_W-2; g += 8) {
-          m[y][g] = 0; m[y][g+1] = 0;
-        }
+      for (let y = 3; y < MAZE_H - 3; y += 4) {
+        const startX = (flr(y / 4) % 2 === 0) ? 2 : 6;
+        for (let x = startX; x < MAZE_W - 2; x++) m[y][x] = 1;
+        for (let g = startX + 3; g < MAZE_W - 2; g += 5) { m[y][g] = 0; m[y][g + 1] = 0; }
       }
-      // Vertical connectors
-      for (let x = 6; x < MAZE_W-4; x += 12) {
-        for (let y = 2; y < MAZE_H-2; y++) {
-          if (m[y][x] === 0) m[y][x] = 1;
-        }
-        // Gaps
-        for (let g = 3; g < MAZE_H-2; g += 5) {
-          m[g][x] = 0; m[g+1][x] = 0;
-        }
+      for (let x = 5; x < MAZE_W - 3; x += 7) {
+        for (let y = 2; y < MAZE_H - 2; y++) { if (m[y][x] === 0) m[y][x] = 1; }
+        for (let g = 2; g < MAZE_H - 2; g += 3) { m[g][x] = 0; }
       }
     }
     else if (pat === 5) {
-      // Dense labyrinth
-      // Grid of small rooms
-      for (let gy = 2; gy < MAZE_H-2; gy += 4) {
-        for (let gx = 2; gx < MAZE_W-2; gx += 6) {
-          // Small 6x4 room outlines
-          for (let x = gx; x < gx+6 && x < MAZE_W-1; x++) {
+      // Dense labyrinth -- small 4x3 room outlines
+      for (let gy = 2; gy < MAZE_H - 2; gy += 3) {
+        for (let gx = 2; gx < MAZE_W - 2; gx += 4) {
+          for (let x = gx; x < gx + 4 && x < MAZE_W - 1; x++) {
             if (gy < MAZE_H) m[gy][x] = 1;
-            if (gy+3 < MAZE_H) m[gy+3][x] = 1;
+            if (gy + 2 < MAZE_H) m[gy + 2][x] = 1;
           }
-          for (let y = gy; y < gy+4 && y < MAZE_H-1; y++) {
+          for (let y = gy; y < gy + 3 && y < MAZE_H - 1; y++) {
             m[y][gx] = 1;
-            if (gx+5 < MAZE_W) m[y][gx+5] = 1;
+            if (gx + 3 < MAZE_W) m[y][gx + 3] = 1;
           }
-          // Door on each wall
-          const dx = gx + 3;
-          if (dx < MAZE_W) { m[gy][dx] = 0; if(gy+3<MAZE_H) m[gy+3][dx] = 0; }
-          const dy = gy + 2;
-          if (dy < MAZE_H) { m[dy][gx] = 0; if(gx+5<MAZE_W) m[dy][gx+5] = 0; }
+          const dx = gx + 2;
+          if (dx < MAZE_W) { m[gy][dx] = 0; if (gy + 2 < MAZE_H) m[gy + 2][dx] = 0; }
+          const dy = gy + 1;
+          if (dy < MAZE_H) { m[dy][gx] = 0; if (gx + 3 < MAZE_W) m[dy][gx + 3] = 0; }
         }
       }
     }
 
-    // Ensure border is solid
-    for (let x = 0; x < MAZE_W; x++) { m[0][x] = 1; m[MAZE_H-1][x] = 1; }
-    for (let y = 0; y < MAZE_H; y++) { m[y][0] = 1; m[y][MAZE_W-1] = 1; }
+    // Re-enforce border
+    for (let x = 0; x < MAZE_W; x++) { m[0][x] = 1; m[MAZE_H - 1][x] = 1; }
+    for (let y = 0; y < MAZE_H; y++) { m[y][0] = 1; m[y][MAZE_W - 1] = 1; }
 
     return m;
   }
 
   function findStart() {
-    // Find open spot near center
-    const cx = Math.floor(MAZE_W/2);
-    const cy = Math.floor(MAZE_H/2);
-    for (let r = 0; r < 20; r++) {
+    const cx = flr(MAZE_W / 2), cy = flr(MAZE_H / 2);
+    for (let r = 0; r < 15; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
-          const tx = cx+dx, ty = cy+dy;
-          if (tx > 1 && tx < MAZE_W-2 && ty > 1 && ty < MAZE_H-2) {
-            if (maze[ty][tx] === 0 && maze[ty][tx+1] === 0 && maze[ty][tx+2] === 0 && maze[ty][tx-1] === 0) {
-              return {x: tx, y: ty};
+          const tx = cx + dx, ty = cy + dy;
+          if (tx > 1 && tx < MAZE_W - 2 && ty > 1 && ty < MAZE_H - 2) {
+            if (maze[ty][tx] === 0 && maze[ty][tx + 1] === 0 && maze[ty][tx + 2] === 0 && maze[ty][tx - 1] === 0) {
+              return { x: tx, y: ty };
             }
           }
         }
       }
     }
-    return {x: 3, y: 3};
-  }
-
-  function countOpenTiles() {
-    let c = 0;
-    for (let y = 1; y < MAZE_H-1; y++)
-      for (let x = 1; x < MAZE_W-1; x++)
-        if (maze[y][x] === 0) c++;
-    return c;
+    return { x: 3, y: 3 };
   }
 
   function placeFood() {
     let attempts = 0;
     while (attempts < 2000) {
-      const fx = 1 + flr(rnd(MAZE_W-2));
-      const fy = 1 + flr(rnd(MAZE_H-2));
+      const fx = 1 + flr(rnd(MAZE_W - 2));
+      const fy = 1 + flr(rnd(MAZE_H - 2));
       if (maze[fy][fx] !== 0) { attempts++; continue; }
-      // Not on snake
       let onSnake = false;
       for (const seg of snake) {
         if (seg.x === fx && seg.y === fy) { onSnake = true; break; }
@@ -385,7 +353,6 @@
       foodY = fy;
       return;
     }
-    // Fallback
     foodX = -1; foodY = -1;
   }
 
@@ -393,22 +360,19 @@
     maze = createMaze(level);
     const start = findStart();
     snake = [];
-    dir = 1; // start moving right
-    nextDir = 1;
-    // Create initial snake (length 4, going left from head)
+    dir = 1; nextDir = 1;
     for (let i = 0; i < 4; i++) {
-      snake.push({x: start.x - i, y: start.y});
+      snake.push({ x: start.x - i, y: start.y });
     }
-    // Speed: gets faster each level
     moveDelay = _max(3, 8 - level);
     moveTimer = 0;
     foodEaten = 0;
-    foodTotal = 10 + level * 3; // pellets to eat per level
-    if (foodTotal > 30) foodTotal = 30;
+    foodTotal = 8 + level * 2;
+    if (foodTotal > 20) foodTotal = 20;
     placeFood();
     bonusActive = false;
     bonusTimer = 0;
-    timeLeft = 60 + level * 10; // seconds
+    timeLeft = 60 + level * 10;
     if (timeLeft > 120) timeLeft = 120;
     timeTick = 0;
   }
@@ -419,7 +383,6 @@
   }
 
   function isSnakeBody(tx, ty) {
-    // Check all but last segment (since tail moves)
     for (let i = 0; i < snake.length - 1; i++) {
       if (snake[i].x === tx && snake[i].y === ty) return true;
     }
@@ -428,10 +391,20 @@
 
   function canTurn(d) {
     const head = snake[0];
-    const nx = head.x + DX[d];
-    const ny = head.y + DY[d];
-    return !isWall(nx, ny);
+    return !isWall(head.x + DX[d], head.y + DY[d]);
   }
+
+  // --- Circle collision: head center vs food/bonus center ---
+  function circleHit(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist2 = dx * dx + dy * dy;
+    const rSum = ar + br;
+    return dist2 < rSum * rSum;
+  }
+
+  // Pixel center of a tile
+  function tileCX(tx) { return MAZE_OX + tx * TILE + TILE / 2; }
+  function tileCY(ty) { return MAZE_OY + ty * TILE + TILE / 2; }
 
   function startGame() {
     score = 0;
@@ -439,7 +412,7 @@
     level = 0;
     initLevel();
     subState = SUB_READY;
-    stateTimer = 60; // 2 seconds
+    stateTimer = 60;
   }
 
   // --- Title Screen ---
@@ -448,174 +421,183 @@
     if (btnp("start") || btnp("a")) {
       note(0, "C4", 0.1);
       startGame();
-      Mono.go(PLAY); return;
+      Mono.go(PLAY);
     }
   }
 
   function drawTitle() {
     cls(0);
 
-    // Animated border
-    const blink = (flr(titleAnim/15) % 2 === 0) ? 3 : 2;
-    rect(4, 4, W-8, H-8, blink);
-    rect(6, 6, W-12, H-12, 1);
+    const blink = (flr(titleAnim / 15) % 2 === 0) ? 3 : 2;
+    rect(4, 4, W - 8, H - 8, blink);
+    rect(6, 6, W - 12, H - 12, 1);
 
-    // Title
+    // Big title (3x scale manual glyph render)
     const t = "NIBBLER";
-    const tw = t.length * 5;
-    const tx = (W - tw*3) / 2;
-
-    // Draw big title (3x scale)
+    const tw = t.length * 15;
+    const txOff = flr((W - tw) / 2);
+    const FONT_DATA = Mono._fontData || null; // fallback manual
     for (let ci = 0; ci < t.length; ci++) {
       const ch = t[ci];
-      const glyph = FONT[ch];
+      const ox = txOff + ci * 15;
+      const oy = 38 + flr(sin(titleAnim * 0.08 + ci * 0.5) * 4);
+      const col = (ci + flr(titleAnim / 10)) % 2 === 0 ? 3 : 2;
+      // Use text() for each char at 1x but draw manually at 3x
+      // Manual 4x7 glyph lookup
+      const glyph = getGlyph(ch);
       if (!glyph) continue;
-      const ox = tx + ci * 15;
-      const oy = 38 + Math.floor(sin(titleAnim * 0.08 + ci * 0.5) * 4);
-      const col = (ci + flr(titleAnim/10)) % 2 === 0 ? 3 : 2;
-      for (let py = 0; py < FONT_H; py++) {
-        for (let px = 0; px < FONT_W; px++) {
-          if (glyph[py * FONT_W + px]) {
-            rectf(ox + px*3, oy + py*3, 3, 3, col);
+      for (let py = 0; py < 7; py++) {
+        for (let px = 0; px < 4; px++) {
+          if (glyph[py * 4 + px]) {
+            rectf(ox + px * 3, oy + py * 3, 3, 3, col);
           }
         }
       }
     }
 
-    // Subtitle
-    text("SNAKE IN A MAZE", (W - 15*5)/2, 75, 2);
+    text("SNAKE IN A MAZE", flr((W - 15 * 5) / 2), 75, 2);
 
-    // Demo snake animation
-    const sy = 105;
-    for (let i = 0; i < 12; i++) {
-      const sx = 107 + i * 8 + Math.floor(sin(titleAnim * 0.1 + i * 0.3) * 2);
-      if (i === 0) {
-        sprT(6, sx, sy);
-      } else {
-        sprT(3, sx, sy);
-      }
+    // Demo snake
+    const sy = 100;
+    for (let i = 0; i < 8; i++) {
+      const sx = 88 + i * TILE + flr(sin(titleAnim * 0.1 + i * 0.3) * 2);
+      sprT(i === 0 ? 6 : 3, sx, sy);
     }
 
-    // Instructions
-    const blink2 = (flr(titleAnim/20) % 2 === 0) ? 3 : 1;
-    text("PRESS START", (W - 11*5)/2, 142, blink2);
-
-    text("ARROWS - TURN SNAKE", (W - 19*5)/2, 165, 2);
-    text("EAT ALL PELLETS", (W - 15*5)/2, 176, 2);
-    text("AVOID WALLS AND YOURSELF", (W - 24*5)/2, 187, 2);
-
-    // Hi-score
-    text("HI " + String(hiScore).padStart(6, "0"), (W - 12*5)/2, 210, 1);
-
-    // Credits
-    text("MONO 2026", (W - 12*5)/2, 226, 1);
+    const blink2 = (flr(titleAnim / 20) % 2 === 0) ? 3 : 1;
+    text("PRESS START", flr((W - 11 * 5) / 2), 142, blink2);
+    text("ARROWS - TURN SNAKE", flr((W - 19 * 5) / 2), 165, 2);
+    text("EAT ALL PELLETS", flr((W - 15 * 5) / 2), 176, 2);
+    text("AVOID WALLS AND YOURSELF", flr((W - 24 * 5) / 2), 187, 2);
+    text("HI " + String(hiScore).padStart(6, "0"), flr((W - 12 * 5) / 2), 210, 1);
+    text("MONO 2026", flr((W - 12 * 5) / 2), 226, 1);
   }
+
+  // Minimal font glyph lookup for title rendering
+  const _fontRaw = {
+    "A":"0110100110011111100110011001","B":"1110100110101110100110011110",
+    "C":"0110100110001000100001100110","D":"1100101010011001100110101100",
+    "E":"1111100010001110100010001111","F":"1111100010001110100010001000",
+    "G":"0111100010001011100101100111","H":"1001100110011111100110011001",
+    "I":"1110010001000100010001001110","J":"0111001000100010001010100100",
+    "K":"1001101011001100101010011001","L":"1000100010001000100010001111",
+    "M":"1001111111011001100110011001","N":"1001110111011001100110011001",
+    "O":"0110100110011001100110010110","P":"1110100110011110100010001000",
+    "Q":"0110100110011001101101100001","R":"1110100110011110101010011001",
+    "S":"0111100010000110000110001110","T":"1111001000100010001000100010",
+    "U":"1001100110011001100110010110","V":"1001100110011001100101100110",
+    "W":"1001100110011001101111011001","X":"1001100101100110011010011001",
+    "Y":"1001100101100010001000100010","Z":"1111000100100100100010001111",
+  };
+  const _glyphs = {};
+  for (const [ch, bits] of Object.entries(_fontRaw)) {
+    _glyphs[ch] = [];
+    for (let i = 0; i < bits.length; i++) _glyphs[ch].push(parseInt(bits[i]));
+  }
+  function getGlyph(ch) { return _glyphs[ch] || null; }
 
   // --- Gameplay ---
   function updatePlay() {
-    // Input: queue next direction
     if (btnp("up") && dir !== 2) nextDir = 0;
     else if (btnp("right") && dir !== 3) nextDir = 1;
     else if (btnp("down") && dir !== 0) nextDir = 2;
     else if (btnp("left") && dir !== 1) nextDir = 3;
 
-    // Also allow held buttons for responsive turning
     if (btn("up") && dir !== 2 && dir !== 0 && canTurn(0)) nextDir = 0;
     else if (btn("right") && dir !== 3 && dir !== 1 && canTurn(1)) nextDir = 1;
     else if (btn("down") && dir !== 0 && dir !== 2 && canTurn(2)) nextDir = 2;
     else if (btn("left") && dir !== 1 && dir !== 3 && canTurn(3)) nextDir = 3;
 
-    // Timer countdown
     timeTick++;
     if (timeTick >= FPS) {
       timeTick = 0;
       timeLeft--;
-      if (timeLeft <= 10 && timeLeft > 0) {
-        note(1, "A5", 0.05);
-      }
-      if (timeLeft <= 0) {
-        // Time up — lose life
-        die();
-        return;
-      }
+      if (timeLeft <= 10 && timeLeft > 0) note(1, "A5", 0.05);
+      if (timeLeft <= 0) { die(); return; }
     }
 
-    // Movement
     moveTimer++;
     if (moveTimer >= moveDelay) {
       moveTimer = 0;
 
-      // Try to apply queued direction
-      if (canTurn(nextDir)) {
-        dir = nextDir;
-      }
+      if (canTurn(nextDir)) dir = nextDir;
 
       const head = snake[0];
       const nx = head.x + DX[dir];
       const ny = head.y + DY[dir];
 
-      // Check collisions
-      if (isWall(nx, ny) || isSnakeBody(nx, ny)) {
-        die();
-        return;
+      // Wall & self collision (tile-based, kept for accuracy)
+      if (isWall(nx, ny) || isSnakeBody(nx, ny)) { die(); return; }
+
+      snake.unshift({ x: nx, y: ny });
+
+      // Debug hitboxes for head tile (rect) vs wall collision region
+      dbg(MAZE_OX + nx * TILE, MAZE_OY + ny * TILE, TILE, TILE);
+
+      // --- Circle collision: head vs food ---
+      const hcx = tileCX(nx), hcy = tileCY(ny);
+      const headR = 6;
+
+      let ateFood = false;
+      if (foodX >= 0) {
+        const fcx = tileCX(foodX), fcy = tileCY(foodY);
+        const foodR = 6;
+        dbgC(hcx, hcy, headR);
+        dbgC(fcx, fcy, foodR);
+        if (circleHit(hcx, hcy, headR, fcx, fcy, foodR)) {
+          ateFood = true;
+        }
       }
 
-      // Move snake
-      snake.unshift({x: nx, y: ny});
-
-      // Check food
-      if (nx === foodX && ny === foodY) {
+      if (ateFood) {
         foodEaten++;
         score += 10 * (level + 1);
         note(0, "E5", 0.08);
         note(1, "G5", 0.06);
 
         if (foodEaten >= foodTotal) {
-          // Level complete!
-          score += timeLeft * 5; // time bonus
+          score += timeLeft * 5;
           note(0, "C5", 0.15);
           setTimeout(() => note(0, "E5", 0.15), 150);
           setTimeout(() => note(0, "G5", 0.2), 300);
           Mono.go(CLEAR); return;
         }
-
         placeFood();
 
-        // Chance for bonus
         if (!bonusActive && rnd(1) < 0.25) {
           bonusActive = true;
-          bonusTimer = FPS * 8; // 8 seconds
-          // Place bonus
-          let attempts = 0;
-          while (attempts < 500) {
-            const bx = 1 + flr(rnd(MAZE_W-2));
-            const by = 1 + flr(rnd(MAZE_H-2));
+          bonusTimer = FPS * 8;
+          let att = 0;
+          while (att < 500) {
+            const bx = 1 + flr(rnd(MAZE_W - 2));
+            const by = 1 + flr(rnd(MAZE_H - 2));
             if (maze[by][bx] === 0) {
-              let onSnake = false;
-              for (const s of snake) { if (s.x===bx && s.y===by) { onSnake=true; break; } }
-              if (!onSnake && !(bx===foodX && by===foodY)) {
-                bonusX = bx; bonusY = by;
-                break;
-              }
+              let onSnk = false;
+              for (const s of snake) { if (s.x === bx && s.y === by) { onSnk = true; break; } }
+              if (!onSnk && !(bx === foodX && by === foodY)) { bonusX = bx; bonusY = by; break; }
             }
-            attempts++;
+            att++;
           }
         }
       } else {
-        // Remove tail (normal movement)
         snake.pop();
       }
 
-      // Check bonus food
-      if (bonusActive && nx === bonusX && ny === bonusY) {
-        bonusActive = false;
-        score += 50 * (level + 1);
-        note(0, "C6", 0.1);
-        note(1, "E6", 0.08);
+      // --- Circle collision: head vs bonus food ---
+      if (bonusActive) {
+        const bcx = tileCX(bonusX), bcy = tileCY(bonusY);
+        const bonusR = 7;
+        dbgC(hcx, hcy, headR);
+        dbgC(bcx, bcy, bonusR);
+        if (circleHit(hcx, hcy, headR, bcx, bcy, bonusR)) {
+          bonusActive = false;
+          score += 50 * (level + 1);
+          note(0, "C6", 0.1);
+          note(1, "E6", 0.08);
+        }
       }
     }
 
-    // Bonus timer
     if (bonusActive) {
       bonusTimer--;
       if (bonusTimer <= 0) bonusActive = false;
@@ -631,111 +613,71 @@
   }
 
   function drawMaze() {
-    // Draw maze walls
     for (let y = 0; y < MAZE_H; y++) {
       for (let x = 0; x < MAZE_W; x++) {
         if (maze[y][x] === 1) {
-          const px = MAZE_OX + x * 8;
-          const py = MAZE_OY + y * 8;
-          // Simple wall tile — use colored rectangles for speed
-          rectf(px, py, 8, 8, 0);
-          // Check neighbors for wall drawing style
-          const hasTop = y > 0 && maze[y-1][x] === 1;
-          const hasBot = y < MAZE_H-1 && maze[y+1][x] === 1;
-          const hasLeft = x > 0 && maze[y][x-1] === 1;
-          const hasRight = x < MAZE_W-1 && maze[y][x+1] === 1;
-
-          // Draw a beveled wall block
-          rectf(px+1, py+1, 6, 6, 1);
-          if (hasTop) rectf(px+1, py, 6, 2, 1);
-          if (hasBot) rectf(px+1, py+6, 6, 2, 1);
-          if (hasLeft) rectf(px, py+1, 2, 6, 1);
-          if (hasRight) rectf(px+6, py+1, 2, 6, 1);
-          // Highlight edge
-          pix(px+1, py+1, 2);
+          const px = MAZE_OX + x * TILE;
+          const py = MAZE_OY + y * TILE;
+          sprT(1, px, py);
         }
       }
     }
   }
 
   function drawSnake() {
-    // Draw snake from tail to head
     for (let i = snake.length - 1; i >= 0; i--) {
       const seg = snake[i];
-      const px = MAZE_OX + seg.x * 8;
-      const py = MAZE_OY + seg.y * 8;
+      const px = MAZE_OX + seg.x * TILE;
+      const py = MAZE_OY + seg.y * TILE;
 
       if (i === 0) {
-        // Head — determine direction for sprite
-        const c = 3; // bright
-        if (dir === 0) { // up
-          rectf(px+1, py, 6, 7, c);
-          rectf(px+2, py, 4, 8, c);
-          pix(px+2, py+1, 0); pix(px+5, py+1, 0); // eyes
-        } else if (dir === 2) { // down
-          rectf(px+1, py+1, 6, 7, c);
-          rectf(px+2, py, 4, 8, c);
-          pix(px+2, py+6, 0); pix(px+5, py+6, 0);
-        } else if (dir === 1) { // right
-          rectf(px+1, py+1, 7, 6, c);
-          rectf(px, py+2, 8, 4, c);
-          pix(px+6, py+2, 0); pix(px+6, py+5, 0);
-        } else { // left
-          rectf(px, py+1, 7, 6, c);
-          rectf(px, py+2, 8, 4, c);
-          pix(px+1, py+2, 0); pix(px+1, py+5, 0);
-        }
+        // Head -- pick sprite by direction
+        if (dir === 0) sprT(2, px, py);            // up
+        else if (dir === 2) sprT(2, px, py, false, true); // down (flip Y)
+        else if (dir === 1) sprT(6, px, py);        // right
+        else sprT(6, px, py, true, false);           // left (flip X)
+        // Debug rect for head hitbox
+        dbg(px, py, TILE, TILE);
       } else if (i === snake.length - 1) {
-        // Tail
-        rectf(px+2, py+2, 4, 4, 2);
+        sprT(4, px, py);
       } else {
-        // Body
-        rectf(px+1, py+1, 6, 6, 2);
-        rectf(px+2, py+2, 4, 4, 3);
+        sprT(3, px, py);
       }
     }
   }
 
   function drawHUD() {
-    // Top bar background
-    rectf(0, 0, W, 14, 0);
-    line(0, 14, W, 14, 1);
+    // Top bar
+    rectf(0, 0, W, 16, 0);
+    line(0, 15, W, 15, 1);
 
-    // Score
     text("SCORE " + String(score).padStart(6, "0"), 4, HUD_Y, 3);
+    text("LV" + String(level + 1).padStart(2, "0"), 80, HUD_Y, 2);
+    text("FOOD " + String(foodTotal - foodEaten).padStart(2, "0") + "/" + String(foodTotal).padStart(2, "0"), 110, HUD_Y, 2);
 
-    // Level
-    text("LV" + String(level+1).padStart(2, "0"), 70, HUD_Y, 2);
-
-    // Pellets remaining
-    text("FOOD " + String(foodTotal - foodEaten).padStart(2, "0") + "/" + String(foodTotal).padStart(2, "0"), 96, HUD_Y, 2);
-
-    // Lives
     for (let i = 0; i < lives; i++) {
-      sprT(8, 200 + i * 10, HUD_Y - 1);
+      sprT(8, 210 + i * 18, HUD_Y - 2);
     }
 
-    // Hi score
-    text("HI " + String(hiScore).padStart(6, "0"), 272, HUD_Y, 1);
+    text("HI " + String(hiScore).padStart(6, "0"), 270, HUD_Y, 1);
 
-    // Timer bar at bottom
-    rectf(0, H-12, W, 12, 0);
-    line(0, H-12, W, H-12, 1);
+    // Bottom bar
+    const botY = MAZE_OY + MAZE_H * TILE; // 16 + 13*16 = 224
+    rectf(0, botY, W, H - botY, 0);
+    line(0, botY, W, botY, 1);
 
-    // Timer text
-    const tCol = timeLeft <= 10 ? ((flr(Mono.frame/8) % 2 === 0) ? 3 : 1) : 2;
-    text("TIME " + String(timeLeft).padStart(3, "0"), 8, H-10, tCol);
+    const tCol = timeLeft <= 10 ? ((flr(Mono.frame / 8) % 2 === 0) ? 3 : 1) : 2;
+    text("TIME " + String(timeLeft).padStart(3, "0"), 8, botY + 4, tCol);
 
-    // Timer bar
-    const barW = 267;
-    const barX = 40;
-    const barY = H - 9;
-    const maxTime = 60 + level * 10 > 120 ? 120 : 60 + level * 10;
-    const fill = Math.floor((timeLeft / maxTime) * barW);
-    rect(barX, barY, barW, 5, 1);
+    const barW = 255;
+    const barX = 50;
+    const barY = botY + 4;
+    const maxTime = min(120, 60 + level * 10);
+    const fill = flr((timeLeft / maxTime) * barW);
+    rect(barX, barY, barW, 7, 1);
     if (fill > 0) {
       const fc = timeLeft <= 10 ? 1 : (timeLeft <= 20 ? 2 : 3);
-      rectf(barX+1, barY+1, fill-2, 3, fc);
+      rectf(barX + 1, barY + 1, fill - 2, 5, fc);
     }
   }
 
@@ -745,23 +687,29 @@
 
     // Draw food
     if (foodX >= 0) {
-      const fpx = MAZE_OX + foodX * 8;
-      const fpy = MAZE_OY + foodY * 8;
-      // Pulsing food
+      const fpx = MAZE_OX + foodX * TILE;
+      const fpy = MAZE_OY + foodY * TILE;
       const pulse = sin(Mono.frame * 0.15) * 0.5 + 0.5;
-      const fc = pulse > 0.5 ? 3 : 2;
-      circf(fpx+4, fpy+4, 3, fc);
-      pix(fpx+3, fpy+2, 3);
+      if (pulse > 0.5) {
+        sprT(5, fpx, fpy);
+      } else {
+        // Dimmer version: draw as circle
+        circf(tileCX(foodX), tileCY(foodY), 5, 2);
+        pix(tileCX(foodX) - 1, tileCY(foodY) - 2, 3);
+      }
+      // Debug circle for food hitbox
+      dbgC(tileCX(foodX), tileCY(foodY), 6);
     }
 
     // Draw bonus food
     if (bonusActive) {
-      const bpx = MAZE_OX + bonusX * 8;
-      const bpy = MAZE_OY + bonusY * 8;
-      const blink = flr(Mono.frame / 4) % 2;
-      if (bonusTimer > 60 || blink === 0) {
+      const bpx = MAZE_OX + bonusX * TILE;
+      const bpy = MAZE_OY + bonusY * TILE;
+      const blinkV = flr(Mono.frame / 4) % 2;
+      if (bonusTimer > 60 || blinkV === 0) {
         sprT(7, bpx, bpy);
       }
+      dbgC(tileCX(bonusX), tileCY(bonusY), 7);
     }
 
     drawSnake();
@@ -771,9 +719,7 @@
   function updateReady() {
     stateTimer--;
     readyBlink++;
-    if (stateTimer <= 0) {
-      subState = SUB_PLAY;
-    }
+    if (stateTimer <= 0) subState = SUB_PLAY;
   }
 
   function drawReady() {
@@ -782,12 +728,11 @@
     drawSnake();
     drawHUD();
 
-    // "READY" overlay
     const blink = flr(readyBlink / 10) % 2 === 0 ? 3 : 2;
-    rectf((W-80)/2, (H-30)/2, 80, 30, 0);
-    rect((W-80)/2, (H-30)/2, 80, 30, blink);
-    text("READY!", (W - 6*5)/2, H/2 - 3, blink);
-    text("LV " + String(level+1), (W - 4*5)/2, H/2 + 8, 2);
+    rectf(flr((W - 80) / 2), flr((H - 30) / 2), 80, 30, 0);
+    rect(flr((W - 80) / 2), flr((H - 30) / 2), 80, 30, blink);
+    text("READY!", flr((W - 6 * 5) / 2), flr(H / 2) - 3, blink);
+    text("LV " + String(level + 1), flr((W - 4 * 5) / 2), flr(H / 2) + 8, 2);
   }
 
   function updateDying() {
@@ -796,11 +741,9 @@
     if (stateTimer <= 0) {
       lives--;
       if (lives <= 0) {
-        Mono.go(GAMEOVER); return;
-        stateTimer = 120;
         if (score > hiScore) hiScore = score;
+        Mono.go(GAMEOVER); return;
       } else {
-        // Restart level
         initLevel();
         subState = SUB_READY;
         stateTimer = 60;
@@ -813,24 +756,20 @@
     drawMaze();
     drawHUD();
 
-    // Flash snake and show explosion
     const head = snake[0];
-    const hpx = MAZE_OX + head.x * 8;
-    const hpy = MAZE_OY + head.y * 8;
+    const hpx = MAZE_OX + head.x * TILE + TILE / 2;
+    const hpy = MAZE_OY + head.y * TILE + TILE / 2;
 
-    if (flr(deathFrame / 3) % 2 === 0) {
-      drawSnake();
-    }
+    if (flr(deathFrame / 3) % 2 === 0) drawSnake();
 
-    // Explosion at head
     if (deathFrame < 15) {
-      const r = 2 + deathFrame;
-      circ(hpx+4, hpy+4, r, 3);
-      circ(hpx+4, hpy+4, r-2, 2);
+      const r = 3 + deathFrame;
+      circ(hpx, hpy, r, 3);
+      circ(hpx, hpy, _max(1, r - 3), 2);
     } else if (deathFrame < 30) {
-      const r = 17 - (deathFrame - 15);
-      circ(hpx+4, hpy+4, r, 2);
-      circ(hpx+4, hpy+4, r-1, 1);
+      const r = 18 - (deathFrame - 15);
+      circ(hpx, hpy, r, 2);
+      circ(hpx, hpy, _max(1, r - 2), 1);
     }
   }
 
@@ -842,7 +781,7 @@
       initLevel();
       subState = SUB_READY;
       stateTimer = 60;
-      Mono.go(PLAY); return;
+      Mono.go(PLAY);
     }
   }
 
@@ -852,23 +791,21 @@
     drawSnake();
     drawHUD();
 
-    // Celebration overlay
     const blink = flr(levelUpAnim / 8) % 2 === 0 ? 3 : 2;
-    rectf((W-107)/2, (H-45)/2, 107, 45, 0);
-    rect((W-107)/2, (H-45)/2, 107, 45, blink);
+    rectf(flr((W - 120) / 2), flr((H - 45) / 2), 120, 45, 0);
+    rect(flr((W - 120) / 2), flr((H - 45) / 2), 120, 45, blink);
 
-    text("MAZE CLEAR!", (W - 11*5)/2, H/2 - 14, 3);
-    text("TIME BONUS +" + String(timeLeft * 5), (W - 18*5)/2, H/2 - 3, 2);
-    text("NEXT MAZE...", (W - 12*5)/2, H/2 + 9, blink);
+    text("MAZE CLEAR!", flr((W - 11 * 5) / 2), flr(H / 2) - 14, 3);
+    text("TIME BONUS +" + String(timeLeft * 5), flr((W - 18 * 5) / 2), flr(H / 2) - 3, 2);
+    text("NEXT MAZE...", flr((W - 12 * 5) / 2), flr(H / 2) + 9, blink);
 
-    // Sparkle particles
     for (let i = 0; i < 6; i++) {
-      const angle = (levelUpAnim * 0.05 + i * 1.047);
-      const r = 27 + sin(levelUpAnim * 0.1 + i) * 10;
-      const px = W/2 + Math.floor(cos(angle) * r);
-      const py = H/2 + Math.floor(sin(angle) * r);
-      pix(px, py, 3);
-      pix(px+1, py, 2);
+      const angle = levelUpAnim * 0.05 + i * 1.047;
+      const r = 30 + flr(sin(levelUpAnim * 0.1 + i) * 12);
+      const ppx = flr(W / 2 + cos(angle) * r);
+      const ppy = flr(H / 2 + sin(angle) * r);
+      pix(ppx, ppy, 3);
+      pix(ppx + 1, ppy, 2);
     }
   }
 
@@ -876,7 +813,7 @@
     stateTimer--;
     titleAnim++;
     if (stateTimer <= 0 && (btnp("start") || btnp("a"))) {
-      Mono.go(TITLE); return;
+      Mono.go(TITLE);
     }
   }
 
@@ -885,19 +822,18 @@
     drawMaze();
     drawHUD();
 
-    // Game Over overlay
-    rectf((W-120)/2, (H-60)/2, 120, 60, 0);
-    rect((W-120)/2, (H-60)/2, 120, 60, 1);
-    rect((W-118)/2, (H-58)/2, 116, 56, 2);
+    rectf(flr((W - 120) / 2), flr((H - 60) / 2), 120, 60, 0);
+    rect(flr((W - 120) / 2), flr((H - 60) / 2), 120, 60, 1);
+    rect(flr((W - 118) / 2), flr((H - 58) / 2), 116, 56, 2);
 
     const blink = flr(titleAnim / 15) % 2 === 0 ? 3 : 2;
-    text("GAME OVER", (W - 9*5)/2, H/2 - 19, blink);
-    text("SCORE " + String(score).padStart(6, "0"), (W - 12*5)/2, H/2 - 6, 3);
-    text("HI    " + String(hiScore).padStart(6, "0"), (W - 12*5)/2, H/2 + 4, 2);
+    text("GAME OVER", flr((W - 9 * 5) / 2), flr(H / 2) - 19, blink);
+    text("SCORE " + String(score).padStart(6, "0"), flr((W - 12 * 5) / 2), flr(H / 2) - 6, 3);
+    text("HI    " + String(hiScore).padStart(6, "0"), flr((W - 12 * 5) / 2), flr(H / 2) + 4, 2);
 
     if (stateTimer <= 0) {
       const blink2 = flr(titleAnim / 20) % 2 === 0 ? 3 : 1;
-      text("PRESS START", (W - 11*5)/2, H/2 + 16, blink2);
+      text("PRESS START", flr((W - 11 * 5) / 2), flr(H / 2) + 16, blink2);
     }
   }
 

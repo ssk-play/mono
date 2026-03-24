@@ -20,18 +20,42 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC, overlap } = Mono;
+
+  // --- 8->16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Circle collision helper ---
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    return Math.sqrt(dx * dx + dy * dy) < r1 + r2;
+  }
+
+  // --- Font metrics ---
+  const FONT_W = 4, FONT_H = 7;
 
   // --- Grid constants ---
-  // Arena: 13 columns x 15 rows of 12x12 cells = 156x180
+  // Arena: 13 columns x 13 rows of 16x16 cells = 208x208
   // Centered in 320x240 with room for HUD
   const COLS = 13;
-  const ROWS = 15;
-  const TILE = 12;
-  const ARENA_X = flr((W - COLS * TILE) / 2);
-  const ARENA_Y = 15;
-  const ARENA_W = COLS * TILE;
-  const ARENA_H = ROWS * TILE;
+  const ROWS = 13;
+  const TILE = 16;
+  const ARENA_W = COLS * TILE;   // 208
+  const ARENA_H = ROWS * TILE;   // 208
+  const ARENA_X = flr((W - ARENA_W) / 2);  // 56
+  const ARENA_Y = 14;
+  const WALL_T = 4;  // wall thickness (visual only)
 
   // Cell types
   const EMPTY = 0;
@@ -39,9 +63,10 @@
   const DIAMOND = 2;
   const EGG = 3;
 
-  // --- Sprites ---
+  // --- Sprites (all 16x16 via upscale) ---
+
   // 1: Pengo facing down frame 1
-  defSprite(1,
+  defSprite(1, up(
     "00333300" +
     "03333330" +
     "33233230" +
@@ -50,9 +75,9 @@
     "03322330" +
     "00333300" +
     "00300300"
-  );
+  ));
   // 2: Pengo facing down frame 2
-  defSprite(2,
+  defSprite(2, up(
     "00333300" +
     "03333330" +
     "33233230" +
@@ -61,9 +86,9 @@
     "03322330" +
     "00333300" +
     "03000030"
-  );
+  ));
   // 3: Pengo facing up frame 1
-  defSprite(3,
+  defSprite(3, up(
     "00333300" +
     "03333330" +
     "33333330" +
@@ -72,9 +97,9 @@
     "03333330" +
     "00333300" +
     "00300300"
-  );
+  ));
   // 4: Pengo facing up frame 2
-  defSprite(4,
+  defSprite(4, up(
     "00333300" +
     "03333330" +
     "33333330" +
@@ -83,9 +108,9 @@
     "03333330" +
     "00333300" +
     "03000030"
-  );
+  ));
   // 5: Pengo facing right frame 1
-  defSprite(5,
+  defSprite(5, up(
     "00333300" +
     "03333300" +
     "33233300" +
@@ -94,9 +119,9 @@
     "03322330" +
     "00333300" +
     "00300300"
-  );
+  ));
   // 6: Pengo facing right frame 2
-  defSprite(6,
+  defSprite(6, up(
     "00333300" +
     "03333300" +
     "33233300" +
@@ -105,9 +130,9 @@
     "03322330" +
     "00333300" +
     "03000030"
-  );
-  // 10: Ice block top-left
-  defSprite(10,
+  ));
+  // 10: Ice block
+  defSprite(10, up(
     "22222222" +
     "21111112" +
     "21222212" +
@@ -115,43 +140,10 @@
     "21222212" +
     "21222212" +
     "21111112" +
-    "21222212"
-  );
-  // 11: Ice block top-right
-  defSprite(11,
-    "22222222" +
-    "21111112" +
-    "21222212" +
-    "21222212" +
-    "21222212" +
-    "21222212" +
-    "21111112" +
-    "21222212"
-  );
-  // 12: Ice block bottom-left
-  defSprite(12,
-    "21222212" +
-    "21111112" +
-    "21222212" +
-    "21222212" +
-    "21222212" +
-    "21222212" +
-    "21111112" +
     "22222222"
-  );
-  // 13: Ice block bottom-right
-  defSprite(13,
-    "21222212" +
-    "21111112" +
-    "21222212" +
-    "21222212" +
-    "21222212" +
-    "21222212" +
-    "21111112" +
-    "22222222"
-  );
-  // 14: Diamond block top-left
-  defSprite(14,
+  ));
+  // 14: Diamond block
+  defSprite(14, up(
     "33333333" +
     "32222223" +
     "32333323" +
@@ -159,43 +151,10 @@
     "32333323" +
     "32333323" +
     "32222223" +
-    "32333323"
-  );
-  // 15: Diamond block top-right
-  defSprite(15,
-    "33333333" +
-    "32222223" +
-    "32333323" +
-    "32331323" +
-    "32333323" +
-    "32333323" +
-    "32222223" +
-    "32333323"
-  );
-  // 16: Diamond block bottom-left
-  defSprite(16,
-    "32333323" +
-    "32222223" +
-    "32333323" +
-    "32333323" +
-    "32313323" +
-    "32333323" +
-    "32222223" +
     "33333333"
-  );
-  // 17: Diamond block bottom-right
-  defSprite(17,
-    "32333323" +
-    "32222223" +
-    "32333323" +
-    "32333323" +
-    "32331323" +
-    "32333323" +
-    "32222223" +
-    "33333333"
-  );
+  ));
   // 20: Sno-Bee enemy frame 1
-  defSprite(20,
+  defSprite(20, up(
     "01111100" +
     "13333310" +
     "13033030" +
@@ -204,9 +163,9 @@
     "01311310" +
     "00111100" +
     "01000010"
-  );
+  ));
   // 21: Sno-Bee enemy frame 2
-  defSprite(21,
+  defSprite(21, up(
     "01111100" +
     "13333310" +
     "13033030" +
@@ -215,9 +174,9 @@
     "01311310" +
     "00111100" +
     "10000001"
-  );
+  ));
   // 22: Sno-Bee stunned
-  defSprite(22,
+  defSprite(22, up(
     "01111100" +
     "13333310" +
     "10030030" +
@@ -226,9 +185,9 @@
     "01111110" +
     "00111100" +
     "00100100"
-  );
+  ));
   // 25: Explosion frame 1
-  defSprite(25,
+  defSprite(25, up(
     "20000020" +
     "02000200" +
     "00222200" +
@@ -237,9 +196,9 @@
     "02000200" +
     "20000020" +
     "00000000"
-  );
+  ));
   // 26: Explosion frame 2
-  defSprite(26,
+  defSprite(26, up(
     "10001001" +
     "00100010" +
     "01000100" +
@@ -248,9 +207,9 @@
     "00100010" +
     "10001001" +
     "00000000"
-  );
+  ));
   // 31: Pengo push frame
-  defSprite(31,
+  defSprite(31, up(
     "00333300" +
     "03333330" +
     "33233230" +
@@ -259,9 +218,9 @@
     "33322330" +
     "00333300" +
     "00300300"
-  );
-  // 32: Life icon
-  defSprite(32,
+  ));
+  // 32: Life icon (small, rendered at native 16x16 but visually small)
+  defSprite(32, up(
     "00000000" +
     "00333300" +
     "03233230" +
@@ -270,9 +229,9 @@
     "00333300" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 33: Egg crack
-  defSprite(33,
+  defSprite(33, up(
     "22222222" +
     "21111112" +
     "21200212" +
@@ -281,7 +240,7 @@
     "21022012" +
     "21111112" +
     "22222222"
-  );
+  ));
 
   // --- Game state ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -403,7 +362,12 @@
 
   function cellToX(cx) { return ARENA_X + cx * TILE; }
   function cellToY(cy) { return ARENA_Y + cy * TILE; }
+  function cellCenterX(cx) { return ARENA_X + cx * TILE + TILE / 2; }
+  function cellCenterY(cy) { return ARENA_Y + cy * TILE + TILE / 2; }
   function inBounds(cx, cy) { return cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS; }
+
+  // Collision radius for circle-based checks (characters fill ~10px of 16px tile)
+  const CHAR_R = 6;
 
   const DX = [0, 0, -1, 1];
   const DY = [1, -1, 0, 0];
@@ -448,9 +412,18 @@
     let crushed = [];
 
     while (inBounds(nx, ny) && grid[nx][ny] === EMPTY) {
-      // Check enemies in path
+      // Check enemies in path — use circle collision for sliding block vs enemy
+      const blockCX = cellCenterX(nx);
+      const blockCY = cellCenterY(ny);
       for (const e of enemies) {
-        if (e.alive && e.cx === nx && e.cy === ny && e.stunTimer <= 0) crushed.push(e);
+        if (e.alive && e.stunTimer <= 0) {
+          const eCX = cellCenterX(e.cx);
+          const eCY = cellCenterY(e.cy);
+          if (circCollide(blockCX, blockCY, TILE / 2, eCX, eCY, CHAR_R)) {
+            crushed.push(e);
+            dbgC(eCX, eCY, CHAR_R);
+          }
+        }
       }
       nx += dx;
       ny += dy;
@@ -469,7 +442,7 @@
     // Crush enemies
     for (const e of crushed) {
       e.alive = false;
-      addExplosion(cellToX(e.cx) + 6, cellToY(e.cy) + 6);
+      addExplosion(cellCenterX(e.cx), cellCenterY(e.cy));
       score += 400;
       crushSound();
       bonusPopups.push({ x: cellToX(e.cx), y: cellToY(e.cy), text: "400", timer: 40 });
@@ -478,7 +451,7 @@
     const hitWall = !inBounds(nx, ny);
     if (hitWall) {
       // Block destroyed by wall
-      addExplosion(cellToX(finalX) + 6, cellToY(finalY) + 6);
+      addExplosion(cellCenterX(finalX), cellCenterY(finalY));
       breakBlockSound();
     } else {
       // Block stops
@@ -564,7 +537,7 @@
     if (deathTimer > 0) return;
     lives--;
     deathTimer = 60;
-    addExplosion(cellToX(pengo.cx) + 6, cellToY(pengo.cy) + 6);
+    addExplosion(cellCenterX(pengo.cx), cellCenterY(pengo.cy));
     deathSound();
   }
 
@@ -669,7 +642,7 @@
           if (grid[tx][ty] !== DIAMOND) {
             grid[tx][ty] = EMPTY;
             hatchTimers = hatchTimers.filter(h => h.cx !== tx || h.cy !== ty);
-            addExplosion(cellToX(tx) + 6, cellToY(ty) + 6);
+            addExplosion(cellCenterX(tx), cellCenterY(ty));
             breakBlockSound();
             score += 30;
           } else {
@@ -685,9 +658,9 @@
       const sb = slidingBlocks[i];
       sb.x += dirDx(sb.dir) * sb.speed;
       sb.y += dirDy(sb.dir) * sb.speed;
-      const dx = _abs(sb.toX - sb.x);
-      const dy = _abs(sb.toY - sb.y);
-      if (dx <= sb.speed && dy <= sb.speed) slidingBlocks.splice(i, 1);
+      const ddx = _abs(sb.toX - sb.x);
+      const ddy = _abs(sb.toY - sb.y);
+      if (ddx <= sb.speed && ddy <= sb.speed) slidingBlocks.splice(i, 1);
     }
 
     // --- Egg hatching ---
@@ -722,7 +695,7 @@
           if (inBounds(bx, by) && grid[bx][by] !== EMPTY && grid[bx][by] !== DIAMOND) {
             grid[bx][by] = EMPTY;
             hatchTimers = hatchTimers.filter(h => h.cx !== bx || h.cy !== by);
-            addExplosion(cellToX(bx) + 6, cellToY(by) + 6);
+            addExplosion(cellCenterX(bx), cellCenterY(by));
             breakBlockSound();
           }
           e.targetBlock = null;
@@ -777,24 +750,38 @@
       }
     }
 
-    // Enemy-pengo collision
+    // Enemy-pengo collision (circle-based)
     if (pengo.invincible <= 0) {
+      const pCX = cellCenterX(pengo.cx);
+      const pCY = cellCenterY(pengo.cy);
+      dbgC(pCX, pCY, CHAR_R);  // debug: pengo hitbox
       for (const e of enemies) {
-        if (e.alive && e.stunTimer <= 0 && e.cx === pengo.cx && e.cy === pengo.cy) {
+        if (!e.alive || e.stunTimer > 0) continue;
+        const eCX = cellCenterX(e.cx);
+        const eCY = cellCenterY(e.cy);
+        dbgC(eCX, eCY, CHAR_R);  // debug: enemy hitbox
+        if (circCollide(pCX, pCY, CHAR_R, eCX, eCY, CHAR_R)) {
           killPengo();
           break;
         }
       }
     }
 
-    // Stomp stunned enemies
-    for (const e of enemies) {
-      if (e.alive && e.stunTimer > 0 && e.cx === pengo.cx && e.cy === pengo.cy) {
-        e.alive = false;
-        addExplosion(cellToX(e.cx) + 6, cellToY(e.cy) + 6);
-        score += 500;
-        crushSound();
-        bonusPopups.push({ x: cellToX(e.cx), y: cellToY(e.cy), text: "500", timer: 40 });
+    // Stomp stunned enemies (circle-based)
+    {
+      const pCX = cellCenterX(pengo.cx);
+      const pCY = cellCenterY(pengo.cy);
+      for (const e of enemies) {
+        if (!e.alive || e.stunTimer <= 0) continue;
+        const eCX = cellCenterX(e.cx);
+        const eCY = cellCenterY(e.cy);
+        if (circCollide(pCX, pCY, CHAR_R, eCX, eCY, CHAR_R)) {
+          e.alive = false;
+          addExplosion(cellCenterX(e.cx), cellCenterY(e.cy));
+          score += 500;
+          crushSound();
+          bonusPopups.push({ x: cellToX(e.cx), y: cellToY(e.cy), text: "500", timer: 40 });
+        }
       }
     }
 
@@ -814,7 +801,6 @@
   function drawPlayScene() {
     cls(0);
 
-    // --- Play state ---
     const shk = wallShakeTimer > 0 ? flr(sin(wallShakeTimer * 2) * 2) : 0;
     const shX = (wallShakeDir >= 2) ? shk : 0;
     const shY = (wallShakeDir < 2) ? shk : 0;
@@ -822,33 +808,35 @@
     // Arena background
     rectf(ARENA_X - 1, ARENA_Y - 1, ARENA_W + 2, ARENA_H + 2, 0);
 
-    // Walls
+    // Walls (thin border style for 16x16 layout)
     const wc = wallShakeTimer > 0 && flr(Mono.frame / 2) % 2 === 0 ? 2 : 1;
-    // Top & bottom walls
-    rectf(ARENA_X - TILE + shX, ARENA_Y - TILE + shY, ARENA_W + TILE * 2, TILE, wc);
-    rectf(ARENA_X - TILE + shX, ARENA_Y + ARENA_H + shY, ARENA_W + TILE * 2, TILE, wc);
-    // Left & right walls
-    rectf(ARENA_X - TILE + shX, ARENA_Y + shY, TILE, ARENA_H, wc);
-    rectf(ARENA_X + ARENA_W + shX, ARENA_Y + shY, TILE, ARENA_H, wc);
+    // Top wall
+    rectf(ARENA_X - WALL_T + shX, ARENA_Y - WALL_T + shY, ARENA_W + WALL_T * 2, WALL_T, wc);
+    // Bottom wall
+    rectf(ARENA_X - WALL_T + shX, ARENA_Y + ARENA_H + shY, ARENA_W + WALL_T * 2, WALL_T, wc);
+    // Left wall
+    rectf(ARENA_X - WALL_T + shX, ARENA_Y + shY, WALL_T, ARENA_H, wc);
+    // Right wall
+    rectf(ARENA_X + ARENA_W + shX, ARENA_Y + shY, WALL_T, ARENA_H, wc);
     // Wall detail lines
-    for (let i = 0; i <= COLS + 1; i++) {
-      const wx = ARENA_X - TILE + i * TILE + shX;
-      line(wx, ARENA_Y - TILE + shY, wx, ARENA_Y + shY - 1, 0);
-      line(wx, ARENA_Y + ARENA_H + shY, wx, ARENA_Y + ARENA_H + TILE + shY, 0);
+    for (let i = 0; i <= COLS; i++) {
+      const wx = ARENA_X + i * TILE + shX;
+      line(wx, ARENA_Y - WALL_T + shY, wx, ARENA_Y + shY - 1, 0);
+      line(wx, ARENA_Y + ARENA_H + shY, wx, ARENA_Y + ARENA_H + WALL_T + shY, 0);
     }
     for (let j = 0; j <= ROWS; j++) {
       const wy = ARENA_Y + j * TILE + shY;
-      line(ARENA_X - TILE + shX, wy, ARENA_X + shX - 1, wy, 0);
-      line(ARENA_X + ARENA_W + shX, wy, ARENA_X + ARENA_W + TILE + shX, wy, 0);
+      line(ARENA_X - WALL_T + shX, wy, ARENA_X + shX - 1, wy, 0);
+      line(ARENA_X + ARENA_W + shX, wy, ARENA_X + ARENA_W + WALL_T + shX, wy, 0);
     }
     // Wall inner border
     rect(ARENA_X - 1 + shX, ARENA_Y - 1 + shY, ARENA_W + 2, ARENA_H + 2, wc === 2 ? 3 : 2);
 
-    // Grid cells
+    // Grid cells — native 16x16 sprites
     for (let c = 0; c < COLS; c++) {
       for (let r = 0; r < ROWS; r++) {
-        const x = ARENA_X + c * TILE + shX;
-        const y = ARENA_Y + r * TILE + shY;
+        const x = cellToX(c) + shX;
+        const y = cellToY(r) + shY;
         const cell = grid[c][r];
         if (cell === ICE || cell === EGG) {
           let hatching = false;
@@ -857,36 +845,39 @@
             if (ht && ht.hatching) hatching = true;
           }
           if (hatching && flr(Mono.frame / 4) % 2 === 0) {
-            drawBlock12(x, y, 33);
+            spr(33, x, y);
           } else {
-            drawBlock12(x, y, 10);
+            spr(10, x, y);
           }
+          dbg(x, y, TILE, TILE);  // debug: block hitbox
         } else if (cell === DIAMOND) {
-          drawBlock12(x, y, 14);
+          spr(14, x, y);
+          dbg(x, y, TILE, TILE);  // debug: diamond hitbox
         }
       }
     }
 
     // Sliding blocks
     for (const sb of slidingBlocks) {
-      const sprBase = sb.type === DIAMOND ? 14 : 10;
-      drawBlock12(flr(sb.x) + shX, flr(sb.y) + shY, sprBase);
+      const sprId = sb.type === DIAMOND ? 14 : 10;
+      spr(sprId, flr(sb.x) + shX, flr(sb.y) + shY);
     }
 
-    // Enemies
+    // Enemies — native 16x16 sprites
     for (const e of enemies) {
       if (!e.alive) continue;
       const ex = cellToX(e.cx) + shX;
       const ey = cellToY(e.cy) + shY;
       if (e.stunTimer > 0) {
         if (e.stunTimer < 30 && flr(Mono.frame / 4) % 2 === 0) continue;
-        draw12(ex, ey, 22, false);
+        spr(22, ex, ey);
       } else {
-        draw12(ex, ey, e.animFrame === 0 ? 20 : 21, false);
+        spr(e.animFrame === 0 ? 20 : 21, ex, ey);
       }
+      dbgC(cellCenterX(e.cx), cellCenterY(e.cy), CHAR_R);  // debug: enemy circle
     }
 
-    // Pengo
+    // Pengo — native 16x16 sprites
     if (deathTimer <= 0) {
       if (pengo.invincible <= 0 || flr(Mono.frame / 3) % 2 === 0) {
         const px = cellToX(pengo.cx) + shX;
@@ -901,15 +892,15 @@
         } else {
           sprId = pengo.animFrame === 0 ? 5 : 6;
         }
-        draw12(px, py, sprId, pengo.dir === 2);
+        spr(sprId, px, py, pengo.dir === 2);
+        dbgC(cellCenterX(pengo.cx), cellCenterY(pengo.cy), CHAR_R);  // debug: pengo circle
       }
     }
 
-    // Explosions
+    // Explosions — native 16x16 sprites
     for (const e of explosions) {
       const sprId = e.timer > 6 ? 25 : 26;
-      // Draw at 16x16
-      draw12(flr(e.x) - 6, flr(e.y) - 6, sprId, false);
+      spr(sprId, flr(e.x) - TILE / 2, flr(e.y) - TILE / 2);
     }
 
     // Particles
@@ -940,62 +931,24 @@
     rectf(0, 0, W, 12, 0);
     text("SCORE:" + score, 3, 3, 3);
     text("LV:" + level, W / 2 - 10, 3, 2);
-    for (let i = 0; i < lives; i++) spr(32, W - 30 + i * 10, 2);
+    for (let i = 0; i < lives; i++) spr(32, W - 50 + i * 18, 0);
 
-    // HUD bottom
-    rectf(0, H - 8, W, 8, 0);
+    // HUD bottom (below arena + wall)
+    const hudY = ARENA_Y + ARENA_H + WALL_T + 2;
+    rectf(0, hudY, W, H - hudY, 0);
     const ac = enemies.filter(e => e.alive).length;
-    text("ENEMIES:" + ac + "  EGGS:" + hatchTimers.length, 3, H - 7, 1);
-  }
-
-  // Draw an 8x8 sprite scaled to 12x12
-  function draw12(x, y, sprId, flipX) {
-    const s = sprites[sprId];
-    if (!s) return;
-    x = flr(x); y = flr(y);
-    for (let dy = 0; dy < 12; dy++) {
-      const sy = flr(dy * 8 / 12);
-      for (let dx = 0; dx < 12; dx++) {
-        const srcX = flr(dx * 8 / 12);
-        const sx = flipX ? 7 - srcX : srcX;
-        const c = s[sy * 8 + sx];
-        const fx = x + dx, fy = y + dy;
-        if (fx >= 0 && fx < W && fy >= 0 && fy < H)
-          buf32[fy * W + fx] = COLOR_U32[c];
-      }
-    }
-  }
-
-  // Draw a 12x12 block from 4 quadrant sprites (8x8 each) scaled down
-  function drawBlock12(x, y, sprBase) {
-    x = flr(x); y = flr(y);
-    for (let dy = 0; dy < 12; dy++) {
-      const srcY = flr(dy * 16 / 12);
-      const qy = srcY < 8 ? 0 : 1;
-      const sy = srcY - qy * 8;
-      for (let dx = 0; dx < 12; dx++) {
-        const srcX = flr(dx * 16 / 12);
-        const qx = srcX < 8 ? 0 : 1;
-        const sx = srcX - qx * 8;
-        const sid = sprBase + qy * 2 + qx;
-        const s = sprites[sid];
-        if (!s) continue;
-        const c = s[sy * 8 + sx];
-        const fx = x + dx, fy = y + dy;
-        if (fx >= 0 && fx < W && fy >= 0 && fy < H)
-          buf32[fy * W + fx] = COLOR_U32[c];
-      }
-    }
+    text("ENEMIES:" + ac + "  EGGS:" + hatchTimers.length, 3, hudY + 2, 1);
   }
 
   function drawTitle() {
+    cls(0);
     // Background ice pattern
     for (let i = 0; i < 30; i++) {
       const bx = ((i * 43 + flr(Mono.frame * 0.2)) % (W + 24)) - 12;
       const by = ((i * 67) % (H + 24)) - 12;
-      rectf(bx, by, 10, 10, 1);
-      rect(bx + 1, by + 1, 8, 8, 0);
-      rect(bx + 2, by + 2, 6, 6, 1);
+      rectf(bx, by, 14, 14, 1);
+      rect(bx + 1, by + 1, 12, 12, 0);
+      rect(bx + 2, by + 2, 10, 10, 1);
     }
 
     const ty = 20 + sin(Mono.frame * 0.05) * 3;
@@ -1006,18 +959,18 @@
     text("PENGO", titleX, flr(ty), 3);
     rectf(titleX - 8, flr(ty) + 10, 40, 1, 2);
 
-    // Animated characters
+    // Animated characters — native 16x16
     const cx = W / 2;
     const anim = flr(Mono.frame / 10) % 2;
-    draw12(cx - 6, flr(ty) + 16, anim === 0 ? 1 : 2, false);
+    spr(anim === 0 ? 1 : 2, cx - 8, flr(ty) + 16);
 
     const ea = flr(Mono.frame / 12) % 2;
-    draw12(cx - 27, flr(ty) + 17 + sin(Mono.frame * 0.1) * 2, ea === 0 ? 20 : 21, false);
-    draw12(cx + 16, flr(ty) + 17 + sin(Mono.frame * 0.1 + 2) * 2, ea === 0 ? 21 : 20, false);
+    spr(ea === 0 ? 20 : 21, cx - 30, flr(ty) + 17 + flr(sin(Mono.frame * 0.1) * 2));
+    spr(ea === 0 ? 21 : 20, cx + 16, flr(ty) + 17 + flr(sin(Mono.frame * 0.1 + 2) * 2));
 
     // Diamond blocks flanking
-    drawBlock12(cx - 48, flr(ty) + 17, 14);
-    drawBlock12(cx + 37, flr(ty) + 17, 14);
+    spr(14, cx - 52, flr(ty) + 17);
+    spr(14, cx + 38, flr(ty) + 17);
 
     const startMsg = "PRESS START";
     const startX = W / 2 - flr((startMsg.length * (FONT_W + 1)) / 2);
@@ -1039,11 +992,12 @@
 
     const scMsg = "CRUSH:400  STUN:100  STOMP:500";
     text(scMsg, W / 2 - flr((scMsg.length * (FONT_W + 1)) / 2), 196, 1);
-    const verMsg = "MONO DEMO V0.1";
+    const verMsg = "MONO DEMO V0.2";
     text(verMsg, W / 2 - flr((verMsg.length * (FONT_W + 1)) / 2), 228, 1);
   }
 
   function drawGameOver() {
+    cls(0);
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
     // Draw remaining arena faded
@@ -1057,7 +1011,7 @@
     const lvMsg = "LEVEL: " + level;
     text(lvMsg, W / 2 - flr((lvMsg.length * (FONT_W + 1)) / 2), 111, 2);
     const cMsg = "PRESS START";
-    if (flr(Mono.frame / 20) % 2 === 0) text(cMsg, W / 2 - flr((cMsg.length * (FONT_W + 1)) / 2), 158, 3);
+    if (flr(Mono.frame / 20) % 2 === 0) text(cMsg, W / 2 - flr((cMsg.length * (FONT_W + 1)) / 2), 131, 3);
   }
 
   // --- Title Scene ---
@@ -1070,7 +1024,7 @@
         Mono.go(PLAY); return;
       }
     },
-    draw() { cls(0); drawTitle(); }
+    draw() { drawTitle(); }
   });
 
   // --- Play Scene ---
@@ -1088,9 +1042,9 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
-    draw() { cls(0); drawGameOver(); }
+    draw() { drawGameOver(); }
   });
 
   Mono.go(TITLE);

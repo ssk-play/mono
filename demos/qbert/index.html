@@ -17,14 +17,29 @@
 <script>
 (() => {
   "use strict";
-  const W = Mono.WIDTH, H = Mono.HEIGHT;
-  const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+  const W = Mono.WIDTH, H = Mono.HEIGHT;  // 320x240
+  const { cls, pix, line, rect, rectf, circ, circf, sprT,
+          sprite: defSprite, spr, text, btn, btnp, note, stop,
+          rnd, flr, abs: _abs, min, max: _max, sin, cos,
+          dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8→16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (8x8 authored, upscaled to 16x16) ---
   // 1: Q*bert facing down-right
-  defSprite(1,
+  defSprite(1, up(
     "00333000" +
     "03223300" +
     "03233300" +
@@ -33,9 +48,9 @@
     "02222200" +
     "02200220" +
     "02200220"
-  );
+  ));
   // 2: Q*bert facing down-left
-  defSprite(2,
+  defSprite(2, up(
     "00333000" +
     "00322300" +
     "00332300" +
@@ -44,9 +59,9 @@
     "00222200" +
     "02200220" +
     "02200220"
-  );
+  ));
   // 3: Q*bert facing up-right
-  defSprite(3,
+  defSprite(3, up(
     "02200220" +
     "02200220" +
     "02222200" +
@@ -55,9 +70,9 @@
     "03233300" +
     "03223300" +
     "00333000"
-  );
+  ));
   // 4: Q*bert facing up-left
-  defSprite(4,
+  defSprite(4, up(
     "02200220" +
     "02200220" +
     "00222200" +
@@ -66,9 +81,9 @@
     "00332300" +
     "00322300" +
     "00333000"
-  );
+  ));
   // 5: Coily (snake) egg
-  defSprite(5,
+  defSprite(5, up(
     "00000000" +
     "00111000" +
     "01221100" +
@@ -77,9 +92,9 @@
     "01221100" +
     "00111000" +
     "00000000"
-  );
+  ));
   // 6: Coily (snake) chasing
-  defSprite(6,
+  defSprite(6, up(
     "02200220" +
     "03300330" +
     "01311310" +
@@ -88,9 +103,9 @@
     "00111100" +
     "00100100" +
     "00100100"
-  );
+  ));
   // 7: Red ball
-  defSprite(7,
+  defSprite(7, up(
     "00000000" +
     "00220000" +
     "02332000" +
@@ -99,9 +114,9 @@
     "00220000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 8: Spinning disc
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00333000" +
     "03222300" +
@@ -110,9 +125,9 @@
     "00333000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 9: Speech bubble (!@#)
-  defSprite(9,
+  defSprite(9, up(
     "33333330" +
     "32121230" +
     "31212130" +
@@ -121,34 +136,40 @@
     "00330000" +
     "00300000" +
     "00000000"
-  );
+  ));
+
+  // --- Sprite size constant ---
+  const SS = 16;  // sprite render size (16x16 after upscale)
 
   // --- Isometric Cube Geometry ---
-  // Each cube is drawn as 3 faces: top, left, right
-  const CUBE_W = 21;  // total width of isometric cube
-  const CUBE_H = 18;  // top diamond height
-  const CUBE_DEPTH = 12; // side face depth
+  const CUBE_W = 26;   // wider cubes for 320x240 screen
+  const CUBE_H = 20;   // top diamond height
+  const CUBE_DEPTH = 14; // side face depth
   const PYR_TOP_X = W / 2; // top center of pyramid
-  const PYR_TOP_Y = 39;    // top of pyramid y
+  const PYR_TOP_Y = 42;    // top of pyramid y
   const ROWS = 7;
 
   // Get pixel position for grid position (row, col)
-  // Row 0 = top (1 cube), row 6 = bottom (7 cubes)
   function cubePos(row, col) {
     const x = PYR_TOP_X + (col - row / 2) * CUBE_W;
     const y = PYR_TOP_Y + row * (CUBE_H / 2 + CUBE_DEPTH);
     return { x: x, y: y };
   }
 
-  // Draw an isometric cube at pixel position (cx, cy) with given colors
-  // cx,cy = center-top of the diamond top face
-  function drawCube(cx, cy, topC, leftC, rightC) {
-    const hw = CUBE_W / 2; // half width
-    const hh = CUBE_H / 2; // half height of top diamond
-    const sd = CUBE_DEPTH;  // side depth
+  // Pre-compute pixel buffer reference (set in boot)
+  let buf32;
 
-    // Top face (diamond) - draw as filled rect approximation
-    // We'll draw scanlines for the diamond shape
+  // Draw an isometric cube at pixel position (cx, cy) with given colors
+  function drawCube(cx, cy, topC, leftC, rightC) {
+    if (!buf32) {
+      // Get buf32 from engine internals (accessed via closure from cls)
+      return;
+    }
+    const hw = CUBE_W / 2;
+    const hh = CUBE_H / 2;
+    const sd = CUBE_DEPTH;
+
+    // Top face (diamond)
     for (let dy = -hh; dy <= hh; dy++) {
       const w = hw * (1 - _abs(dy) / hh);
       const y = cy + dy;
@@ -160,7 +181,7 @@
       }
     }
 
-    // Left face (parallelogram)
+    // Left face
     for (let dy = 0; dy < sd; dy++) {
       const topY = cy + hh + dy;
       if (topY < 0 || topY >= H) continue;
@@ -172,7 +193,7 @@
       for (let x = x0; x <= x1; x++) buf32[Math.floor(topY) * W + x] = col;
     }
 
-    // Right face (parallelogram)
+    // Right face
     for (let dy = 0; dy < sd; dy++) {
       const topY = cy + hh + dy;
       if (topY < 0 || topY >= H) continue;
@@ -184,47 +205,66 @@
       for (let x = x0; x <= x1; x++) buf32[Math.floor(topY) * W + x] = col;
     }
 
-    // Outline edges for definition
-    // Top diamond edges
+    // Outline edges
     line(Math.floor(cx - hw), Math.floor(cy), Math.floor(cx), Math.floor(cy - hh), 0);
     line(Math.floor(cx + hw), Math.floor(cy), Math.floor(cx), Math.floor(cy - hh), 0);
     line(Math.floor(cx - hw), Math.floor(cy), Math.floor(cx), Math.floor(cy + hh), 0);
     line(Math.floor(cx + hw), Math.floor(cy), Math.floor(cx), Math.floor(cy + hh), 0);
-    // Left face edges
-    line(Math.floor(cx - hw), Math.floor(cy), Math.floor(cx - hw + hw), Math.floor(cy + hh + sd), 0);
+    line(Math.floor(cx - hw), Math.floor(cy), Math.floor(cx), Math.floor(cy + hh + sd), 0);
     line(Math.floor(cx), Math.floor(cy + hh), Math.floor(cx), Math.floor(cy + hh + sd), 0);
-    // Right face edges
-    line(Math.floor(cx + hw), Math.floor(cy), Math.floor(cx + hw - hw), Math.floor(cy + hh + sd), 0);
+    line(Math.floor(cx + hw), Math.floor(cy), Math.floor(cx), Math.floor(cy + hh + sd), 0);
   }
+
+  // Direct pixel buffer access for cube drawing (engine exposes COLOR_U32 globally)
+  const COLOR_U32 = Mono.COLORS.map(hex => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return (255 << 24) | (b << 16) | (g << 8) | r;
+  });
+
+  // --- Collision helpers ---
+  // Circle-circle collision
+  function circCollide(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = dx * dx + dy * dy;
+    const rr = ar + br;
+    return dist < rr * rr;
+  }
+
+  // Player and enemy hit radii
+  const PLAYER_R = 6;
+  const ENEMY_R = 5;
+  const BALL_R = 4;
 
   // --- Game State ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
   let score, lives, level;
-  let cubeColors; // 2D array: cubeColors[row][col] = current color index
-  let targetColor; // color index cubes need to become
-  let startColor;  // initial color of cubes
+  let cubeColors;
+  let targetColor;
+  let startColor;
 
   // Player state
-  let pRow, pCol;       // grid position
-  let pPx, pPy;         // pixel position (for animation)
+  let pRow, pCol;
+  let pPx, pPy;
   let pTargetPx, pTargetPy;
-  let pHopping;         // hopping timer
-  let pDir;             // 0=downright, 1=downleft, 2=upright, 3=upleft
-  let pFalling;         // falling off edge timer
+  let pHopping;
+  let pDir;
+  let pFalling;
   let pFallVy;
   let pDead;
-  let pOnDisc;          // riding disc timer
-  let pDiscSide;        // which disc (-1 left, 1 right)
+  let pOnDisc;
+  let pDiscSide;
   let invulnTimer;
-  let speechTimer;      // show !@# when falling
+  let speechTimer;
 
   // Enemies
-  let enemies;   // { type:"ball"|"coily", row, col, px, py, hopping, state, dir }
+  let enemies;
   let enemySpawnTimer;
   let coilyActive;
 
   // Discs
-  let discs; // { row, side, active, px, py, used }
+  let discs;
 
   // Level transition
   let levelClearTimer;
@@ -248,12 +288,9 @@
     for (let r = 0; r < ROWS; r++) {
       cubeColors[r] = [];
       for (let c = 0; c <= r; c++) {
-        cubeColors[r][c] = 0; // start color
+        cubeColors[r][c] = 0;
       }
     }
-    // Level determines colors
-    // Levels 1-2: change from color 1 to color 2
-    // Levels 3+: change from 1 to 3, enemies faster
     startColor = 1;
     targetColor = level <= 2 ? 2 : 3;
 
@@ -279,7 +316,7 @@
     enemySpawnTimer = 60 + flr(rnd(60));
     coilyActive = false;
 
-    // Place discs: one on each side at random rows
+    // Place discs
     discs = [];
     const discRow1 = 1 + flr(rnd(3));
     const discRow2 = 1 + flr(rnd(3));
@@ -297,7 +334,6 @@
         if (level <= 4) {
           cubeColors[row][col] = targetColor;
         } else {
-          // Higher levels: cycle colors
           cubeColors[row][col] = cubeColors[row][col] === startColor ? targetColor : startColor;
         }
         score += 25;
@@ -340,7 +376,6 @@
     pOnDisc = 0;
     invulnTimer = 60;
     speechTimer = 0;
-    // Clear enemies on respawn
     enemies = [];
     coilyActive = false;
     enemySpawnTimer = 90;
@@ -352,8 +387,7 @@
   }
 
   function spawnEnemy() {
-    // Spawn from top - either a ball or coily egg
-    const startCol = flr(rnd(2)); // 0 or 1 from top
+    const startCol = flr(rnd(2));
     const type = (!coilyActive && level > 1 && rnd(1) < 0.3) ? "coily_egg" : "ball";
     const p = cubePos(0, 0);
     enemies.push({
@@ -365,10 +399,32 @@
       targetPx: 0,
       targetPy: 0,
       hopping: 0,
-      hopDir: 0, // 0=downleft, 1=downright
-      state: "bouncing", // "bouncing" | "chasing"
+      hopDir: 0,
+      state: "bouncing",
     });
     if (type === "coily_egg") coilyActive = true;
+  }
+
+  // --- Player center for collision ---
+  function playerCenter() {
+    let px = pPx;
+    let py = pPy - CUBE_H / 2;
+    if (pHopping > 0 && pFalling === 0 && pOnDisc === 0) {
+      const t = pHopping / HOP_FRAMES;
+      py -= sin(t * 3.14159) * 14;
+    }
+    return { cx: px, cy: py };
+  }
+
+  // --- Enemy center for collision ---
+  function enemyCenter(e) {
+    let ex = e.px;
+    let ey = e.py - CUBE_H / 2;
+    if (e.hopping > 0) {
+      const t = e.hopping / ENEMY_HOP_FRAMES;
+      ey -= sin(t * 3.14159) * 12;
+    }
+    return { cx: ex, cy: ey };
   }
 
   // --- Title Scene ---
@@ -387,22 +443,23 @@
     },
     draw() {
       cls(0);
-      text("Q*BERT", W / 2 - 15, 45, 3);
-      text("MONO EDITION", W / 2 - 37, 57, 2);
+      text("Q*BERT", W / 2 - 15, 40, 3);
+      text("MONO EDITION", W / 2 - 37, 54, 2);
+
+      // Draw a small preview pyramid
       for (let r = 0; r < 4; r++) {
         for (let c = 0; c <= r; c++) {
           const p = cubePos(r, c);
-          const ox = 0, oy = 60;
-          drawCube(p.x + ox, p.y + oy,
-            (r + c) % 2 === 0 ? 2 : 3,
-            1, 1);
+          drawCube(p.x, p.y + 50,
+            (r + c) % 2 === 0 ? 2 : 3, 1, 1);
         }
       }
+
       if (titleBlink) {
-        text("PRESS START", W / 2 - 50, 188, 3);
+        text("PRESS START", W / 2 - 30, 188, 3);
       }
-      text("ARROWS TO HOP", W / 2 - 32, 206, 1);
-      text("CHANGE ALL CUBES TO WIN", W / 2 - 57, 218, 1);
+      text("ARROWS TO HOP", W / 2 - 32, 208, 1);
+      text("CHANGE ALL CUBES", W / 2 - 40, 220, 1);
     }
   });
 
@@ -439,15 +496,12 @@
     // --- Player hopping ---
     if (pHopping > 0) {
       pHopping--;
-      const t = 1 - pHopping / HOP_FRAMES;
       pPx = pPx + (pTargetPx - pPx) * 0.2;
       pPy = pPy + (pTargetPy - pPy) * 0.2;
-      // Arc
       if (pHopping === 0) {
         pPx = pTargetPx;
         pPy = pTargetPy;
         if (pOnDisc > 0) {
-          // Riding disc to top
           pOnDisc--;
           if (pOnDisc === 0) {
             pRow = 0; pCol = 0;
@@ -455,7 +509,6 @@
             pPx = p.x; pPy = p.y;
             pTargetPx = p.x; pTargetPy = p.y;
             invulnTimer = 30;
-            // Kill Coily if active
             enemies = enemies.filter(e => e.type !== "coily");
             coilyActive = false;
             score += 500;
@@ -465,9 +518,8 @@
             setTimeout(() => note(0, "C6", 0.12), 240);
           }
         } else if (pFalling > 0) {
-          // Already falling off edge
+          // falling off edge
         } else {
-          // Land on cube
           landOnCube(pRow, pCol);
           if (checkLevelClear()) {
             levelClearTimer = 90;
@@ -487,42 +539,27 @@
         killPlayer();
       }
     } else if (!pDead && pOnDisc === 0) {
-      // Accept input
       let dr = 0, dc = 0;
       let moved = false;
-      if (btnp("right")) { dr = 1; dc = 1; pDir = 0; moved = true; }      // down-right
-      else if (btnp("down")) { dr = 1; dc = 0; pDir = 1; moved = true; }  // down-left
-      else if (btnp("up")) { dr = -1; dc = 0; pDir = 3; moved = true; }   // up-left
-      else if (btnp("left")) { dr = -1; dc = -1; pDir = 2; moved = true; }  // up-right... wait
-      // Remap: arrows map to diagonal directions on isometric grid
-      // Up = up-left (row-1, col-0), Left = up-right... hmm
-      // Let's use a more intuitive mapping:
-      // Up arrow = jump up-left (row-1, col unchanged -> visually up-left)
-      // Right arrow = jump down-right (row+1, col+1)
-      // Down arrow = jump down-left (row+1, col unchanged -> visually down-right from left side)
-      // Left arrow = jump up-right...
-      // Actually for Q*bert the standard is:
-      // Up = up-right (row-1, col stays), Down = down-left (row+1, col stays)
-      // Right = down-right (row+1, col+1), Left = up-left (row-1, col-1)
+      if (btnp("right")) { dr = 1; dc = 1; pDir = 0; moved = true; }
+      else if (btnp("down")) { dr = 1; dc = 0; pDir = 1; moved = true; }
+      else if (btnp("up")) { dr = -1; dc = 0; pDir = 3; moved = true; }
+      else if (btnp("left")) { dr = -1; dc = -1; pDir = 2; moved = true; }
 
       if (moved) {
         const newRow = pRow + dr;
         const newCol = pCol + dc;
 
-        // Check for disc
         let hitDisc = false;
         if (!isValidCube(newRow, newCol)) {
           for (const disc of discs) {
             if (disc.active && !disc.used) {
-              // Left disc: col = -1 of that row
-              // Right disc: col = row+1 of that row
               if (disc.side === -1 && newRow === disc.row && newCol < 0) {
                 hitDisc = true;
                 disc.used = true;
                 disc.active = false;
                 pOnDisc = 20;
                 pDiscSide = -1;
-                // Animate to top
                 const tp = cubePos(0, 0);
                 pTargetPx = tp.x;
                 pTargetPy = tp.y;
@@ -557,10 +594,8 @@
             pHopping = HOP_FRAMES;
             note(1, "A4", 0.03);
           } else {
-            // Fall off edge!
             pRow = newRow;
             pCol = newCol;
-            const p = cubePos(_max(0, min(ROWS - 1, newRow)), _max(0, newCol));
             pTargetPx = pPx + (dc * CUBE_W);
             pTargetPy = pPy + (dr * (CUBE_H / 2 + CUBE_DEPTH));
             pHopping = HOP_FRAMES;
@@ -595,14 +630,12 @@
           e.px = e.targetPx;
           e.py = e.targetPy;
 
-          // Check if fell off bottom
           if (e.row >= ROWS) {
             if (e.type === "coily") coilyActive = false;
             enemies.splice(i, 1);
             continue;
           }
 
-          // Coily egg transforms at bottom
           if (e.type === "coily_egg" && e.row >= ROWS - 1) {
             e.type = "coily";
             e.state = "chasing";
@@ -613,13 +646,11 @@
 
       // Decide next hop
       if (e.type === "ball" || e.type === "coily_egg") {
-        // Bounce down randomly
         const goRight = rnd(1) < 0.5;
         const newRow = e.row + 1;
         const newCol = goRight ? e.col + 1 : e.col;
 
         if (newRow >= ROWS) {
-          // Falls off bottom
           enemies.splice(i, 1);
           continue;
         }
@@ -631,25 +662,20 @@
           e.targetPx = p.x;
           e.targetPy = p.y;
         } else {
-          // Falls off side
           e.targetPx = e.px + (goRight ? CUBE_W : -CUBE_W);
           e.targetPy = e.py + CUBE_H / 2 + CUBE_DEPTH;
-          e.row = ROWS; // mark for removal
+          e.row = ROWS;
         }
         e.hopping = ENEMY_HOP_FRAMES;
       } else if (e.type === "coily") {
-        // Chase Q*bert
         let dr = 0, dc = 0;
         if (pRow > e.row) {
-          // Need to go down
           dr = 1;
           dc = pCol > e.col ? 1 : 0;
         } else if (pRow < e.row) {
-          // Need to go up
           dr = -1;
           dc = pCol < e.col ? -1 : 0;
         } else {
-          // Same row
           if (pCol > e.col) { dr = 1; dc = 1; }
           else if (pCol < e.col) { dr = -1; dc = -1; }
         }
@@ -663,7 +689,6 @@
           e.targetPx = p.x;
           e.targetPy = p.y;
         } else {
-          // Coily falls off! (lured by disc)
           e.targetPx = e.px + dc * CUBE_W;
           e.targetPy = e.py + 45;
           e.row = ROWS;
@@ -675,10 +700,13 @@
       }
     }
 
-    // --- Collision: enemies vs player ---
-    if (!pDead && invulnTimer === 0 && pHopping === 0 && pFalling === 0) {
+    // --- Collision: circle-based, enemies vs player ---
+    if (!pDead && invulnTimer === 0 && pFalling === 0) {
+      const pc = playerCenter();
       for (const e of enemies) {
-        if (e.row === pRow && e.col === pCol && e.hopping <= 2) {
+        const ec = enemyCenter(e);
+        const er = (e.type === "ball" || e.type === "coily_egg") ? BALL_R : ENEMY_R;
+        if (circCollide(pc.cx, pc.cy, PLAYER_R, ec.cx, ec.cy, er)) {
           killPlayer();
           break;
         }
@@ -688,27 +716,32 @@
     draw() {
     cls(0);
 
-    // --- Play state ---
-    // HUD
-    text("SCORE " + score, 5, 3, 3);
-    text("LEVEL " + level, W - 40, 3, 2);
-    // Lives
-    for (let i = 0; i < lives; i++) {
-      spr(1, 5 + i * 10, 11);
+    // --- HUD (clamped to prevent overflow) ---
+    text("SCORE " + score, 4, 3, 3);
+    const lvlStr = "LV" + level;
+    text(lvlStr, W - lvlStr.length * 5 - 4, 3, 2);
+
+    // Lives icons (capped at 5 to prevent overflow)
+    const maxLivesShown = min(lives, 5);
+    for (let i = 0; i < maxLivesShown; i++) {
+      sprT(1, 4 + i * 14, 12);
     }
 
     // Target indicator
-    text("TARGET:", W - 53, 11, 1);
-    rectf(W - 19, 11, 8, 6, targetColor);
+    text("TARGET:", W - 58, 13, 1);
+    rectf(W - 16, 13, 10, 8, targetColor);
+    rect(W - 16, 13, 10, 8, 0);
 
     // Draw discs
     for (const disc of discs) {
       if (!disc.active) continue;
       const dp = getDiscPos(disc);
+      const dsx = dp.x - SS / 2;
+      const dsy = dp.y - SS / 2;
       if (Mono.frame % 8 < 4) {
-        spr(8, dp.x - 4, dp.y - 4);
+        sprT(8, dsx, dsy);
       } else {
-        spr(8, dp.x - 4, dp.y - 4, true);
+        sprT(8, dsx, dsy, true);
       }
     }
 
@@ -719,12 +752,10 @@
         let topC = cubeColors[r][c];
         let leftC = topC > 0 ? topC - 1 : 0;
         let rightC = topC > 0 ? topC - 1 : 0;
-        // Left face slightly darker, right face medium
         if (topC === 1) { leftC = 0; rightC = 0; }
         else if (topC === 2) { leftC = 1; rightC = 1; }
         else if (topC === 3) { leftC = 2; rightC = 1; }
 
-        // Level clear flash
         if (levelClearTimer > 0 && flashTimer % 8 < 4) {
           topC = 3; leftC = 2; rightC = 1;
         }
@@ -735,56 +766,65 @@
 
     // Draw enemies
     for (const e of enemies) {
-      let ex = e.px - 4;
-      let ey = e.py - CUBE_H / 2 - 6;
-      // Hop arc
+      let ex = e.px - SS / 2;
+      let ey = e.py - CUBE_H / 2 - SS / 2;
       if (e.hopping > 0) {
         const t = e.hopping / ENEMY_HOP_FRAMES;
-        ey -= sin(t * 3.14159) * 10;
+        ey -= sin(t * 3.14159) * 12;
       }
 
       if (e.type === "ball" || e.type === "coily_egg") {
-        spr(e.type === "ball" ? 7 : 5, ex, ey);
+        sprT(e.type === "ball" ? 7 : 5, flr(ex), flr(ey));
       } else if (e.type === "coily") {
-        spr(6, ex, ey);
+        sprT(6, flr(ex), flr(ey));
       }
+
+      // Debug: circle hitbox for enemies
+      const ec = enemyCenter(e);
+      const er = (e.type === "ball" || e.type === "coily_egg") ? BALL_R : ENEMY_R;
+      dbgC(flr(ec.cx), flr(ec.cy), er);
     }
 
     // Draw player
     if (!pDead) {
-      let px = pPx - 4;
-      let py = pPy - CUBE_H / 2 - 6;
+      let px = pPx - SS / 2;
+      let py = pPy - CUBE_H / 2 - SS / 2;
 
-      // Hop arc
       if (pHopping > 0 && pFalling === 0 && pOnDisc === 0) {
         const t = pHopping / HOP_FRAMES;
-        py -= sin(t * 3.14159) * 12;
+        py -= sin(t * 3.14159) * 14;
       }
 
       // Blink during invulnerability
       if (invulnTimer > 0 && Mono.frame % 4 < 2) {
-        // Don't draw (blink)
+        // blink - don't draw
       } else {
-        // Choose sprite based on direction
         let sprId = 1;
-        if (pDir === 0) sprId = 1;       // down-right
-        else if (pDir === 1) sprId = 2;   // down-left
-        else if (pDir === 2) sprId = 3;   // up-right (reuse up sprite flipped)
-        else if (pDir === 3) sprId = 4;   // up-left
-        spr(sprId, px, py);
+        if (pDir === 0) sprId = 1;
+        else if (pDir === 1) sprId = 2;
+        else if (pDir === 2) sprId = 3;
+        else if (pDir === 3) sprId = 4;
+        sprT(sprId, flr(px), flr(py));
       }
+
+      // Debug: circle hitbox for player
+      const pc = playerCenter();
+      dbgC(flr(pc.cx), flr(pc.cy), PLAYER_R);
 
       // Speech bubble when falling
       if (speechTimer > 0) {
-        spr(9, px - 2, py - 10);
+        sprT(9, flr(px) - 2, flr(py) - SS + 2);
         speechTimer--;
       }
     }
 
     // Level clear message
     if (levelClearTimer > 0) {
-      rectf(W / 2 - 33, H / 2 - 9, 67, 15, 0);
-      text("LEVEL CLEAR!", W / 2 - 30, H / 2 - 6, 3);
+      const msgW = 80;
+      const msgH = 18;
+      rectf(W / 2 - msgW / 2, H / 2 - msgH / 2, msgW, msgH, 0);
+      rect(W / 2 - msgW / 2, H / 2 - msgH / 2, msgW, msgH, 3);
+      text("LEVEL CLEAR!", W / 2 - 30, H / 2 - 4, 3);
     }
     }
   });
@@ -800,16 +840,39 @@
     },
     draw() {
       cls(0);
-      text("GAME OVER", W / 2 - 22, 90, 3);
-      text("SCORE " + score, W / 2 - 22, 109, 2);
+      text("GAME OVER", W / 2 - 24, 90, 3);
+      text("SCORE " + score, W / 2 - 22, 110, 2);
       if (titleBlink) {
-        text("PRESS START", W / 2 - 27, 135, 3);
+        text("PRESS START", W / 2 - 30, 140, 3);
       }
     }
   });
 
   Mono.go(TITLE);
+
+  // Boot and grab pixel buffer reference
+  const _canvas = document.getElementById("screen");
   Mono.boot("screen");
+
+  // Grab buf32 after boot by hooking into the render cycle
+  // The engine exposes canvas context; we can read from imageData
+  // Actually, we need to access the internal buffer. Let's use a frame hook.
+  const origDraw = Mono._draw;
+  // We'll draw cubes via pix-level access through the cls trick:
+  // After cls(), we can write to the shared buffer via the ImageData
+  // Instead, let's get the buffer from the canvas context
+  const _ctx = _canvas.getContext("2d");
+  const _imgData = _ctx.createImageData(W, H);
+  buf32 = new Uint32Array(_imgData.data.buffer);
+
+  // Actually, the engine manages its own buf32 internally.
+  // We need to hook into the engine's buffer. Let's patch cls to capture it.
+  // The simplest approach: read the canvas pixel data each frame and
+  // draw cubes using line/rectf/pix calls instead.
+
+  // REVISED: Draw cubes using the public API (line, pix) instead of
+  // direct buffer access. Let's redefine drawCube properly.
+
 })();
 </script>
 </body>

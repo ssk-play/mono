@@ -19,13 +19,40 @@
   "use strict";
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, sprT, text: drawText, btn, btnp, note, stop, rnd, flr,
+          spr, text: drawText, btn, btnp, note, stop, rnd, flr,
           abs: _abs, min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites ---
+  // --- 8→16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Circle collision helper ---
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    const dist = dx * dx + dy * dy;
+    const rSum = r1 + r2;
+    return dist < rSum * rSum;
+  }
+
+  // --- Rect collision helper (fallback) ---
+  function rectCollide(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x1 + w1 > x2 && x1 < x2 + w2 && y1 + h1 > y2 && y1 < y2 + h2;
+  }
+
+  // --- Sprites (8x8 data upscaled to 16x16) ---
 
   // 1: Player ship
-  defSprite(1,
+  defSprite(1, up(
     "00030000" +
     "00333000" +
     "00333000" +
@@ -34,10 +61,10 @@
     "33322330" +
     "33000030" +
     "01000010"
-  );
+  ));
 
   // 2: Small bird - wings up
-  defSprite(2,
+  defSprite(2, up(
     "30000030" +
     "03000300" +
     "03300330" +
@@ -46,10 +73,10 @@
     "00033000" +
     "00300300" +
     "00000000"
-  );
+  ));
 
   // 3: Small bird - wings down
-  defSprite(3,
+  defSprite(3, up(
     "00000000" +
     "00300300" +
     "00033000" +
@@ -58,10 +85,10 @@
     "03300330" +
     "03000300" +
     "30000030"
-  );
+  ));
 
   // 4: Phoenix bird - wings up (large, multi-hit)
-  defSprite(4,
+  defSprite(4, up(
     "30000030" +
     "33000330" +
     "33300330" +
@@ -70,10 +97,10 @@
     "03333300" +
     "00333000" +
     "00300300"
-  );
+  ));
 
   // 5: Phoenix bird - wings down
-  defSprite(5,
+  defSprite(5, up(
     "00300300" +
     "00333000" +
     "03333300" +
@@ -82,10 +109,10 @@
     "33300330" +
     "33000330" +
     "30000030"
-  );
+  ));
 
   // 6: Phoenix damaged (no wings)
-  defSprite(6,
+  defSprite(6, up(
     "00000000" +
     "00000000" +
     "00300300" +
@@ -94,10 +121,10 @@
     "00333300" +
     "00033000" +
     "00300300"
-  );
+  ));
 
   // 7: Mothership body (alien inside)
-  defSprite(7,
+  defSprite(7, up(
     "00333000" +
     "03222300" +
     "32222230" +
@@ -106,10 +133,10 @@
     "03222300" +
     "00333000" +
     "00030000"
-  );
+  ));
 
   // 8: Shield segment (rotating barrier piece)
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00000000" +
     "33333330" +
@@ -118,10 +145,10 @@
     "33333330" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 9: Player bullet
-  defSprite(9,
+  defSprite(9, up(
     "00030000" +
     "00030000" +
     "00020000" +
@@ -130,10 +157,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 10: Enemy bullet
-  defSprite(10,
+  defSprite(10, up(
     "00000000" +
     "00000000" +
     "00010000" +
@@ -142,10 +169,10 @@
     "00030000" +
     "00030000" +
     "00000000"
-  );
+  ));
 
   // 11: Explosion frame 1
-  defSprite(11,
+  defSprite(11, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -154,10 +181,10 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
 
   // 12: Explosion frame 2
-  defSprite(12,
+  defSprite(12, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -166,10 +193,10 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
 
   // 13: Life icon
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "00030000" +
     "00333000" +
@@ -178,10 +205,10 @@
     "33322330" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 14: Shield icon (player shield active)
-  defSprite(14,
+  defSprite(14, up(
     "00333000" +
     "03333300" +
     "33333330" +
@@ -190,10 +217,10 @@
     "03333300" +
     "00333000" +
     "00030000"
-  );
+  ));
 
   // 15: Mothership shield block (solid)
-  defSprite(15,
+  defSprite(15, up(
     "33333333" +
     "32222223" +
     "32222223" +
@@ -202,10 +229,10 @@
     "32222223" +
     "32222223" +
     "33333333"
-  );
+  ));
 
   // 16: Star
-  defSprite(16,
+  defSprite(16, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -214,15 +241,28 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
-  // --- Game Constants ---
+  // --- Game Constants (16x16 sprite scale) ---
+  const SPR = 16;                 // sprite dimension
+  const HALF = SPR / 2;           // 8 — center offset
+
   const FORM_COLS = 10;
   const FORM_ROWS = 4;
-  const FORM_CELL_W = 12;
-  const FORM_CELL_H = 12;
+  const FORM_CELL_W = 20;         // wider cells for 16px sprites
+  const FORM_CELL_H = 20;
   const FORM_BASE_X = (W - FORM_COLS * FORM_CELL_W) / 2;
   const FORM_BASE_Y = 30;
+
+  // Max lives icons to display (layout overflow guard)
+  const MAX_LIVES_DISPLAY = 5;
+
+  // Collision radii
+  const PLAYER_R = 6;
+  const SMALLBIRD_R = 7;
+  const PHOENIX_R = 7;
+  const BULLET_R = 3;
+  const EBULLET_R = 3;
 
   // --- Game State ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -237,7 +277,7 @@
   let hiScore = 0;
 
   function resetGame() {
-    player = { x: W / 2 - 4, y: H - 22, speed: 3 };
+    player = { x: W / 2 - HALF, y: H - 32, speed: 3 };
     bullets = [];
     eBullets = [];
     enemies = [];
@@ -323,13 +363,13 @@
 
   function spawnBoss() {
     boss = {
-      x: W / 2 - 4, y: 45,
+      x: W / 2 - HALF, y: 45,
       hp: 20 + loop * 10,
       maxHp: 20 + loop * 10,
       shieldAngle: 0,
       shieldSegments: 12,
-      shieldRadius: 20,
-      shieldHp: [], // each segment has HP
+      shieldRadius: 32,
+      shieldHp: [],
       state: "entering",
       enterT: 0,
       moveDir: 1,
@@ -355,7 +395,7 @@
     const count = big ? 16 : 8;
     for (let i = 0; i < count; i++)
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + HALF, y: y + HALF,
         vx: rnd(big ? 6 : 4) - (big ? 3 : 2),
         vy: rnd(big ? 6 : 4) - (big ? 3 : 2),
         life: 6 + flr(rnd(big ? 16 : 10)),
@@ -404,10 +444,6 @@
     return u * u * a + 2 * u * t * b + t * t * c;
   }
 
-  function hitBox(ax, ay, aw, ah, bx, by, bw, bh) {
-    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
-  }
-
   function getPhaseLabel() {
     const actualPhase = ((phase - 1) % 5) + 1;
     if (actualPhase <= 2) return "PHASE " + phase + " - SMALL BIRDS";
@@ -420,11 +456,11 @@
     lives--;
     addExplosion(player.x, player.y, true);
     deathSound();
-    player.x = W / 2 - 4;
+    player.x = W / 2 - HALF;
     invincibleTimer = 60;
     if (lives <= 0) {
-      Mono.go(GAMEOVER); return;
       if (score > hiScore) hiScore = score;
+      Mono.go(GAMEOVER); return;
     }
   }
 
@@ -438,19 +474,18 @@
   }
 
   function updatePlayState() {
-    // --- Play state ---
     if (waveMessage > 0) waveMessage--;
     if (invincibleTimer > 0) invincibleTimer--;
 
     // Player movement
     if (btn("left")) player.x -= player.speed;
     if (btn("right")) player.x += player.speed;
-    player.x = _max(3, min(W - 11, player.x));
+    player.x = _max(2, min(W - SPR - 2, player.x));
 
     // Player shoot
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("a") && shootCooldown <= 0 && bullets.length < 3) {
-      bullets.push({ x: player.x + 0, y: player.y - 4 });
+      bullets.push({ x: player.x + HALF - 1, y: player.y - 6 });
       shootCooldown = 7;
       shootSound();
     }
@@ -463,13 +498,13 @@
       if (shieldEnergy <= 0) { shieldActive = false; shieldCooldown = 60; }
     } else {
       shieldActive = false;
-      if (shieldEnergy < 90) shieldEnergy += 0.25; // regen slowly
+      if (shieldEnergy < 90) shieldEnergy += 0.25;
     }
 
     // Update player bullets
     for (let i = bullets.length - 1; i >= 0; i--) {
       bullets[i].y -= 6;
-      if (bullets[i].y < -8) bullets.splice(i, 1);
+      if (bullets[i].y < -SPR) bullets.splice(i, 1);
     }
 
     // Boss phase
@@ -507,7 +542,7 @@
           const t = e.enterT / flyInDuration;
           const startX = W / 2 + sin(e.formCol * 0.8) * 67;
           e.x = startX + (target.x - startX) * t;
-          e.y = -10 + (target.y + 10) * t;
+          e.y = -16 + (target.y + 16) * t;
         } else {
           e.state = "formation";
         }
@@ -524,7 +559,7 @@
         if (e.diveT >= 1) {
           e.state = "returning";
           e.x = e.divePath.ex;
-          e.y = -10;
+          e.y = -16;
           e.diveT = 0;
         } else {
           const p = e.divePath;
@@ -532,8 +567,8 @@
           e.y = bezier(e.diveT, p.sy, p.my, p.ey);
         }
         e.shootTimer--;
-        if (e.shootTimer <= 0 && e.y > 0 && e.y < H - 30) {
-          eBullets.push({ x: e.x + 0, y: e.y + 8 });
+        if (e.shootTimer <= 0 && e.y > 0 && e.y < H - 40) {
+          eBullets.push({ x: e.x + HALF - 1, y: e.y + SPR });
           e.shootTimer = _max(20, 40 - loop * 3) + flr(rnd(30));
         }
       }
@@ -551,15 +586,20 @@
         }
       }
 
-      // Bullet-enemy collision
+      // Bullet-enemy collision (circle)
+      const eCx = e.x + HALF, eCy = e.y + HALF;
+      const eR = e.type === "phoenix" ? PHOENIX_R : SMALLBIRD_R;
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (hitBox(b.x, b.y, 2, 5, e.x, e.y, 8, 8)) {
+        const bCx = b.x + HALF, bCy = b.y + HALF;
+        if (circCollide(bCx, bCy, BULLET_R, eCx, eCy, eR)) {
+          Mono.dbgC(bCx, bCy, BULLET_R);
+          Mono.dbgC(eCx, eCy, eR);
           bullets.splice(j, 1);
           e.hp--;
           if (e.type === "phoenix") {
             e.damaged = true;
-            e.regenTimer = 90 - loop * 5; // regenerate after delay
+            e.regenTimer = 90 - loop * 5;
           }
           if (e.hp <= 0) {
             addExplosion(e.x, e.y, e.type === "phoenix");
@@ -593,9 +633,13 @@
     // Update enemy bullets
     for (let i = eBullets.length - 1; i >= 0; i--) {
       eBullets[i].y += 3 + loop * 0.3;
-      if (eBullets[i].y > H + 8) { eBullets.splice(i, 1); continue; }
+      if (eBullets[i].y > H + SPR) { eBullets.splice(i, 1); continue; }
       const b = eBullets[i];
-      if (hitBox(b.x, b.y, 2, 5, player.x, player.y, 8, 8)) {
+      const bCx = b.x + HALF, bCy = b.y + HALF;
+      const pCx = player.x + HALF, pCy = player.y + HALF;
+      if (circCollide(bCx, bCy, EBULLET_R, pCx, pCy, PLAYER_R)) {
+        Mono.dbgC(bCx, bCy, EBULLET_R);
+        Mono.dbgC(pCx, pCy, PLAYER_R);
         eBullets.splice(i, 1);
         if (shieldActive) {
           shieldSound();
@@ -607,18 +651,25 @@
       }
     }
 
-    // Enemy-player collision
+    // Enemy-player collision (circle)
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
-      if (e.state === "diving" && hitBox(player.x, player.y, 8, 8, e.x, e.y, 8, 8)) {
-        addExplosion(e.x, e.y, false);
-        enemies.splice(i, 1);
-        if (shieldActive) {
-          shieldSound();
-          shieldEnergy -= 20;
-          score += 5;
-        } else {
-          killPlayer();
+      if (e.state === "diving") {
+        const eCx = e.x + HALF, eCy = e.y + HALF;
+        const eR = e.type === "phoenix" ? PHOENIX_R : SMALLBIRD_R;
+        const pCx = player.x + HALF, pCy = player.y + HALF;
+        if (circCollide(eCx, eCy, eR, pCx, pCy, PLAYER_R)) {
+          Mono.dbgC(eCx, eCy, eR);
+          Mono.dbgC(pCx, pCy, PLAYER_R);
+          addExplosion(e.x, e.y, false);
+          enemies.splice(i, 1);
+          if (shieldActive) {
+            shieldSound();
+            shieldEnergy -= 20;
+            score += 5;
+          } else {
+            killPlayer();
+          }
         }
       }
     }
@@ -632,7 +683,7 @@
         if (e.shootTimer <= 0) {
           const hasBelow = enemies.some(o => o.formCol === e.formCol && o.formRow > e.formRow && o.state === "formation");
           if (!hasBelow && rnd(1) < 0.5) {
-            eBullets.push({ x: e.x + 0, y: e.y + 8 });
+            eBullets.push({ x: e.x + HALF - 1, y: e.y + SPR });
           }
           e.shootTimer = _max(30, 100 - loop * 8) + flr(rnd(50));
         }
@@ -640,7 +691,7 @@
     }
 
     // Phase clear check
-    if (enemies.length === 0 && !boss ) {
+    if (enemies.length === 0 && !boss) {
       phaseClearSound();
       waveTimer++;
       if (waveTimer > 60) {
@@ -657,7 +708,7 @@
 
     if (b.state === "entering") {
       b.enterT++;
-      b.y = -15 + b.enterT * 1.5;
+      b.y = -20 + b.enterT * 1.5;
       if (b.y >= 45) {
         b.y = 45;
         b.state = "fighting";
@@ -670,20 +721,19 @@
 
     // Boss movement
     b.x += b.moveDir * b.moveSpeed;
-    if (b.x > W - 33) b.moveDir = -1;
-    if (b.x < 33) b.moveDir = 1;
+    if (b.x > W - 40) b.moveDir = -1;
+    if (b.x < 24) b.moveDir = 1;
     // Slight vertical bob
     b.y = 45 + sin(b.phaseTimer * 0.03) * 11;
 
     // Boss shoots
     b.shootTimer--;
     if (b.shootTimer <= 0) {
-      // Fire spread
       const spread = 2 + flr(loop / 2);
       for (let s = 0; s < spread; s++) {
         const angle = Math.PI / 2 + (s - (spread - 1) / 2) * 0.2;
         eBullets.push({
-          x: b.x + 0, y: b.y + 12,
+          x: b.x + HALF - 1, y: b.y + SPR + 4,
           vx: cos(angle) * 2,
           vy: sin(angle) * 2.5,
           aimed: true,
@@ -701,8 +751,12 @@
       } else {
         eb.y += 3 + loop * 0.3;
       }
-      if (eb.y > H + 8 || eb.x < -8 || eb.x > W + 8) { eBullets.splice(i, 1); continue; }
-      if (hitBox(eb.x, eb.y, 2, 5, player.x, player.y, 8, 8)) {
+      if (eb.y > H + SPR || eb.x < -SPR || eb.x > W + SPR) { eBullets.splice(i, 1); continue; }
+      const bCx = eb.x + HALF, bCy = eb.y + HALF;
+      const pCx = player.x + HALF, pCy = player.y + HALF;
+      if (circCollide(bCx, bCy, EBULLET_R, pCx, pCy, PLAYER_R)) {
+        Mono.dbgC(bCx, bCy, EBULLET_R);
+        Mono.dbgC(pCx, pCy, PLAYER_R);
         eBullets.splice(i, 1);
         if (shieldActive) {
           shieldSound();
@@ -718,19 +772,22 @@
     for (let j = bullets.length - 1; j >= 0; j--) {
       const bul = bullets[j];
       let hitShield = false;
+      const bulCx = bul.x + HALF, bulCy = bul.y + HALF;
 
-      // Check shield segments
+      // Check shield segments (circle collision)
       for (let s = 0; s < b.shieldSegments; s++) {
         if (b.shieldHp[s] <= 0) continue;
         const angle = b.shieldAngle + (s / b.shieldSegments) * Math.PI * 2;
-        const sx = b.x + cos(angle) * b.shieldRadius;
-        const sy = b.y + sin(angle) * b.shieldRadius;
-        if (hitBox(bul.x, bul.y, 2, 5, sx - 3, sy - 3, 7, 7)) {
+        const sx = b.x + HALF + cos(angle) * b.shieldRadius;
+        const sy = b.y + HALF + sin(angle) * b.shieldRadius;
+        if (circCollide(bulCx, bulCy, BULLET_R, sx, sy, 5)) {
+          Mono.dbgC(bulCx, bulCy, BULLET_R);
+          Mono.dbgC(sx, sy, 5);
           bullets.splice(j, 1);
           b.shieldHp[s]--;
           phoenixHitSound();
           if (b.shieldHp[s] <= 0) {
-            addExplosion(sx - 4, sy - 4, false);
+            addExplosion(flr(sx) - HALF, flr(sy) - HALF, false);
             score += 20;
           }
           hitShield = true;
@@ -739,17 +796,20 @@
       }
 
       if (!hitShield && j < bullets.length) {
-        // Check boss body
-        if (hitBox(bul.x, bul.y, 2, 5, b.x - 4, b.y - 4, 16, 16)) {
+        // Check boss body (circle)
+        const bossCx = b.x + HALF, bossCy = b.y + HALF;
+        const bossR = 7;
+        if (circCollide(bulCx, bulCy, BULLET_R, bossCx, bossCy, bossR)) {
+          Mono.dbgC(bulCx, bulCy, BULLET_R);
+          Mono.dbgC(bossCx, bossCy, bossR);
           bullets.splice(j, 1);
           b.hp--;
           bossHitSound();
           score += 10;
           if (b.hp <= 0) {
-            // Boss defeated
             addExplosion(b.x - 4, b.y - 4, true);
-            addExplosion(b.x + 4, b.y, true);
-            addExplosion(b.x - 2, b.y + 6, true);
+            addExplosion(b.x + 8, b.y, true);
+            addExplosion(b.x, b.y + 8, true);
             score += b.pts;
             bossDeathSound();
             boss = null;
@@ -762,7 +822,7 @@
     updateExplosionsParticles();
 
     // Phase clear
-    if (!boss ) {
+    if (!boss) {
       phaseClearSound();
       waveTimer++;
       if (waveTimer > 60) {
@@ -794,45 +854,47 @@
     const ty = 45 + sin(Mono.frame * 0.05) * 5;
 
     // Title text
-    drawText("PHOENIX", 142, flr(ty), 3);
-    drawText("PHOENIX", 143, flr(ty) + 1, 1);
-    rectf(113, flr(ty) + 12, 93, 1, 2);
+    drawText("PHOENIX", 122, flr(ty), 3);
+    drawText("PHOENIX", 123, flr(ty) + 1, 1);
+    rectf(100, flr(ty) + 12, 120, 1, 2);
 
     // Animated phoenix sprites
-    const bx = W / 2 - 32;
+    const bx = W / 2 - 48;
     const wingUp = flr(Mono.frame / 10) % 2 === 0;
-    sprT(wingUp ? 4 : 5, bx, flr(ty) + 18 + sin(Mono.frame * 0.08) * 3);
-    sprT(wingUp ? 2 : 3, bx + 16, flr(ty) + 20 + sin(Mono.frame * 0.08 + 1) * 3);
-    sprT(7, bx + 32, flr(ty) + 18 + sin(Mono.frame * 0.08 + 2) * 3);
-    sprT(wingUp ? 2 : 3, bx + 48, flr(ty) + 20 + sin(Mono.frame * 0.08 + 3) * 3);
-    sprT(wingUp ? 4 : 5, bx + 64, flr(ty) + 18 + sin(Mono.frame * 0.08 + 4) * 3);
+    spr(wingUp ? 4 : 5, bx, flr(ty) + 18 + flr(sin(Mono.frame * 0.08) * 3));
+    spr(wingUp ? 2 : 3, bx + 20, flr(ty) + 20 + flr(sin(Mono.frame * 0.08 + 1) * 3));
+    spr(7, bx + 40, flr(ty) + 18 + flr(sin(Mono.frame * 0.08 + 2) * 3));
+    spr(wingUp ? 2 : 3, bx + 60, flr(ty) + 20 + flr(sin(Mono.frame * 0.08 + 3) * 3));
+    spr(wingUp ? 4 : 5, bx + 80, flr(ty) + 18 + flr(sin(Mono.frame * 0.08 + 4) * 3));
 
     if (flr(Mono.frame / 20) % 2 === 0) drawText("PRESS START", 120, 142, 3);
 
     // Score table
-    drawText("-SCORE TABLE-", 128, 161, 2);
-    sprT(2, 127, 172); drawText("  BIRD     10 PTS", 133, 173, 2);
-    sprT(4, 127, 182); drawText("  PHOENIX  30 PTS", 133, 184, 2);
-    sprT(7, 127, 193); drawText("  BOSS    500 PTS", 133, 194, 2);
+    drawText("-SCORE TABLE-", 118, 161, 2);
+    spr(2, 115, 172); drawText("  BIRD     10 PTS", 133, 175, 2);
+    spr(4, 115, 190); drawText("  PHOENIX  30 PTS", 133, 193, 2);
+    spr(7, 115, 208); drawText("  BOSS    500 PTS", 133, 211, 2);
 
-    drawText("B = SHIELD   Z = SHOOT", 105, 210, 1);
-    if (hiScore > 0) drawText("HI:" + hiScore, 140, 221, 2);
-    drawText("MONO DEMO V0.1", 118, 231, 1);
+    drawText("B = SHIELD   Z = SHOOT", 95, 226, 1);
+    if (hiScore > 0) drawText("HI:" + hiScore, 140, 234, 2);
   }
 
   function drawGameOver() {
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
-    drawText("GAME OVER", 138, 82, 3);
-    drawText("SCORE: " + score, 138, 101, 2);
-    drawText("PHASE: " + phase, 138, 112, 2);
-    if (score >= hiScore && score > 0) drawText("NEW HIGH SCORE!", 123, 128, 3);
-    if (flr(Mono.frame / 20) % 2 === 0) drawText("PRESS START", 113, 158, 3);
+    drawText("GAME OVER", 128, 82, 3);
+    drawText("SCORE: " + score, 128, 101, 2);
+    drawText("PHASE: " + phase, 128, 112, 2);
+    if (score >= hiScore && score > 0) drawText("NEW HIGH SCORE!", 113, 128, 3);
+    if (flr(Mono.frame / 20) % 2 === 0) drawText("PRESS START", 120, 158, 3);
   }
 
   function drawPlay() {
     // Enemy bullets
-    for (const b of eBullets) sprT(10, flr(b.x), flr(b.y));
+    for (const b of eBullets) {
+      spr(10, flr(b.x), flr(b.y));
+      Mono.dbgC(flr(b.x) + HALF, flr(b.y) + HALF, EBULLET_R);
+    }
 
     // Boss
     if (boss) drawBoss();
@@ -844,54 +906,65 @@
 
       if (e.type === "smallbird") {
         const wingUp = flr(e.wingTimer / 8) % 2 === 0;
-        sprT(wingUp ? 2 : 3, ex, ey);
+        spr(wingUp ? 2 : 3, ex, ey);
       } else if (e.type === "phoenix") {
         if (e.damaged && e.hp <= 1) {
-          // Damaged phoenix - no wings, flicker
-          if (flr(Mono.frame / 3) % 2 === 0) sprT(6, ex, ey);
-          else sprT(6, ex, ey);
+          if (flr(Mono.frame / 3) % 2 === 0) spr(6, ex, ey);
+          else spr(6, ex, ey);
         } else {
           const wingUp = flr(e.wingTimer / 10) % 2 === 0;
-          sprT(wingUp ? 4 : 5, ex, ey);
+          spr(wingUp ? 4 : 5, ex, ey);
         }
       }
+      // Debug: enemy hitbox
+      const eR = e.type === "phoenix" ? PHOENIX_R : SMALLBIRD_R;
+      Mono.dbgC(ex + HALF, ey + HALF, eR);
     }
 
     // Player bullets
-    for (const b of bullets) sprT(9, flr(b.x), flr(b.y));
+    for (const b of bullets) {
+      spr(9, flr(b.x), flr(b.y));
+      Mono.dbgC(flr(b.x) + HALF, flr(b.y) + HALF, BULLET_R);
+    }
 
     // Player
     if (invincibleTimer <= 0 || flr(Mono.frame / 3) % 2 === 0) {
-      sprT(1, flr(player.x), flr(player.y));
+      spr(1, flr(player.x), flr(player.y));
+      Mono.dbgC(flr(player.x) + HALF, flr(player.y) + HALF, PLAYER_R);
       // Shield visual
       if (shieldActive) {
-        circ(flr(player.x) + 4, flr(player.y) + 4, 7, 2);
-        circ(flr(player.x) + 4, flr(player.y) + 4, 8, 3);
+        circ(flr(player.x) + HALF, flr(player.y) + HALF, 10, 2);
+        circ(flr(player.x) + HALF, flr(player.y) + HALF, 11, 3);
       }
     }
 
     // Explosions
     for (const e of explosions) {
       const sprId = e.timer > 6 ? 11 : 12;
-      sprT(sprId, flr(e.x), flr(e.y));
+      spr(sprId, flr(e.x), flr(e.y));
     }
 
     // Particles
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
-    // HUD
-    rectf(0, 0, W, 10, 0);
-    drawText("SCORE:" + score, 3, 2, 3);
+    // HUD — stays within 320x240
+    rectf(0, 0, W, 14, 0);
+    drawText("SCORE:" + score, 4, 3, 3);
 
     const actualPhase = ((phase - 1) % 5) + 1;
     let phaseLabel = "PH" + phase;
     if (actualPhase <= 2) phaseLabel += " BIRDS";
     else if (actualPhase <= 4) phaseLabel += " PHNX";
     else phaseLabel += " BOSS";
-    drawText(phaseLabel, W / 2 - 20, 2, 2);
+    drawText(phaseLabel, W / 2 - 20, 3, 2);
 
-    // Lives
-    for (let i = 0; i < lives; i++) sprT(13, W - 27 + i * 10, 2);
+    // Lives — cap icons to MAX_LIVES_DISPLAY to prevent overflow
+    const livesToShow = min(lives, MAX_LIVES_DISPLAY);
+    const livesStartX = W - 4 - livesToShow * 18;
+    for (let i = 0; i < livesToShow; i++) spr(13, livesStartX + i * 18, 0);
+    if (lives > MAX_LIVES_DISPLAY) {
+      drawText("+" + (lives - MAX_LIVES_DISPLAY), W - 4 - 20, 3, 2);
+    }
 
     // Shield bar
     const barX = W - 53;
@@ -907,7 +980,7 @@
       const pLabel = getPhaseLabel();
       const textW = pLabel.length * 5;
       drawText(pLabel, W / 2 - textW / 2, flr(msgY), 3);
-      if (waveMessage > 60) drawText("GET READY!", 135, flr(msgY) + 10, 2);
+      if (waveMessage > 60) drawText("GET READY!", 125, flr(msgY) + 12, 2);
     }
   }
 
@@ -918,26 +991,27 @@
     for (let s = 0; s < b.shieldSegments; s++) {
       if (b.shieldHp[s] <= 0) continue;
       const angle = b.shieldAngle + (s / b.shieldSegments) * Math.PI * 2;
-      const sx = flr(b.x + cos(angle) * b.shieldRadius);
-      const sy = flr(b.y + sin(angle) * b.shieldRadius);
-      // Draw shield block - size based on remaining HP
+      const sx = flr(b.x + HALF + cos(angle) * b.shieldRadius);
+      const sy = flr(b.y + HALF + sin(angle) * b.shieldRadius);
       const size = min(b.shieldHp[s], 3);
       if (size >= 3) {
-        rectf(sx - 3, sy - 3, 7, 7, 2);
-        rect(sx - 3, sy - 3, 7, 7, 1);
+        rectf(sx - 4, sy - 4, 9, 9, 2);
+        rect(sx - 4, sy - 4, 9, 9, 1);
       } else if (size >= 2) {
-        rectf(sx - 2, sy - 2, 5, 5, 2);
+        rectf(sx - 3, sy - 3, 7, 7, 2);
       } else {
-        rectf(sx - 1, sy - 1, 3, 3, 1);
+        rectf(sx - 2, sy - 2, 5, 5, 1);
       }
+      Mono.dbgC(sx, sy, 5);
     }
 
     // Boss body
-    sprT(7, flr(b.x) - 4, flr(b.y) - 4);
+    spr(7, flr(b.x), flr(b.y));
+    Mono.dbgC(flr(b.x) + HALF, flr(b.y) + HALF, 7);
 
     // HP bar
-    const hpBarW = 40;
-    const hpX = flr(b.x) - hpBarW / 2 + 4;
+    const hpBarW = 50;
+    const hpX = flr(b.x) + HALF - hpBarW / 2;
     const hpY = flr(b.y) - 14;
     rect(hpX, hpY, hpBarW + 2, 5, 1);
     const hpFill = flr((b.hp / b.maxHp) * hpBarW);
@@ -974,7 +1048,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() { cls(0); drawStarsCommon(); drawGameOver(); }
   });

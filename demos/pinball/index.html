@@ -17,17 +17,125 @@
 <script>
 (() => {
   "use strict";
-  const W = Mono.WIDTH, H = Mono.HEIGHT;
+  const W = Mono.WIDTH, H = Mono.HEIGHT; // 320x240
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
+
+  // --- 8->16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) { const ch = d[r * 8 + c]; row += ch + ch; }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (8x8 source, upscaled to 16x16) ---
+
+  // Ball sprite (shiny chrome ball)
+  defSprite(1, up(
+    "00330000" +
+    "03333000" +
+    "33333300" +
+    "33233300" +
+    "33333300" +
+    "03333000" +
+    "00330000" +
+    "00000000"
+  ));
+
+  // Bumper sprite (round bumper, idle)
+  defSprite(2, up(
+    "00222000" +
+    "02332200" +
+    "23322320" +
+    "23312320" +
+    "23322320" +
+    "02332200" +
+    "00222000" +
+    "00000000"
+  ));
+
+  // Bumper sprite (hit flash)
+  defSprite(3, up(
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "33313330" +
+    "33333330" +
+    "03333300" +
+    "00333000" +
+    "00000000"
+  ));
+
+  // Target unlit
+  defSprite(4, up(
+    "00000000" +
+    "01111100" +
+    "01222100" +
+    "01222100" +
+    "01222100" +
+    "01111100" +
+    "00000000" +
+    "00000000"
+  ));
+
+  // Target lit
+  defSprite(5, up(
+    "00000000" +
+    "02222200" +
+    "02333200" +
+    "02333200" +
+    "02333200" +
+    "02222200" +
+    "00000000" +
+    "00000000"
+  ));
+
+  // Flipper base pivot
+  defSprite(6, up(
+    "00000000" +
+    "00330000" +
+    "03333000" +
+    "03333000" +
+    "00330000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  ));
+
+  // Plunger head
+  defSprite(7, up(
+    "00000000" +
+    "00000000" +
+    "01333100" +
+    "13333310" +
+    "13323310" +
+    "01333100" +
+    "00000000" +
+    "00000000"
+  ));
+
+  // Slingshot marker
+  defSprite(8, up(
+    "00000000" +
+    "00200000" +
+    "02220000" +
+    "22222000" +
+    "02220000" +
+    "00200000" +
+    "00000000" +
+    "00000000"
+  ));
 
   // --- Table layout constants ---
-  // Table is centered, portrait-ish in the 320x240 landscape canvas
-  const TBL_X = 93;    // left edge of table
-  const TBL_Y = 8;     // top edge
-  const TBL_W = 133;   // table width
-  const TBL_H = 225;   // table height
+  const TBL_X = 93;
+  const TBL_Y = 8;
+  const TBL_W = 133;
+  const TBL_H = 225;
   const TBL_R = TBL_X + TBL_W;
   const TBL_B = TBL_Y + TBL_H;
 
@@ -40,7 +148,7 @@
   const FLIP_Y = TBL_B - 30;
   const FLIP_LX = TBL_X + 23;
   const FLIP_RX = LANE_X - 23;
-  const FLIP_MAX_ANG = 0.55; // radians up from rest
+  const FLIP_MAX_ANG = 0.55;
 
   // Drain
   const DRAIN_Y = TBL_B - 8;
@@ -105,7 +213,7 @@
     rightFlipAng = 0;
     plungerPow = 0;
     plungerHeld = false;
-    ballSaved = true; // first ball gets a save
+    ballSaved = true;
     spawnBall();
   }
 
@@ -169,20 +277,16 @@
     const d = Math.sqrt(dx * dx + dy * dy);
     if (d === 0) return;
     const nx = dx / d, ny = dy / d;
-    // Push ball out
     b.x = bmp.x + nx * (bmp.r + b.r + 1);
     b.y = bmp.y + ny * (bmp.r + b.r + 1);
-    // Reflect velocity and add kick
     const dot = b.vx * nx + b.vy * ny;
     b.vx = b.vx - 2 * dot * nx + nx * 2.5;
     b.vy = b.vy - 2 * dot * ny + ny * 2.5;
-    // Limit speed
     const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
     if (spd > 10) { b.vx = b.vx / spd * 10; b.vy = b.vy / spd * 10; }
   }
 
   function flipperTip(baseX, baseY, ang, side) {
-    // side: -1 for left, 1 for right
     const restAng = side === -1 ? 0.4 : Math.PI - 0.4;
     const flipAng = restAng + side * ang;
     return {
@@ -201,7 +305,7 @@
     return { d: dist(px, py, cx, cy), cx: cx, cy: cy, t: t };
   }
 
-  // --- Ramp zone (top of table) ---
+  // --- Ramp zone ---
   const RAMP_X = TBL_X + 40;
   const RAMP_W = 40;
   const RAMP_Y = TBL_Y + 11;
@@ -213,13 +317,20 @@
       showBonus("RAMP BONUS 500!");
       sndRamp();
       shake(6);
-      // Kick ball back down with some angle
       b.vy = 4;
       b.vx = (rnd(4) - 2);
       for (let i = 0; i < 10; i++) addParticle(b.x, b.y, 3);
       return true;
     }
     return false;
+  }
+
+  // --- Circle-circle collision test ---
+  function circleCollide(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const d2 = dx * dx + dy * dy;
+    const rr = ar + br;
+    return d2 < rr * rr;
   }
 
   // --- Update ball physics ---
@@ -236,12 +347,15 @@
     b.x += b.vx;
     b.y += b.vy;
 
+    // Debug: ball circle hitbox
+    dbgC(b.x, b.y, b.r);
+
     // Wall collisions (left)
     if (b.x - b.r < TBL_X) {
       b.x = TBL_X + b.r;
       b.vx = _abs(b.vx) * 0.8;
     }
-    // Right wall (but not in plunger lane area when ball is low)
+    // Right wall (not in plunger lane area when ball is low)
     const inLane = b.x > LANE_X - 5 && b.y > TBL_Y + 38;
     if (!inLane && b.x + b.r > LANE_X) {
       b.x = LANE_X - b.r;
@@ -264,7 +378,7 @@
       b.vy = _abs(b.vy) * 0.6;
     }
 
-    // Curved top arch - bounce off top corners
+    // Curved top arch - circle collision against corner arcs
     const archR = 20;
     // Top-left corner arc
     const tlcx = TBL_X + archR, tlcy = TBL_Y + archR;
@@ -297,10 +411,9 @@
       }
     }
 
-    // Bumper collisions
+    // Bumper collisions (circle-circle)
     for (const bmp of bumpers) {
-      const d = dist(b.x, b.y, bmp.x, bmp.y);
-      if (d < bmp.r + b.r) {
+      if (circleCollide(b.x, b.y, b.r, bmp.x, bmp.y, bmp.r)) {
         reflectBallOffBumper(b, bmp);
         bmp.hit = 8;
         score += 100;
@@ -308,33 +421,41 @@
         shake(3);
         for (let i = 0; i < 5; i++) addParticle(b.x, b.y, 3);
       }
+      // Debug: bumper circle hitbox
+      dbgC(bmp.x, bmp.y, bmp.r);
     }
 
-    // Target collisions
+    // Target collisions (circle-rect)
     for (const tgt of targets) {
-      if (!tgt.lit &&
-          b.x + b.r > tgt.x && b.x - b.r < tgt.x + tgt.w &&
-          b.y + b.r > tgt.y && b.y - b.r < tgt.y + tgt.h) {
-        tgt.lit = true;
-        score += 200;
-        sndTarget();
-        // Bounce away
-        const tcx = tgt.x + tgt.w / 2;
-        const tcy = tgt.y + tgt.h / 2;
-        const dx = b.x - tcx, dy = b.y - tcy;
-        const d = Math.sqrt(dx * dx + dy * dy) || 1;
-        b.vx += (dx / d) * 3;
-        b.vy += (dy / d) * 3;
-        for (let i = 0; i < 5; i++) addParticle(tcx, tcy, 2);
-        // Check multiball
-        if (!allTargetsLit && targets.every(t => t.lit)) {
-          allTargetsLit = true;
-          triggerMultiball();
+      // Debug: target rect hitbox
+      dbg(tgt.x, tgt.y, tgt.w, tgt.h);
+
+      if (!tgt.lit) {
+        // Circle vs AABB collision
+        const closestX = _max(tgt.x, min(b.x, tgt.x + tgt.w));
+        const closestY = _max(tgt.y, min(b.y, tgt.y + tgt.h));
+        const dx = b.x - closestX, dy = b.y - closestY;
+        if (dx * dx + dy * dy < b.r * b.r) {
+          tgt.lit = true;
+          score += 200;
+          sndTarget();
+          const tcx = tgt.x + tgt.w / 2;
+          const tcy = tgt.y + tgt.h / 2;
+          const ddx = b.x - tcx, ddy = b.y - tcy;
+          const dd = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+          b.vx += (ddx / dd) * 3;
+          b.vy += (ddy / dd) * 3;
+          for (let i = 0; i < 5; i++) addParticle(tcx, tcy, 2);
+          if (!allTargetsLit && targets.every(t => t.lit)) {
+            allTargetsLit = true;
+            triggerMultiball();
+          }
         }
       }
     }
 
-    // Ramp
+    // Ramp (debug rect hitbox)
+    dbg(RAMP_X, RAMP_Y, RAMP_W, RAMP_H);
     checkRamp(b);
 
     // Flipper collisions
@@ -369,6 +490,10 @@
       }
     }
 
+    // Debug: slingshot zones
+    dbg(TBL_X, slingLY, slingLX + 10 - TBL_X, 30);
+    dbg(slingRX - 10, slingRY, LANE_X - (slingRX - 10), 30);
+
     // Speed cap
     const spd = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
     if (spd > 12) { b.vx = b.vx / spd * 12; b.vy = b.vy / spd * 12; }
@@ -377,20 +502,22 @@
   function collideFlipperBall(b, baseX, baseY, ang, side, active) {
     const tip = flipperTip(baseX, baseY, ang, side);
     const seg = pointToSegDist(b.x, b.y, baseX, baseY, tip.x, tip.y);
+
+    // Debug: flipper pivot and tip
+    dbgC(baseX, baseY, 3);
+    dbgC(tip.x, tip.y, 2);
+
     if (seg.d < b.r + 3) {
-      // Push ball out
       const nx = (b.x - seg.cx), ny = (b.y - seg.cy);
       const nd = Math.sqrt(nx * nx + ny * ny) || 1;
       b.x = seg.cx + (nx / nd) * (b.r + 4);
       b.y = seg.cy + (ny / nd) * (b.r + 4);
-      // Flipper hitting: give upward velocity
       if (active) {
         const power = 6 + ang * 4;
         b.vy = -power;
-        b.vx += side * (2 + seg.t * 3); // more at tip
+        b.vx += side * (2 + seg.t * 3);
         sndFlipper();
       } else {
-        // Rest: gentle bounce
         const dot = b.vx * (nx / nd) + b.vy * (ny / nd);
         if (dot < 0) {
           b.vx -= 1.5 * dot * (nx / nd);
@@ -405,7 +532,6 @@
     showBonus("MULTIBALL!");
     sndMultiball();
     shake(10);
-    // Add 2 extra balls
     for (let i = 0; i < 2; i++) {
       multiballs.push({
         x: TBL_X + 40 + rnd(40),
@@ -443,10 +569,9 @@
   // --- Tilt detection ---
   function checkTilt() {
     if (tilted) return;
-    // Count rapid left/right presses
     if (btnp("left") || btnp("a") || btnp("right") || btnp("b")) {
       tiltCount++;
-      tiltTimer = 20; // window for counting
+      tiltTimer = 20;
     }
     if (tiltTimer > 0) {
       tiltTimer--;
@@ -476,22 +601,13 @@
       rect(13, 15, W - 26, H - 30, 1);
       rect(16, 18, W - 32, H - 36, 1);
       text("MONO PINBALL", W / 2 - 75, 40, 3);
-      circf(W / 2, 90, 15, 2);
-      circ(W / 2, 90, 15, 3);
-      circ(W / 2, 90, 11, 1);
-      circf(W / 2, 90, 4, 3);
-      line(W / 2 - 27, 120, W / 2 - 7, 109, 3);
-      line(W / 2 + 27, 120, W / 2 + 7, 109, 3);
-      for (let i = -1; i <= 1; i++) {
-        line(W / 2 - 27, 120 + i, W / 2 - 7, 109 + i, 2);
-        line(W / 2 + 27, 120 + i, W / 2 + 7, 109 + i, 2);
-      }
+      // Decorative ball
+      sprT(1, W / 2 - 8, 78);
+      // Decorative bumpers
       for (let i = 0; i < 3; i++) {
-        const bx = W / 2 - 33 + i * 33;
-        const by = 78 + Math.sin(Mono.frame * 0.08 + i * 2) * 4;
-        const br = 6 + ((Mono.frame + i * 10) % 20 < 10 ? 2 : 0);
-        circf(bx, by, br, (Mono.frame + i * 10) % 20 < 10 ? 3 : 2);
-        circ(bx, by, br, 1);
+        const bx = W / 2 - 40 + i * 40;
+        const by = 72 + flr(sin(Mono.frame * 0.08 + i * 2) * 4);
+        sprT((Mono.frame + i * 10) % 20 < 10 ? 3 : 2, bx - 8, by - 8);
       }
       if (titleBlink) {
         text("PRESS START", W / 2 - 98, 150, 3);
@@ -507,228 +623,214 @@
   Mono.scene(PLAY, {
     init() { resetGame(); },
     update() {
-    // --- Play state ---
-    // Tilt cooldown
-    if (tilted) {
-      tiltCooldown--;
-      if (tiltCooldown <= 0) tilted = false;
-    }
-
-    // Flippers
-    if (!tilted) {
-      const flipSpeed = 0.15;
-      if (btn("left") || btn("a")) {
-        leftFlipAng = min(leftFlipAng + flipSpeed, FLIP_MAX_ANG);
-      } else {
-        leftFlipAng = _max(leftFlipAng - flipSpeed * 0.7, 0);
+      // Tilt cooldown
+      if (tilted) {
+        tiltCooldown--;
+        if (tiltCooldown <= 0) tilted = false;
       }
-      if (btn("right") || btn("b")) {
-        rightFlipAng = min(rightFlipAng + flipSpeed, FLIP_MAX_ANG);
-      } else {
-        rightFlipAng = _max(rightFlipAng - flipSpeed * 0.7, 0);
-      }
-    } else {
-      // Flippers drop when tilted
-      leftFlipAng = _max(leftFlipAng - 0.05, 0);
-      rightFlipAng = _max(rightFlipAng - 0.05, 0);
-    }
 
-    // Plunger
-    if (!ball.launched) {
-      if (btn("down")) {
-        plungerPow = min(plungerPow + 0.8, 30);
-        plungerHeld = true;
-      } else if (plungerHeld) {
-        // Release!
-        ball.vy = -plungerPow * 0.35;
-        ball.vx = -0.5;
-        ball.launched = true;
-        plungerHeld = false;
-        sndLaunch();
-      }
-    }
-
-    // Tilt check
-    checkTilt();
-
-    // Update main ball
-    if (ball.launched) {
-      updateBall(ball);
-      // Check drain
-      if (ball.y > DRAIN_Y + 10) {
-        if (multiball && multiballs.length > 0) {
-          // Main ball drains in multiball, swap with a multiball
-          const mb = multiballs.pop();
-          ball.x = mb.x; ball.y = mb.y;
-          ball.vx = mb.vx; ball.vy = mb.vy;
-          ball.launched = true;
+      // Flippers
+      if (!tilted) {
+        const flipSpeed = 0.15;
+        if (btn("left") || btn("a")) {
+          leftFlipAng = min(leftFlipAng + flipSpeed, FLIP_MAX_ANG);
         } else {
-          multiball = false;
-          drainBall();
+          leftFlipAng = _max(leftFlipAng - flipSpeed * 0.7, 0);
+        }
+        if (btn("right") || btn("b")) {
+          rightFlipAng = min(rightFlipAng + flipSpeed, FLIP_MAX_ANG);
+        } else {
+          rightFlipAng = _max(rightFlipAng - flipSpeed * 0.7, 0);
+        }
+      } else {
+        leftFlipAng = _max(leftFlipAng - 0.05, 0);
+        rightFlipAng = _max(rightFlipAng - 0.05, 0);
+      }
+
+      // Plunger
+      if (!ball.launched) {
+        if (btn("down")) {
+          plungerPow = min(plungerPow + 0.8, 30);
+          plungerHeld = true;
+        } else if (plungerHeld) {
+          ball.vy = -plungerPow * 0.35;
+          ball.vx = -0.5;
+          ball.launched = true;
+          plungerHeld = false;
+          sndLaunch();
         }
       }
-    }
 
-    // Update multiball extra balls
-    for (let i = multiballs.length - 1; i >= 0; i--) {
-      updateBall(multiballs[i]);
-      if (multiballs[i].y > DRAIN_Y + 10) {
-        multiballs.splice(i, 1);
+      // Tilt check
+      checkTilt();
+
+      // Update main ball
+      if (ball.launched) {
+        updateBall(ball);
+        if (ball.y > DRAIN_Y + 10) {
+          if (multiball && multiballs.length > 0) {
+            const mb = multiballs.pop();
+            ball.x = mb.x; ball.y = mb.y;
+            ball.vx = mb.vx; ball.vy = mb.vy;
+            ball.launched = true;
+          } else {
+            multiball = false;
+            drainBall();
+          }
+        }
       }
-    }
-    if (multiballs.length === 0 && multiball) {
-      multiball = false;
-      // Reset targets for next multiball opportunity
-      allTargetsLit = false;
-      for (const t of targets) t.lit = false;
-    }
 
-    // Bumper hit flash decay
-    for (const bmp of bumpers) if (bmp.hit > 0) bmp.hit--;
+      // Update multiball extra balls
+      for (let i = multiballs.length - 1; i >= 0; i--) {
+        updateBall(multiballs[i]);
+        if (multiballs[i].y > DRAIN_Y + 10) {
+          multiballs.splice(i, 1);
+        }
+      }
+      if (multiballs.length === 0 && multiball) {
+        multiball = false;
+        allTargetsLit = false;
+        for (const t of targets) t.lit = false;
+      }
 
-    // Particles
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.x += p.vx; p.y += p.vy;
-      p.vy += 0.1;
-      p.life--;
-      if (p.life <= 0) particles.splice(i, 1);
-    }
+      // Bumper hit flash decay
+      for (const bmp of bumpers) if (bmp.hit > 0) bmp.hit--;
 
-    // Bonus text timer
-    if (bonusTimer > 0) bonusTimer--;
+      // Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        p.vy += 0.1;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
 
-    // Shake
-    if (shakeTimer > 0) {
-      shakeTimer--;
-      shakeX = flr(rnd(5)) - 2;
-      shakeY = flr(rnd(5)) - 2;
-    } else {
-      shakeX = 0; shakeY = 0;
-    }
+      // Bonus text timer
+      if (bonusTimer > 0) bonusTimer--;
+
+      // Shake
+      if (shakeTimer > 0) {
+        shakeTimer--;
+        shakeX = flr(rnd(5)) - 2;
+        shakeY = flr(rnd(5)) - 2;
+      } else {
+        shakeX = 0; shakeY = 0;
+      }
     },
     draw() {
-    cls(0);
-    // --- Play state drawing with shake offset ---
-    const ox = shakeX, oy = shakeY;
+      cls(0);
+      const ox = shakeX, oy = shakeY;
 
-    // Table
-    rectf(TBL_X + ox, TBL_Y + oy, TBL_W, TBL_H, 0);
-    rect(TBL_X + ox, TBL_Y + oy, TBL_W, TBL_H, 1);
-    rect(TBL_X + 3 + ox, TBL_Y + 3 + oy, TBL_W - 6, TBL_H - 6, 1);
+      // Table background and border
+      rectf(TBL_X + ox, TBL_Y + oy, TBL_W, TBL_H, 0);
+      rect(TBL_X + ox, TBL_Y + oy, TBL_W, TBL_H, 1);
+      rect(TBL_X + 3 + ox, TBL_Y + 3 + oy, TBL_W - 6, TBL_H - 6, 1);
 
-    // Plunger lane
-    line(LANE_X + ox, TBL_Y + 30 + oy, LANE_X + ox, TBL_B + oy, 1);
+      // Plunger lane
+      line(LANE_X + ox, TBL_Y + 30 + oy, LANE_X + ox, TBL_B + oy, 1);
 
-    // Top arches
-    const archR = 20;
-    for (let a = 0; a < Math.PI / 2; a += 0.15) {
-      const x1 = TBL_X + archR - Math.cos(a) * archR + ox;
-      const y1 = TBL_Y + archR - Math.sin(a) * archR + oy;
-      const x2 = TBL_X + archR - Math.cos(a + 0.15) * archR + ox;
-      const y2 = TBL_Y + archR - Math.sin(a + 0.15) * archR + oy;
-      line(x1, y1, x2, y2, 1);
-    }
-    for (let a = 0; a < Math.PI / 2; a += 0.15) {
-      const x1 = LANE_X - archR + Math.cos(a) * archR + ox;
-      const y1 = TBL_Y + archR - Math.sin(a) * archR + oy;
-      const x2 = LANE_X - archR + Math.cos(a + 0.15) * archR + ox;
-      const y2 = TBL_Y + archR - Math.sin(a + 0.15) * archR + oy;
-      line(x1, y1, x2, y2, 1);
-    }
-
-    // Ramp
-    rectf(RAMP_X + ox, RAMP_Y + oy, RAMP_W, RAMP_H, 0);
-    rect(RAMP_X + ox, RAMP_Y + oy, RAMP_W, RAMP_H, 2);
-    text("RAMP", RAMP_X + 10 + ox, RAMP_Y + 2 + oy, 2);
-
-    // Slingshots
-    const sly = FLIP_Y - 26;
-    line(TBL_X + 5 + ox, sly + oy, TBL_X + 5 + ox, sly + 30 + oy, 2);
-    line(TBL_X + 5 + ox, sly + oy, TBL_X + 17 + ox, sly + 15 + oy, 2);
-    line(TBL_X + 17 + ox, sly + 15 + oy, TBL_X + 5 + ox, sly + 30 + oy, 2);
-    line(LANE_X - 5 + ox, sly + oy, LANE_X - 5 + ox, sly + 30 + oy, 2);
-    line(LANE_X - 5 + ox, sly + oy, LANE_X - 17 + ox, sly + 15 + oy, 2);
-    line(LANE_X - 17 + ox, sly + 15 + oy, LANE_X - 5 + ox, sly + 30 + oy, 2);
-
-    // Drain guides
-    line(TBL_X + 3 + ox, FLIP_Y - 45 + oy, TBL_X + 3 + ox, FLIP_Y + 4 + oy, 1);
-    line(LANE_X - 3 + ox, FLIP_Y - 45 + oy, LANE_X - 3 + ox, FLIP_Y + 4 + oy, 1);
-
-    // Drain slopes
-    const drainL = FLIP_LX - 10;
-    const drainR = FLIP_RX + 10;
-    line(TBL_X + ox, DRAIN_Y + oy, drainL + ox, DRAIN_Y + 9 + oy, 1);
-    line(LANE_X + ox, DRAIN_Y + oy, drainR + ox, DRAIN_Y + 9 + oy, 1);
-
-    // Bumpers
-    for (const b of bumpers) {
-      const c = b.hit > 0 ? 3 : 2;
-      circf(b.x + ox, b.y + oy, b.r, c);
-      circ(b.x + ox, b.y + oy, b.r, 1);
-      circ(b.x + ox, b.y + oy, b.r - 2, b.hit > 0 ? 1 : 2);
-      text("100", b.x - 7 + ox, b.y - 3 + oy, b.hit > 0 ? 0 : 1);
-    }
-
-    // Targets
-    for (const t of targets) {
-      if (t.lit) {
-        rectf(t.x + ox, t.y + oy, t.w, t.h, 3);
-        rect(t.x + ox, t.y + oy, t.w, t.h, 2);
-      } else {
-        rectf(t.x + ox, t.y + oy, t.w, t.h, 1);
-        rect(t.x + ox, t.y + oy, t.w, t.h, 2);
+      // Top arches
+      const archR = 20;
+      for (let a = 0; a < Math.PI / 2; a += 0.15) {
+        const x1 = TBL_X + archR - Math.cos(a) * archR + ox;
+        const y1 = TBL_Y + archR - Math.sin(a) * archR + oy;
+        const x2 = TBL_X + archR - Math.cos(a + 0.15) * archR + ox;
+        const y2 = TBL_Y + archR - Math.sin(a + 0.15) * archR + oy;
+        line(x1, y1, x2, y2, 1);
       }
-    }
-
-    // Flippers
-    const ltip = flipperTip(FLIP_LX, FLIP_Y, leftFlipAng, -1);
-    for (let i = -2; i <= 2; i++) {
-      line(FLIP_LX + ox, FLIP_Y + i + oy, ltip.x + ox, ltip.y + i + oy, tilted ? 1 : 3);
-    }
-    circf(FLIP_LX + ox, FLIP_Y + oy, 3, 3);
-    circf(ltip.x + ox, ltip.y + oy, 2, 3);
-
-    const rtip = flipperTip(FLIP_RX, FLIP_Y, rightFlipAng, 1);
-    for (let i = -2; i <= 2; i++) {
-      line(FLIP_RX + ox, FLIP_Y + i + oy, rtip.x + ox, rtip.y + i + oy, tilted ? 1 : 3);
-    }
-    circf(FLIP_RX + ox, FLIP_Y + oy, 3, 3);
-    circf(rtip.x + ox, rtip.y + oy, 2, 3);
-
-    // Plunger
-    if (!ball.launched) {
-      const plX = LANE_X + LANE_W / 2 + ox;
-      const plBase = TBL_B - 4 + oy;
-      const plTop = plBase - 15 + plungerPow * 0.5;
-      rectf(plX - 3, plTop, 6, plBase - plTop, 2);
-      rectf(plX - 5, plTop - 3, 10, 5, 3);
-      for (let sy = plTop + 5; sy < plBase; sy += 4) {
-        line(plX - 2, sy, plX + 2, sy + 2, 1);
+      for (let a = 0; a < Math.PI / 2; a += 0.15) {
+        const x1 = LANE_X - archR + Math.cos(a) * archR + ox;
+        const y1 = TBL_Y + archR - Math.sin(a) * archR + oy;
+        const x2 = LANE_X - archR + Math.cos(a + 0.15) * archR + ox;
+        const y2 = TBL_Y + archR - Math.sin(a + 0.15) * archR + oy;
+        line(x1, y1, x2, y2, 1);
       }
-    }
 
-    // Ball
-    if (ball.launched || !ball.launched) {
-      drawBall({ x: ball.x + ox, y: ball.y + oy, r: ball.r });
-    }
-    for (const mb of multiballs) {
-      drawBall({ x: mb.x + ox, y: mb.y + oy, r: mb.r });
-    }
+      // Ramp
+      rectf(RAMP_X + ox, RAMP_Y + oy, RAMP_W, RAMP_H, 0);
+      rect(RAMP_X + ox, RAMP_Y + oy, RAMP_W, RAMP_H, 2);
+      text("RAMP", RAMP_X + 10 + ox, RAMP_Y + 2 + oy, 2);
 
-    // Particles
-    for (const p of particles) {
-      pix(p.x + ox, p.y + oy, p.color);
-    }
+      // Slingshots - draw sprite markers at triangle centers
+      const sly = FLIP_Y - 26;
+      line(TBL_X + 5 + ox, sly + oy, TBL_X + 5 + ox, sly + 30 + oy, 2);
+      line(TBL_X + 5 + ox, sly + oy, TBL_X + 17 + ox, sly + 15 + oy, 2);
+      line(TBL_X + 17 + ox, sly + 15 + oy, TBL_X + 5 + ox, sly + 30 + oy, 2);
+      sprT(8, TBL_X + 2 + ox, sly + 7 + oy);
 
-    // HUD (no shake offset for HUD)
-    drawHUD();
+      line(LANE_X - 5 + ox, sly + oy, LANE_X - 5 + ox, sly + 30 + oy, 2);
+      line(LANE_X - 5 + ox, sly + oy, LANE_X - 17 + ox, sly + 15 + oy, 2);
+      line(LANE_X - 17 + ox, sly + 15 + oy, LANE_X - 5 + ox, sly + 30 + oy, 2);
+      sprT(8, LANE_X - 18 + ox, sly + 7 + oy, true);
 
-    // Decorative dots along table sides
-    for (let dy = TBL_Y + 15; dy < TBL_B - 15; dy += 11) {
-      pix(TBL_X + 1 + ox, dy + oy, 1);
-      pix(TBL_R - 2 + ox, dy + oy, 1);
-    }
+      // Drain guides
+      line(TBL_X + 3 + ox, FLIP_Y - 45 + oy, TBL_X + 3 + ox, FLIP_Y + 4 + oy, 1);
+      line(LANE_X - 3 + ox, FLIP_Y - 45 + oy, LANE_X - 3 + ox, FLIP_Y + 4 + oy, 1);
+
+      // Drain slopes
+      const drainL = FLIP_LX - 10;
+      const drainR = FLIP_RX + 10;
+      line(TBL_X + ox, DRAIN_Y + oy, drainL + ox, DRAIN_Y + 9 + oy, 1);
+      line(LANE_X + ox, DRAIN_Y + oy, drainR + ox, DRAIN_Y + 9 + oy, 1);
+
+      // Bumpers (use sprites)
+      for (const b of bumpers) {
+        const sid = b.hit > 0 ? 3 : 2;
+        sprT(sid, b.x - 8 + ox, b.y - 8 + oy);
+        text("100", b.x - 7 + ox, b.y - 3 + oy, b.hit > 0 ? 0 : 1);
+      }
+
+      // Targets (use sprites)
+      for (const t of targets) {
+        sprT(t.lit ? 5 : 4, t.x - 6 + ox, t.y - 2 + oy);
+      }
+
+      // Flippers
+      const ltip = flipperTip(FLIP_LX, FLIP_Y, leftFlipAng, -1);
+      for (let i = -2; i <= 2; i++) {
+        line(FLIP_LX + ox, FLIP_Y + i + oy, ltip.x + ox, ltip.y + i + oy, tilted ? 1 : 3);
+      }
+      sprT(6, FLIP_LX - 8 + ox, FLIP_Y - 8 + oy);
+      circf(flr(ltip.x) + ox, flr(ltip.y) + oy, 2, 3);
+
+      const rtip = flipperTip(FLIP_RX, FLIP_Y, rightFlipAng, 1);
+      for (let i = -2; i <= 2; i++) {
+        line(FLIP_RX + ox, FLIP_Y + i + oy, rtip.x + ox, rtip.y + i + oy, tilted ? 1 : 3);
+      }
+      sprT(6, FLIP_RX - 8 + ox, FLIP_Y - 8 + oy);
+      circf(flr(rtip.x) + ox, flr(rtip.y) + oy, 2, 3);
+
+      // Plunger
+      if (!ball.launched) {
+        const plX = LANE_X + LANE_W / 2 + ox;
+        const plBase = TBL_B - 4 + oy;
+        const plTop = plBase - 15 + plungerPow * 0.5;
+        rectf(plX - 3, plTop, 6, plBase - plTop, 2);
+        sprT(7, plX - 8, plTop - 10);
+        for (let sy = plTop + 5; sy < plBase; sy += 4) {
+          line(plX - 2, sy, plX + 2, sy + 2, 1);
+        }
+      }
+
+      // Ball (use sprite)
+      drawBall(ball.x + ox, ball.y + oy);
+      for (const mb of multiballs) {
+        drawBall(mb.x + ox, mb.y + oy);
+      }
+
+      // Particles
+      for (const p of particles) {
+        pix(p.x + ox, p.y + oy, p.color);
+      }
+
+      // HUD (no shake offset, clamped inside 320x240)
+      drawHUD();
+
+      // Decorative dots
+      for (let dy = TBL_Y + 15; dy < TBL_B - 15; dy += 11) {
+        pix(TBL_X + 1 + ox, dy + oy, 1);
+        pix(TBL_R - 2 + ox, dy + oy, 1);
+      }
     }
   });
 
@@ -745,7 +847,8 @@
       rect(13, 15, W - 26, H - 30, 1);
       text("GAME OVER", W / 2 - 44, 55, 3);
       text("FINAL SCORE", W / 2 - 54, 85, 2);
-      text(String(score), W / 2 - String(score).length * 2.5, 100, 3);
+      const ss = String(score);
+      text(ss, W / 2 - flr(ss.length * 2.5), 100, 3);
       if (score >= highScore && score > 0) {
         text("NEW HIGH SCORE!", W / 2 - 73, 122, (Mono.frame % 10 < 6) ? 3 : 2);
       }
@@ -756,134 +859,13 @@
     }
   });
 
-  // --- Drawing ---
-  function drawTable() {
-    // Table background
-    rectf(TBL_X, TBL_Y, TBL_W, TBL_H, 0);
-    // Table border
-    rect(TBL_X, TBL_Y, TBL_W, TBL_H, 1);
-    // Inner border decoration
-    rect(TBL_X + 3, TBL_Y + 3, TBL_W - 6, TBL_H - 6, 1);
-
-    // Plunger lane
-    line(LANE_X, TBL_Y + 30, LANE_X, TBL_B, 1);
-
-    // Top arch decorations
-    const archR = 20;
-    // Draw arcs as series of lines
-    for (let a = 0; a < Math.PI / 2; a += 0.15) {
-      const x1 = TBL_X + archR - Math.cos(a) * archR;
-      const y1 = TBL_Y + archR - Math.sin(a) * archR;
-      const x2 = TBL_X + archR - Math.cos(a + 0.15) * archR;
-      const y2 = TBL_Y + archR - Math.sin(a + 0.15) * archR;
-      line(x1, y1, x2, y2, 1);
-    }
-    for (let a = 0; a < Math.PI / 2; a += 0.15) {
-      const x1 = LANE_X - archR + Math.cos(a) * archR;
-      const y1 = TBL_Y + archR - Math.sin(a) * archR;
-      const x2 = LANE_X - archR + Math.cos(a + 0.15) * archR;
-      const y2 = TBL_Y + archR - Math.sin(a + 0.15) * archR;
-      line(x1, y1, x2, y2, 1);
-    }
-
-    // Ramp
-    rectf(RAMP_X, RAMP_Y, RAMP_W, RAMP_H, 0);
-    rect(RAMP_X, RAMP_Y, RAMP_W, RAMP_H, 2);
-    text("RAMP", RAMP_X + 10, RAMP_Y + 2, 2);
-
-    // Slingshot triangles (above flippers, on sides)
-    const sly = FLIP_Y - 26;
-    // Left slingshot
-    line(TBL_X + 5, sly, TBL_X + 5, sly + 30, 2);
-    line(TBL_X + 5, sly, TBL_X + 17, sly + 15, 2);
-    line(TBL_X + 17, sly + 15, TBL_X + 5, sly + 30, 2);
-    // Right slingshot
-    line(LANE_X - 5, sly, LANE_X - 5, sly + 30, 2);
-    line(LANE_X - 5, sly, LANE_X - 17, sly + 15, 2);
-    line(LANE_X - 17, sly + 15, LANE_X - 5, sly + 30, 2);
-
-    // Drain warning
-    const drainL = FLIP_LX - 10;
-    const drainR = FLIP_RX + 10;
-    line(TBL_X, DRAIN_Y, drainL, DRAIN_Y + 9, 1);
-    line(LANE_X, DRAIN_Y, drainR, DRAIN_Y + 9, 1);
-
-    // Drain guides (outer lanes)
-    line(TBL_X + 3, FLIP_Y - 45, TBL_X + 3, FLIP_Y + 4, 1);
-    line(LANE_X - 3, FLIP_Y - 45, LANE_X - 3, FLIP_Y + 4, 1);
-  }
-
-  function drawBumpers() {
-    for (const b of bumpers) {
-      const c = b.hit > 0 ? 3 : 2;
-      circf(b.x, b.y, b.r, c);
-      circ(b.x, b.y, b.r, 1);
-      circ(b.x, b.y, b.r - 2, b.hit > 0 ? 1 : 2);
-      // Score label
-      text("100", b.x - 7, b.y - 3, b.hit > 0 ? 0 : 1);
-    }
-  }
-
-  function drawTargets() {
-    for (const t of targets) {
-      if (t.lit) {
-        rectf(t.x, t.y, t.w, t.h, 3);
-        rect(t.x, t.y, t.w, t.h, 2);
-      } else {
-        rectf(t.x, t.y, t.w, t.h, 1);
-        rect(t.x, t.y, t.w, t.h, 2);
-      }
-    }
-  }
-
-  function drawFlippers() {
-    // Left flipper
-    const ltip = flipperTip(FLIP_LX, FLIP_Y, leftFlipAng, -1);
-    // Draw thick flipper
-    for (let i = -2; i <= 2; i++) {
-      line(FLIP_LX, FLIP_Y + i, ltip.x, ltip.y + i, tilted ? 1 : 3);
-    }
-    circf(FLIP_LX, FLIP_Y, 3, 3);
-    circf(ltip.x, ltip.y, 2, 3);
-
-    // Right flipper
-    const rtip = flipperTip(FLIP_RX, FLIP_Y, rightFlipAng, 1);
-    for (let i = -2; i <= 2; i++) {
-      line(FLIP_RX, FLIP_Y + i, rtip.x, rtip.y + i, tilted ? 1 : 3);
-    }
-    circf(FLIP_RX, FLIP_Y, 3, 3);
-    circf(rtip.x, rtip.y, 2, 3);
-  }
-
-  function drawPlunger() {
-    const plX = LANE_X + LANE_W / 2;
-    const plBase = TBL_B - 4;
-    const plTop = plBase - 15 + plungerPow * 0.5;
-    // Plunger shaft
-    rectf(plX - 3, plTop, 6, plBase - plTop, 2);
-    // Plunger head
-    rectf(plX - 5, plTop - 3, 10, 5, 3);
-    // Spring lines
-    for (let sy = plTop + 5; sy < plBase; sy += 4) {
-      line(plX - 2, sy, plX + 2, sy + 2, 1);
-    }
-  }
-
-  function drawBall(b) {
-    circf(b.x, b.y, b.r, 3);
-    circ(b.x, b.y, b.r, 2);
-    // Shine
-    pix(b.x - 1, b.y - 1, 3);
-  }
-
-  function drawParticles() {
-    for (const p of particles) {
-      pix(p.x, p.y, p.color);
-    }
+  // --- Drawing helpers ---
+  function drawBall(bx, by) {
+    sprT(1, flr(bx) - 8, flr(by) - 8);
   }
 
   function drawHUD() {
-    // Score panel (left side)
+    // Score panel (left side, fits within 0..90 x 0..55)
     rectf(3, 8, 83, 45, 0);
     rect(3, 8, 83, 45, 1);
     text("SCORE", 8, 11, 2);
@@ -891,34 +873,34 @@
     text("HIGH", 8, 30, 2);
     text(String(highScore), 8, 38, 3);
 
-    // Ball count (right side)
-    rectf(233, 8, 83, 34, 0);
-    rect(233, 8, 83, 34, 1);
-    text("BALL", 239, 11, 2);
+    // Ball count (right side, fits within 230..315 x 8..42)
+    rectf(230, 8, 85, 34, 0);
+    rect(230, 8, 85, 34, 1);
+    text("BALL", 236, 11, 2);
     for (let i = 0; i < balls; i++) {
-      circf(247 + i * 14, 29, 4, 3);
+      circf(244 + i * 14, 29, 4, 3);
     }
 
     // Ball save indicator
     if (ballSaved) {
-      text("SAVE", 239, 36, (Mono.frame % 20 < 12) ? 3 : 1);
+      text("SAVE", 236, 36, (Mono.frame % 20 < 12) ? 3 : 1);
     }
 
-    // Multiball indicator
+    // Multiball indicator (below ball count, inside bounds)
     if (multiball) {
       const mc = (Mono.frame % 10 < 5) ? 3 : 2;
-      text("MULTIBALL!", 239, 45, mc);
+      text("MULTIBALL!", 236, 45, mc);
     }
 
-    // Target progress
+    // Target progress (fits within 230..315 x 53..68)
     const litCount = targets.filter(t => t.lit).length;
-    rectf(233, 53, 83, 15, 0);
-    rect(233, 53, 83, 15, 1);
-    text("TARGETS " + litCount + "/" + targets.length, 239, 56, litCount === targets.length ? 3 : 2);
+    rectf(230, 53, 85, 15, 0);
+    rect(230, 53, 85, 15, 1);
+    text("TARGETS " + litCount + "/" + targets.length, 236, 56, litCount === targets.length ? 3 : 2);
 
-    // Bonus text
+    // Bonus text (centered on table)
     if (bonusTimer > 0) {
-      const bx = TBL_X + TBL_W / 2 - bonusText.length * 2.5;
+      const bx = TBL_X + TBL_W / 2 - flr(bonusText.length * 2.5);
       const by = TBL_Y + TBL_H / 2 - 15;
       const bc = (Mono.frame % 6 < 3) ? 3 : 2;
       text(bonusText, bx, by, bc);
