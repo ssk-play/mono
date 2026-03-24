@@ -436,10 +436,16 @@
     }
   }
 
+  // Persistent powerup state (survives between levels, resets on new game)
+  let savedFireRange = 1, savedMaxBombs = 1, savedSpeed = 2;
+
   function resetGame() {
     score = 0;
     lives = 3;
     level = 0;
+    savedFireRange = 1;
+    savedMaxBombs = 1;
+    savedSpeed = 2;
     startLevel();
   }
 
@@ -454,9 +460,9 @@
       targetPx: OX + 1 * TX, targetPy: OY + 1 * TX,
       moving: false,
       dir: 1, // 0=up 1=down 2=left 3=right
-      fireRange: 1 + flr(level / 4),
-      maxBombs: 1 + flr(level / 3),
-      speed: 2,
+      fireRange: savedFireRange,
+      maxBombs: savedMaxBombs,
+      speed: savedSpeed,
       animFrame: 0,
       animTimer: 0,
     };
@@ -828,6 +834,10 @@
       moveTimer = (moveTimer || 0) + 1;
       if (moveTimer > 90) {
         moveTimer = 0;
+        // Save powerup state before level reset
+        savedFireRange = player.fireRange;
+        savedMaxBombs = player.maxBombs;
+        savedSpeed = player.speed;
         startLevel();
         GrayBox.go(PLAY);
       }
