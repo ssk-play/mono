@@ -22,10 +22,24 @@
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
           min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 -> 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (8x8 data upscaled to 16x16) ---
 
   // 1: Bub the dragon (facing right)
-  defSprite(1,
+  defSprite(1, up(
     "00333300" +
     "03222230" +
     "32302230" +
@@ -34,10 +48,10 @@
     "03331330" +
     "03303300" +
     "03000300"
-  );
+  ));
 
   // 2: Platform block
-  defSprite(2,
+  defSprite(2, up(
     "33333333" +
     "21212121" +
     "12121212" +
@@ -46,10 +60,10 @@
     "12121212" +
     "21212121" +
     "12121212"
-  );
+  ));
 
   // 3: Bubble (small, just shot)
-  defSprite(3,
+  defSprite(3, up(
     "00333000" +
     "03000300" +
     "30000030" +
@@ -58,10 +72,10 @@
     "30000030" +
     "03000300" +
     "00333000"
-  );
+  ));
 
   // 4: Bubble with enemy trapped
-  defSprite(4,
+  defSprite(4, up(
     "00333000" +
     "03222300" +
     "32313230" +
@@ -70,10 +84,10 @@
     "32222230" +
     "03222300" +
     "00333000"
-  );
+  ));
 
   // 5: Enemy type A — blob monster
-  defSprite(5,
+  defSprite(5, up(
     "00111100" +
     "01222210" +
     "12302310" +
@@ -82,10 +96,10 @@
     "12222210" +
     "01222210" +
     "10100101"
-  );
+  ));
 
   // 6: Enemy type B — ghost
-  defSprite(6,
+  defSprite(6, up(
     "00111100" +
     "01333310" +
     "13203210" +
@@ -94,10 +108,10 @@
     "13131310" +
     "13131310" +
     "10101010"
-  );
+  ));
 
   // 7: Fruit — cherry
-  defSprite(7,
+  defSprite(7, up(
     "00000300" +
     "00003000" +
     "00230200" +
@@ -106,10 +120,10 @@
     "03332000" +
     "02320000" +
     "00200000"
-  );
+  ));
 
   // 8: Fruit — melon slice
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "03333300" +
     "32222230" +
@@ -118,10 +132,10 @@
     "03333300" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 9: Fruit — diamond
-  defSprite(9,
+  defSprite(9, up(
     "00030000" +
     "00323000" +
     "03232300" +
@@ -130,10 +144,10 @@
     "00323000" +
     "00030000" +
     "00000000"
-  );
+  ));
 
   // 10: Wall block (border)
-  defSprite(10,
+  defSprite(10, up(
     "11111111" +
     "10101010" +
     "01010101" +
@@ -142,10 +156,10 @@
     "10101010" +
     "01010101" +
     "11111111"
-  );
+  ));
 
   // 11: Life icon (mini dragon)
-  defSprite(11,
+  defSprite(11, up(
     "00000000" +
     "00333000" +
     "03222300" +
@@ -154,10 +168,10 @@
     "03303300" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 12: Explosion/pop frame
-  defSprite(12,
+  defSprite(12, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -166,285 +180,174 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
 
   // --- Constants ---
-  const TILE = 8;
-  const COLS = W / TILE;  // 40
-  const ROWS = H / TILE;  // 30
+  const TILE = 16;
+  const COLS = W / TILE;  // 20
+  const ROWS = H / TILE;  // 15
   const GRAVITY = 0.35;
   const JUMP_VEL = -5.5;
   const MOVE_SPEED = 2.2;
   const BUBBLE_SPEED = 4;
   const BUBBLE_FLOAT_SPEED = -0.5;
-  const BUBBLE_LIFE = 300; // frames before bubble pops on its own
+  const BUBBLE_LIFE = 300;
   const MAX_BUBBLES = 8;
+  const SP = 16; // sprite size for collision boxes
 
   // --- Level data ---
-  // Each level is an array of strings, each char: ' '=empty, '#'=platform, '|'=wall
-  // Arena is 40 cols x 30 rows (320x240 at 8px tiles)
-  // The border walls are always present (left/right columns + bottom row)
+  // Each level is an array of strings, 20 cols x 15 rows (320x240 at 16px tiles)
+  // ' '=empty, '#'=platform, '|'=wall
+  // Border walls on left/right columns + bottom row always present
   // Top is OPEN for wrap-around
 
   const LEVELS = [
     // Level 1 — simple platforms
     [
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "      #########          #########      ",
-      "      #########          #########      ",
-      "                                        ",
-      "                                        ",
-      "            ###########                 ",
-      "                                        ",
-      "                                        ",
-      "    ######                 ######       ",
-      "                                        ",
-      "                                        ",
-      "            ###########                 ",
-      "                                        ",
-      "                                        ",
-      "      #########          #########      ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "   #######      ####      #######       ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "########################################",
+      "                    ",
+      "                    ",
+      "                    ",
+      "   ####    ####     ",
+      "                    ",
+      "      #####         ",
+      "                    ",
+      "  ###         ###   ",
+      "                    ",
+      "      #####         ",
+      "                    ",
+      "   ####    ####     ",
+      "                    ",
+      "  ###  ##   ###     ",
+      "####################",
     ],
     // Level 2 — zigzag
     [
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "   ###########                          ",
-      "                                        ",
-      "                                        ",
-      "                ############            ",
-      "                                        ",
-      "                                        ",
-      "   ###########                          ",
-      "                                        ",
-      "                                        ",
-      "                ############            ",
-      "                                        ",
-      "                                        ",
-      "   ###########                          ",
-      "                                        ",
-      "                                        ",
-      "                ############            ",
-      "                                        ",
-      "                                        ",
-      "   ###########                          ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "########################################",
+      "                    ",
+      "                    ",
+      "                    ",
+      "  #####             ",
+      "                    ",
+      "        ######      ",
+      "                    ",
+      "  #####             ",
+      "                    ",
+      "        ######      ",
+      "                    ",
+      "  #####             ",
+      "                    ",
+      "                    ",
+      "####################",
     ],
     // Level 3 — pillars
     [
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "     ###    ###   ####   ###    ###     ",
-      "     ###    ###   ####   ###    ###     ",
-      "                                        ",
-      "                                        ",
-      "  ####### ####### ####### #######       ",
-      "  ####### ####### ####### #######       ",
-      "                                        ",
-      "                                        ",
-      "     ###    ###   ####   ###    ###     ",
-      "     ###    ###   ####   ###    ###     ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "  ####### ####### ####### #######       ",
-      "                                        ",
-      "                                        ",
-      "     ###    ###   ####   ###    ###     ",
-      "     ###    ###   ####   ###    ###     ",
-      "     ###    ###   ####   ###    ###     ",
-      "                                        ",
-      "   #####################################",
-      "   #####################################",
-      "                                        ",
-      "                                        ",
-      "########################################",
+      "                    ",
+      "                    ",
+      "   ##  ##  ##  ##   ",
+      "                    ",
+      "  #### #### ####    ",
+      "                    ",
+      "   ##  ##  ##  ##   ",
+      "                    ",
+      "                    ",
+      "  #### #### ####    ",
+      "                    ",
+      "   ##  ##  ##  ##   ",
+      "  ##################",
+      "                    ",
+      "####################",
     ],
     // Level 4 — diamond
     [
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                 ###                    ",
-      "                                        ",
-      "              ########                  ",
-      "              ########                  ",
-      "          ####       ###                ",
-      "          ####       ###                ",
-      "                                        ",
-      "       ###              ####            ",
-      "                                        ",
-      "    ###                     ###         ",
-      "                                        ",
-      "       ###              ####            ",
-      "       ###              ####            ",
-      "          ####       ###                ",
-      "          ####       ###                ",
-      "                                        ",
-      "              ########                  ",
-      "                                        ",
-      "                 ###                    ",
-      "                                        ",
-      "   #######      ####      #######       ",
-      "   #######      ####      #######       ",
-      "                                        ",
-      "                                        ",
-      "########################################",
+      "                    ",
+      "                    ",
+      "        ##          ",
+      "                    ",
+      "      ####          ",
+      "    ##    ##        ",
+      "                    ",
+      "  ##        ##      ",
+      "                    ",
+      "    ##    ##        ",
+      "      ####          ",
+      "        ##          ",
+      "                    ",
+      "  ###  ##  ###      ",
+      "####################",
     ],
     // Level 5 — castle
     [
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "    ###  ###  ##  ###  ###  ##          ",
-      "    ###  ###  ##  ###  ###  ##          ",
-      "    #################################   ",
-      "                                        ",
-      "                                        ",
-      "        #######      #######            ",
-      "                                        ",
-      "                                        ",
-      "            ###########                 ",
-      "                                        ",
-      "                                        ",
-      "        #######      #######            ",
-      "                                        ",
-      "                                        ",
-      "    #################################   ",
-      "                                        ",
-      "                                        ",
-      "        #######      #######            ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "    #################################   ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "########################################",
+      "                    ",
+      "  ## ## ## ## ##    ",
+      "  #################  ",
+      "                    ",
+      "    ####   ####     ",
+      "                    ",
+      "      #####         ",
+      "                    ",
+      "    ####   ####     ",
+      "                    ",
+      "  #################  ",
+      "                    ",
+      "    ####   ####     ",
+      "                    ",
+      "####################",
     ],
     // Level 6 — spiral
     [
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "   #################################    ",
-      "   #################################    ",
-      "                                        ",
-      "     #############################      ",
-      "     #############################      ",
-      "                                        ",
-      "   #########################            ",
-      "   #########################            ",
-      "                                        ",
-      "     ###################                ",
-      "     ###################                ",
-      "                                        ",
-      "   ##############                       ",
-      "   ##############                       ",
-      "                                        ",
-      "     #########                          ",
-      "     #########                          ",
-      "                                        ",
-      "   #####                                ",
-      "   #####                                ",
-      "                                        ",
-      "   #######      ####      #######       ",
-      "   #######      ####      #######       ",
-      "                                        ",
-      "                                        ",
-      "########################################",
+      "                    ",
+      "                    ",
+      " ################   ",
+      "                    ",
+      "   ############     ",
+      "                    ",
+      " ############       ",
+      "                    ",
+      "   #########        ",
+      "                    ",
+      " ######             ",
+      "                    ",
+      " ###                ",
+      "                    ",
+      "####################",
     ],
     // Level 7 — maze-like
     [
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "   ######         ######        ######  ",
-      "   ######         ######        ######  ",
-      "         ######         ######          ",
-      "         ######         ######          ",
-      "                                        ",
-      "   ######         ######        ######  ",
-      "                                        ",
-      "         ######         ######          ",
-      "                                        ",
-      "   ######         ######        ######  ",
-      "   ######         ######        ######  ",
-      "         ######         ######          ",
-      "         ######         ######          ",
-      "                                        ",
-      "   ######         ######        ######  ",
-      "                                        ",
-      "         ######         ######          ",
-      "                                        ",
-      "   ######         ######        ######  ",
-      "   ######         ######        ######  ",
-      "         ######         ######          ",
-      "         ######         ######          ",
-      "                                        ",
-      "                                        ",
-      "                                        ",
-      "########################################",
+      "                    ",
+      "                    ",
+      " ###    ###    ###  ",
+      "    ###    ###      ",
+      "                    ",
+      " ###    ###    ###  ",
+      "    ###    ###      ",
+      "                    ",
+      " ###    ###    ###  ",
+      "    ###    ###      ",
+      "                    ",
+      " ###    ###    ###  ",
+      "    ###    ###      ",
+      "                    ",
+      "####################",
     ],
   ];
 
-  // Enemy spawn positions per level (col, row in tile coords)
+  // Enemy spawn positions per level (col, row in tile coords for 20x15 grid)
   const LEVEL_ENEMIES = [
-    // Level 1
-    [{c:10,r:11,t:0},{c:29,r:11,t:0},{c:17,r:14,t:1},{c:23,r:14,t:0}],
-    // Level 2
-    [{c:7,r:5,t:0},{c:23,r:8,t:1},{c:7,r:11,t:0},{c:23,r:14,t:1},{c:7,r:17,t:0}],
-    // Level 3
-    [{c:8,r:9,t:0},{c:16,r:9,t:1},{c:24,r:9,t:0},{c:32,r:9,t:1},{c:13,r:5,t:0},{c:27,r:5,t:1}],
-    // Level 4
-    [{c:20,r:5,t:1},{c:13,r:11,t:0},{c:27,r:11,t:0},{c:10,r:16,t:1},{c:30,r:16,t:1},{c:20,r:20,t:0}],
-    // Level 5
-    [{c:13,r:8,t:0},{c:27,r:8,t:1},{c:20,r:11,t:0},{c:13,r:14,t:1},{c:27,r:14,t:0},{c:13,r:20,t:1},{c:27,r:20,t:0}],
-    // Level 6
-    [{c:20,r:4,t:0},{c:27,r:7,t:1},{c:17,r:10,t:0},{c:13,r:13,t:1},{c:10,r:16,t:0},{c:7,r:19,t:1}],
-    // Level 7
-    [{c:7,r:4,t:0},{c:17,r:6,t:1},{c:27,r:4,t:0},{c:37,r:6,t:1},{c:7,r:13,t:0},{c:17,r:11,t:1},{c:27,r:13,t:0},{c:37,r:11,t:1}],
+    [{c:5,r:5,t:0},{c:14,r:5,t:0},{c:8,r:7,t:1},{c:11,r:7,t:0}],
+    [{c:3,r:3,t:0},{c:11,r:4,t:1},{c:3,r:6,t:0},{c:11,r:8,t:1},{c:3,r:10,t:0}],
+    [{c:4,r:4,t:0},{c:8,r:4,t:1},{c:12,r:4,t:0},{c:16,r:4,t:1},{c:6,r:2,t:0},{c:13,r:2,t:1}],
+    [{c:10,r:2,t:1},{c:6,r:5,t:0},{c:13,r:5,t:0},{c:5,r:8,t:1},{c:15,r:8,t:1},{c:10,r:10,t:0}],
+    [{c:6,r:4,t:0},{c:13,r:4,t:1},{c:10,r:6,t:0},{c:6,r:8,t:1},{c:13,r:8,t:0},{c:6,r:11,t:1},{c:13,r:11,t:0}],
+    [{c:10,r:2,t:0},{c:13,r:4,t:1},{c:8,r:6,t:0},{c:6,r:8,t:1},{c:5,r:10,t:0},{c:3,r:12,t:1}],
+    [{c:3,r:2,t:0},{c:8,r:3,t:1},{c:13,r:2,t:0},{c:17,r:3,t:1},{c:3,r:8,t:0},{c:8,r:6,t:1},{c:13,r:8,t:0},{c:17,r:6,t:1}],
   ];
 
   // --- Game state ---
   const { TITLE, PLAY, CLEAR, GAMEOVER } = Mono.SCENE;
   let player, bubbles, enemies, items, particles;
   let score, lives, level, levelTimer, invincible;
-  let levelMap; // current level collision grid
+  let levelMap;
   let shootCooldown;
-  let hurryTimer; // enemies speed up after a while
+  let hurryTimer;
 
   function loadLevel(lvl) {
     const idx = lvl % LEVELS.length;
@@ -453,7 +356,6 @@
     for (let r = 0; r < ROWS; r++) {
       levelMap[r] = [];
       for (let c = 0; c < COLS; c++) {
-        // Always add walls on left and right edges
         if (c === 0 || c === COLS - 1) {
           levelMap[r][c] = 1;
         } else if (r < data.length && c < data[r].length) {
@@ -463,7 +365,6 @@
         }
       }
     }
-    // Bottom row always solid
     for (let c = 0; c < COLS; c++) levelMap[ROWS - 1][c] = 1;
   }
 
@@ -471,12 +372,11 @@
     const c = flr(px / TILE);
     const r = flr(py / TILE);
     if (c < 0 || c >= COLS) return true;
-    if (r < 0 || r >= ROWS) return false; // top is open
+    if (r < 0 || r >= ROWS) return false;
     return levelMap[r] && levelMap[r][c] === 1;
   }
 
   function solidBelow(px, py, w) {
-    // Check if there's solid ground below the entity (feet level)
     const r = flr(py / TILE);
     if (r < 0 || r >= ROWS) return false;
     const c1 = flr(px / TILE);
@@ -485,6 +385,28 @@
       if (c >= 0 && c < COLS && levelMap[r] && levelMap[r][c] === 1) return true;
     }
     return false;
+  }
+
+  // --- Collision helpers ---
+  // AABB overlap
+  function overlapRect(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax + aw > bx && ax < bx + bw && ay + ah > by && ay < by + bh;
+  }
+
+  // Circle-circle collision
+  function overlapCirc(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = dx * dx + dy * dy;
+    const rSum = ar + br;
+    return dist < rSum * rSum;
+  }
+
+  // Circle-rect collision
+  function overlapCircRect(cx, cy, cr, rx, ry, rw, rh) {
+    const nearX = _abs(cx - (rx + rw * 0.5)) < rw * 0.5 ? cx : (cx < rx ? rx : rx + rw);
+    const nearY = _abs(cy - (ry + rh * 0.5)) < rh * 0.5 ? cy : (cy < ry ? ry : ry + rh);
+    const dx = cx - nearX, dy = cy - nearY;
+    return dx * dx + dy * dy < cr * cr;
   }
 
   function resetGame() {
@@ -499,9 +421,9 @@
     const idx = level % LEVELS.length;
 
     player = {
-      x: 21, y: (ROWS - 3) * TILE,
+      x: 32, y: (ROWS - 2) * TILE - SP,
       vx: 0, vy: 0,
-      dir: 1, // 1=right, -1=left
+      dir: 1,
       onGround: false,
       animTimer: 0,
     };
@@ -510,11 +432,10 @@
     items = [];
     particles = [];
     shootCooldown = 0;
-    invincible = 60; // brief invincibility at level start
-    hurryTimer = 30 * 20; // 20 seconds until "HURRY"
-    levelTimer = 90; // show level text
+    invincible = 60;
+    hurryTimer = 30 * 20;
+    levelTimer = 90;
 
-    // Spawn enemies
     const spawns = LEVEL_ENEMIES[idx] || LEVEL_ENEMIES[0];
     const speedMult = 1 + level * 0.1;
     for (const sp of spawns) {
@@ -522,10 +443,10 @@
         x: sp.c * TILE, y: sp.r * TILE,
         vx: (rnd(1) > 0.5 ? 1 : -1) * (0.8 + rnd(0.4)) * speedMult,
         vy: 0,
-        type: sp.t, // 0=blob, 1=ghost
+        type: sp.t,
         onGround: false,
         alive: true,
-        angry: false, // gets angry when hurry
+        angry: false,
         animTimer: flr(rnd(30)),
         dirChangeTimer: 60 + flr(rnd(60)),
       });
@@ -533,7 +454,7 @@
   }
 
   function spawnItem(x, y) {
-    const types = [7, 8, 9]; // cherry, melon, diamond
+    const types = [7, 8, 9];
     const pts = [100, 200, 500];
     const idx = flr(rnd(3));
     items.push({
@@ -541,7 +462,7 @@
       vy: 0,
       type: types[idx],
       pts: pts[idx],
-      life: 300, // disappears after 10 seconds
+      life: 300,
       onGround: false,
     });
   }
@@ -549,7 +470,7 @@
   function addPop(x, y) {
     for (let i = 0; i < 6; i++) {
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(3) - 2,
         life: 8 + flr(rnd(8)),
         color: flr(rnd(3)) + 1,
@@ -574,15 +495,13 @@
   }
 
   // --- Physics helpers ---
-  function moveEntity(e, w, h, isPlayer) {
-    // Horizontal movement
+  function moveEntity(e, w, h) {
     const nx = e.x + e.vx;
     const left = nx;
     const right = nx + w - 1;
     const top = e.y;
     const bot = e.y + h - 1;
 
-    // Check horizontal collision
     let blockedH = false;
     if (e.vx > 0) {
       for (let py = flr(top / TILE); py <= flr(bot / TILE); py++) {
@@ -601,7 +520,6 @@
       else if (e.vx < 0) e.x = (flr(left / TILE) + 1) * TILE;
     }
 
-    // Gravity
     e.vy += GRAVITY;
     if (e.vy > 6) e.vy = 6;
 
@@ -609,7 +527,6 @@
     e.onGround = false;
 
     if (e.vy > 0) {
-      // Falling — check solid below
       const feetY = ny + h;
       const feetRow = flr(feetY / TILE);
       const leftC = flr(e.x / TILE);
@@ -617,7 +534,6 @@
       let landed = false;
       for (let c = leftC; c <= rightC; c++) {
         if (c >= 0 && c < COLS && feetRow >= 0 && feetRow < ROWS && levelMap[feetRow] && levelMap[feetRow][c] === 1) {
-          // Only land if we were above this tile previously
           if (e.y + h <= feetRow * TILE + 1) {
             landed = true;
             break;
@@ -632,15 +548,13 @@
         e.y = ny;
       }
     } else {
-      // Rising — pass through platforms (Bubble Bobble style)
       e.y = ny;
     }
 
-    // Wrap around: falling off bottom appears at top
-    if (e.y > H + 8) {
+    // Wrap around
+    if (e.y > H + SP) {
       e.y = -h;
     }
-    // If above screen and falling, let it come back
     if (e.y < -h * 2) {
       e.y = -h;
     }
@@ -650,7 +564,7 @@
   Mono.scene(TITLE, {
     init() {},
     update() {
-      if (btnp("a") || btnp("b") || btnp("a")) {
+      if (btnp("a") || btnp("b")) {
         Mono.go(PLAY);
         note(0, "C5", 0.1);
         setTimeout(() => note(0, "E5", 0.1), 100);
@@ -667,341 +581,272 @@
   Mono.scene(PLAY, {
     init() { resetGame(); },
     update() {
-    // --- Play state ---
+      if (levelTimer > 0) levelTimer--;
+      if (invincible > 0) invincible--;
 
-    if (levelTimer > 0) levelTimer--;
-    if (invincible > 0) invincible--;
-
-    // Hurry timer
-    hurryTimer--;
-    if (hurryTimer === 0) {
-      // Make all enemies angry (faster)
-      for (const e of enemies) {
-        if (e.alive) {
-          e.angry = true;
-          e.vx *= 1.8;
+      hurryTimer--;
+      if (hurryTimer === 0) {
+        for (const e of enemies) {
+          if (e.alive) {
+            e.angry = true;
+            e.vx *= 1.8;
+          }
         }
       }
-    }
 
-    // Player movement
-    if (btn("left")) {
-      player.vx = -MOVE_SPEED;
-      player.dir = -1;
-    } else if (btn("right")) {
-      player.vx = MOVE_SPEED;
-      player.dir = 1;
-    } else {
-      player.vx = 0;
-    }
-
-    // Jump
-    if (btnp("a") && player.onGround) {
-      player.vy = JUMP_VEL;
-      player.onGround = false;
-      sfxJump();
-    }
-
-    // Shoot bubble
-    if (shootCooldown > 0) shootCooldown--;
-    if (btnp("b") && shootCooldown <= 0 && bubbles.length < MAX_BUBBLES) {
-      bubbles.push({
-        x: player.x + (player.dir > 0 ? 8 : -8),
-        y: player.y,
-        vx: player.dir * BUBBLE_SPEED,
-        vy: 0,
-        state: "shot", // shot -> floating -> trapped
-        life: BUBBLE_LIFE,
-        trappedEnemy: null,
-        floatTimer: 0,
-        shotTimer: 15, // frames before it starts floating
-      });
-      shootCooldown = 10;
-      sfxShoot();
-    }
-
-    player.animTimer++;
-    moveEntity(player, 7, 8, true);
-
-    // Clamp player to arena
-    if (player.x < TILE) player.x = TILE;
-    if (player.x > W - TILE - 7) player.x = W - TILE - 7;
-
-    // Update bubbles
-    for (let i = bubbles.length - 1; i >= 0; i--) {
-      const b = bubbles[i];
-      b.life--;
-      if (b.life <= 0) {
-        // Pop!
-        addPop(b.x, b.y);
-        if (b.trappedEnemy) {
-          // Enemy escapes if bubble times out
-          enemies.push({
-            x: b.x, y: b.y, vx: (rnd(1) > 0.5 ? 1 : -1) * 1.2,
-            vy: 0, type: b.trappedEnemy.type, onGround: false,
-            alive: true, angry: true, animTimer: 0,
-            dirChangeTimer: 30 + flr(rnd(30)),
-          });
-        }
-        bubbles.splice(i, 1);
-        continue;
+      // Player movement
+      if (btn("left")) {
+        player.vx = -MOVE_SPEED;
+        player.dir = -1;
+      } else if (btn("right")) {
+        player.vx = MOVE_SPEED;
+        player.dir = 1;
+      } else {
+        player.vx = 0;
       }
 
-      if (b.state === "shot") {
-        b.x += b.vx;
-        b.shotTimer--;
-        // Check if bubble hits a wall
-        if (solidAt(b.x, b.y + 3) || solidAt(b.x + 7, b.y + 3)) {
-          b.state = "floating";
-          b.vx = 0;
-        }
-        if (b.shotTimer <= 0) {
-          b.state = "floating";
-          b.vx = 0;
+      if (btnp("a") && player.onGround) {
+        player.vy = JUMP_VEL;
+        player.onGround = false;
+        sfxJump();
+      }
+
+      if (shootCooldown > 0) shootCooldown--;
+      if (btnp("b") && shootCooldown <= 0 && bubbles.length < MAX_BUBBLES) {
+        bubbles.push({
+          x: player.x + (player.dir > 0 ? SP : -SP),
+          y: player.y,
+          vx: player.dir * BUBBLE_SPEED,
+          vy: 0,
+          state: "shot",
+          life: BUBBLE_LIFE,
+          trappedEnemy: null,
+          floatTimer: 0,
+          shotTimer: 15,
+        });
+        shootCooldown = 10;
+        sfxShoot();
+      }
+
+      player.animTimer++;
+      moveEntity(player, 14, SP);
+
+      // Clamp player to arena
+      if (player.x < TILE) player.x = TILE;
+      if (player.x > W - TILE - 14) player.x = W - TILE - 14;
+
+      // Update bubbles
+      for (let i = bubbles.length - 1; i >= 0; i--) {
+        const b = bubbles[i];
+        b.life--;
+        if (b.life <= 0) {
+          addPop(b.x, b.y);
+          if (b.trappedEnemy) {
+            enemies.push({
+              x: b.x, y: b.y, vx: (rnd(1) > 0.5 ? 1 : -1) * 1.2,
+              vy: 0, type: b.trappedEnemy.type, onGround: false,
+              alive: true, angry: true, animTimer: 0,
+              dirChangeTimer: 30 + flr(rnd(30)),
+            });
+          }
+          bubbles.splice(i, 1);
+          continue;
         }
 
-        // Check if bubble traps an enemy
-        if (!b.trappedEnemy) {
-          for (let j = enemies.length - 1; j >= 0; j--) {
-            const e = enemies[j];
-            if (!e.alive) continue;
-            if (b.x + 8 > e.x && b.x < e.x + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
-              b.trappedEnemy = { type: e.type };
-              b.state = "floating";
-              b.vx = 0;
-              enemies.splice(j, 1);
-              note(1, "A5", 0.04);
-              break;
+        if (b.state === "shot") {
+          b.x += b.vx;
+          b.shotTimer--;
+          // Circle collision with walls for bubble
+          const bcx = b.x + 8, bcy = b.y + 8, br = 7;
+          if (solidAt(bcx - br, bcy) || solidAt(bcx + br, bcy)) {
+            b.state = "floating";
+            b.vx = 0;
+          }
+          if (b.shotTimer <= 0) {
+            b.state = "floating";
+            b.vx = 0;
+          }
+
+          // Check if bubble traps an enemy (circle vs rect)
+          if (!b.trappedEnemy) {
+            for (let j = enemies.length - 1; j >= 0; j--) {
+              const e = enemies[j];
+              if (!e.alive) continue;
+              // Bubble is round: center+radius vs enemy rect
+              if (overlapCircRect(bcx, bcy, br, e.x + 1, e.y + 1, 14, 14)) {
+                b.trappedEnemy = { type: e.type };
+                b.state = "floating";
+                b.vx = 0;
+                enemies.splice(j, 1);
+                note(1, "A5", 0.04);
+                break;
+              }
+            }
+          }
+        }
+
+        if (b.state === "floating") {
+          b.floatTimer++;
+          b.vy = BUBBLE_FLOAT_SPEED;
+          b.vx = sin(b.floatTimer * 0.08) * 0.3;
+          b.x += b.vx;
+          b.y += b.vy;
+
+          if (b.x < TILE) b.x = TILE;
+          if (b.x > W - TILE - SP) b.x = W - TILE - SP;
+          if (b.y < 4) { b.y = 4; b.vy = 0; }
+
+          // Player pops trapped bubbles (circle vs rect for bubble)
+          if (b.trappedEnemy) {
+            const bcx = b.x + 8, bcy = b.y + 8, br = 7;
+            if (overlapCircRect(bcx, bcy, br, player.x + 1, player.y + 1, 14, 14)) {
+              sfxPop();
+              addPop(b.x, b.y);
+              score += 100 * (level + 1);
+              spawnItem(b.x, b.y);
+              bubbles.splice(i, 1);
+              continue;
             }
           }
         }
       }
 
-      if (b.state === "floating") {
-        // Float upward with slight wobble
-        b.floatTimer++;
-        b.vy = BUBBLE_FLOAT_SPEED;
-        b.vx = sin(b.floatTimer * 0.08) * 0.3;
-        b.x += b.vx;
-        b.y += b.vy;
+      // Update enemies
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (!e.alive) continue;
 
-        // Clamp to arena
-        if (b.x < TILE) b.x = TILE;
-        if (b.x > W - TILE - 8) b.x = W - TILE - 8;
-        if (b.y < 4) { b.y = 4; b.vy = 0; } // stop at top
+        e.animTimer++;
+        e.dirChangeTimer--;
 
-        // Player can pop trapped bubbles by touching them
-        if (b.trappedEnemy) {
-          const dx = _abs((player.x + 0) - (b.x + 4));
-          const dy = _abs((player.y + 4) - (b.y + 4));
-          if (dx < 9 && dy < 9) {
-            // Pop! Defeat enemy
-            sfxPop();
-            addPop(b.x, b.y);
-            score += 100 * (level + 1);
-            spawnItem(b.x, b.y);
-            bubbles.splice(i, 1);
-            continue;
+        if (e.dirChangeTimer <= 0) {
+          e.vx = -e.vx;
+          e.dirChangeTimer = 40 + flr(rnd(80));
+          if (e.onGround && rnd(1) < 0.3) {
+            e.vy = -4;
+            e.onGround = false;
           }
         }
-      }
-    }
 
-    // Update enemies
-    for (let i = enemies.length - 1; i >= 0; i--) {
-      const e = enemies[i];
-      if (!e.alive) continue;
-
-      e.animTimer++;
-      e.dirChangeTimer--;
-
-      // Simple AI: walk back and forth, occasionally jump
-      if (e.dirChangeTimer <= 0) {
-        e.vx = -e.vx; // reverse direction
-        e.dirChangeTimer = 40 + flr(rnd(80));
-        // Occasionally jump
-        if (e.onGround && rnd(1) < 0.3) {
-          e.vy = -4;
+        if (e.type === 1 && e.onGround && rnd(1) < 0.02) {
+          e.vy = -4.5;
           e.onGround = false;
         }
-      }
 
-      // Ghost type can jump more
-      if (e.type === 1 && e.onGround && rnd(1) < 0.02) {
-        e.vy = -4.5;
-        e.onGround = false;
-      }
+        moveEntity(e, 14, SP);
 
-      moveEntity(e, 7, 8, false);
+        if (e.x <= TILE) { e.x = TILE; e.vx = _abs(e.vx); }
+        if (e.x >= W - TILE - 14) { e.x = W - TILE - 14; e.vx = -_abs(e.vx); }
 
-      // Bounce off walls
-      if (e.x <= TILE) { e.x = TILE; e.vx = _abs(e.vx); }
-      if (e.x >= W - TILE - 7) { e.x = W - TILE - 7; e.vx = -_abs(e.vx); }
-
-      // Enemy-player collision
-      if (invincible <= 0) {
-        const dx = _abs((player.x + 0) - (e.x + 0));
-        const dy = _abs((player.y + 4) - (e.y + 4));
-        if (dx < 7 && dy < 7) {
-          // Player dies
-          lives--;
-          addPop(player.x, player.y);
-          sfxDeath();
-          if (lives <= 0) {
-            Mono.go(GAMEOVER); return;
-            for (let k = 0; k < 20; k++) {
-              particles.push({
-                x: player.x + 4, y: player.y + 4,
-                vx: rnd(6) - 3, vy: rnd(6) - 4,
-                life: 15 + flr(rnd(15)), color: flr(rnd(3)) + 1,
-              });
+        // Enemy-player collision (rect vs rect)
+        if (invincible <= 0) {
+          if (overlapRect(player.x + 2, player.y + 2, 12, 12, e.x + 2, e.y + 2, 12, 12)) {
+            lives--;
+            addPop(player.x, player.y);
+            sfxDeath();
+            if (lives <= 0) {
+              for (let k = 0; k < 20; k++) {
+                particles.push({
+                  x: player.x + 8, y: player.y + 8,
+                  vx: rnd(6) - 3, vy: rnd(6) - 4,
+                  life: 15 + flr(rnd(15)), color: flr(rnd(3)) + 1,
+                });
+              }
+              Mono.go(GAMEOVER); return;
+            } else {
+              player.x = 32;
+              player.y = (ROWS - 2) * TILE - SP;
+              player.vx = 0;
+              player.vy = 0;
+              invincible = 90;
             }
-          } else {
-            // Respawn
-            player.x = 21;
-            player.y = (ROWS - 3) * TILE;
-            player.vx = 0;
-            player.vy = 0;
-            invincible = 90;
+            break;
           }
-          break;
         }
       }
-    }
 
-    // Update items
-    for (let i = items.length - 1; i >= 0; i--) {
-      const it = items[i];
-      it.life--;
-      if (it.life <= 0) { items.splice(i, 1); continue; }
+      // Update items
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        it.life--;
+        if (it.life <= 0) { items.splice(i, 1); continue; }
 
-      // Apply gravity to items
-      it.vy += GRAVITY;
-      if (it.vy > 4) it.vy = 4;
-      const ny = it.y + it.vy;
-      const feetRow = flr((ny + 8) / TILE);
-      const c1 = flr(it.x / TILE);
-      const c2 = flr((it.x + 7) / TILE);
-      let landed = false;
-      for (let c = c1; c <= c2; c++) {
-        if (c >= 0 && c < COLS && feetRow >= 0 && feetRow < ROWS && levelMap[feetRow] && levelMap[feetRow][c] === 1) {
-          if (it.y + 8 <= feetRow * TILE + 1) { landed = true; break; }
+        it.vy += GRAVITY;
+        if (it.vy > 4) it.vy = 4;
+        const ny = it.y + it.vy;
+        const feetRow = flr((ny + SP) / TILE);
+        const c1 = flr(it.x / TILE);
+        const c2 = flr((it.x + 15) / TILE);
+        let landed = false;
+        for (let c = c1; c <= c2; c++) {
+          if (c >= 0 && c < COLS && feetRow >= 0 && feetRow < ROWS && levelMap[feetRow] && levelMap[feetRow][c] === 1) {
+            if (it.y + SP <= feetRow * TILE + 1) { landed = true; break; }
+          }
+        }
+        if (landed) {
+          it.y = feetRow * TILE - SP;
+          it.vy = 0;
+        } else {
+          it.y = ny;
+        }
+        if (it.y > H + 32) { items.splice(i, 1); continue; }
+
+        // Player picks up item (circle collision for round items)
+        const icx = it.x + 8, icy = it.y + 8, ir = 7;
+        if (overlapCircRect(icx, icy, ir, player.x + 1, player.y + 1, 14, 14)) {
+          score += it.pts;
+          sfxItem();
+          addPop(it.x, it.y);
+          particles.push({
+            x: it.x, y: it.y, vx: 0, vy: -0.8,
+            life: 30, color: 3, text: "" + it.pts,
+          });
+          items.splice(i, 1);
         }
       }
-      if (landed) {
-        it.y = feetRow * TILE - 8;
-        it.vy = 0;
-      } else {
-        it.y = ny;
+
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        if (!p.text) p.vy += 0.05;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
       }
-      if (it.y > H + 16) { items.splice(i, 1); continue; }
 
-      // Player picks up item
-      const dx = _abs((player.x + 0) - (it.x + 4));
-      const dy = _abs((player.y + 4) - (it.y + 4));
-      if (dx < 8 && dy < 8) {
-        score += it.pts;
-        sfxItem();
-        addPop(it.x, it.y);
-        // Score popup particle
-        particles.push({
-          x: it.x, y: it.y, vx: 0, vy: -0.8,
-          life: 30, color: 3, text: "" + it.pts,
-        });
-        items.splice(i, 1);
+      // Check level clear
+      if (enemies.length === 0) {
+        Mono.go(CLEAR);
+        levelTimer = 90;
+        sfxLevelClear();
       }
-    }
-
-    // Update particles
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.x += p.vx; p.y += p.vy;
-      if (!p.text) p.vy += 0.05;
-      p.life--;
-      if (p.life <= 0) particles.splice(i, 1);
-    }
-
-    // Check level clear
-    if (enemies.length === 0 && state === "play") {
-      Mono.go(CLEAR);
-      levelTimer = 90;
-      sfxLevelClear();
-    }
     },
     draw() {
       cls(0);
-  
-
-    if (state === "title") {
-      // Title screen
-      const ty = 38 + sin(Mono.frame * 0.05) * 5;
-
-      text("BUBBLE BOBBLE", 128, flr(ty), 3);
-      text("BUBBLE BOBBLE", 129, flr(ty) + 1, 1);
-      rectf(100, flr(ty) + 12, 120, 1, 2);
-
-      // Animated dragon
-      const bx = W / 2 - 20;
-      spr(1, bx, flr(ty) + 24 + sin(Mono.frame * 0.1) * 3);
-      // Some floating bubbles
-      for (let i = 0; i < 5; i++) {
-        const bby = flr(ty) + 22 + sin(Mono.frame * 0.06 + i * 1.3) * 8;
-        const bbx = bx + 13 + i * 11;
-        spr(3, bbx, bby);
-      }
-
-      // Show enemies
-      spr(5, bx - 11, flr(ty) + 24 + sin(Mono.frame * 0.08 + 2) * 3, true);
-      spr(6, bx + 67, flr(ty) + 24 + sin(Mono.frame * 0.08 + 4) * 3);
-
-      if (flr(Mono.frame / 20) % 2 === 0)
-        text("PRESS START", 133, 135, 3);
-
-      // Instructions
-      text("-HOW TO PLAY-", 128, 158, 2);
-      text("A  JUMP", 143, 168, 2);
-      text("B  SHOOT BUBBLE", 123, 176, 2);
-      text("POP BUBBLES TO", 126, 188, 2);
-      text("DEFEAT ENEMIES!", 123, 195, 2);
-
-      text("MONO DEMO V0.1", 118, 229, 1);
-      return;
+      drawPlayScreen();
     }
+  });
 
-    if (state === "gameover") {
-      drawLevel();
-      for (const p of particles) {
-        if (p.text) {
-          text(p.text, flr(p.x), flr(p.y), p.color);
-        } else {
-          pix(flr(p.x), flr(p.y), p.color);
-        }
-      }
-      text("GAME OVER", 138, 90, 3);
-      text("SCORE: " + score, 128, 109, 2);
-      text("LEVEL: " + (level + 1), 138, 120, 2);
-      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 133, 158, 3);
-      return;
-    }
-
-    // --- Play / LevelClear state rendering ---
+  function drawPlayScreen() {
     drawLevel();
 
     // Items
     for (const it of items) {
-      if (it.life < 60 && flr(Mono.frame / 4) % 2 === 0) continue; // blink when about to disappear
+      if (it.life < 60 && flr(Mono.frame / 4) % 2 === 0) continue;
       spr(it.type, flr(it.x), flr(it.y));
+      // Debug: circle hitbox for items
+      Mono.dbgC(flr(it.x) + 8, flr(it.y) + 8, 7);
     }
 
     // Bubbles
     for (const b of bubbles) {
       if (b.trappedEnemy) {
-        // Draw trapped bubble
         spr(4, flr(b.x), flr(b.y));
       } else {
-        // Draw regular bubble, animate slightly
         spr(3, flr(b.x), flr(b.y));
       }
+      // Debug: circle hitbox for bubbles
+      Mono.dbgC(flr(b.x) + 8, flr(b.y) + 8, 7);
     }
 
     // Enemies
@@ -1009,19 +854,21 @@
       if (!e.alive) continue;
       const sprId = e.type === 0 ? 5 : 6;
       const flipX = e.vx < 0;
-      // Flash when angry
       if (e.angry && flr(Mono.frame / 4) % 2 === 0) {
         spr(sprId, flr(e.x), flr(e.y), flipX);
       } else {
         spr(sprId, flr(e.x), flr(e.y), flipX);
       }
+      // Debug: rect hitbox for enemies
+      Mono.dbg(flr(e.x) + 2, flr(e.y) + 2, 12, 12);
     }
 
     // Player
-    // Blink when invincible
     if (invincible <= 0 || flr(Mono.frame / 3) % 2 === 0) {
       spr(1, flr(player.x), flr(player.y), player.dir < 0);
     }
+    // Debug: rect hitbox for player
+    Mono.dbg(flr(player.x) + 2, flr(player.y) + 2, 12, 12);
 
     // Particles
     for (const p of particles) {
@@ -1032,29 +879,30 @@
       }
     }
 
-    // HUD
-    rectf(0, 0, W, 10, 0);
-    text("SCORE:" + score, 4, 2, 3);
-    text("LV:" + (level + 1), W / 2 - 15, 2, 2);
-    for (let i = 0; i < lives; i++) spr(11, W - 30 + i * 10, 1);
+    // HUD — ensure within 320x240
+    rectf(0, 0, W, 12, 0);
+    text("SCORE:" + score, 2, 2, 3);
+    text("LV:" + (level + 1), 140, 2, 2);
+    // Lives: draw up to 5 icons max, spacing so they fit within screen
+    const maxLivesShown = min(lives, 5);
+    const livesStartX = W - 18 * maxLivesShown - 2;
+    for (let i = 0; i < maxLivesShown; i++) spr(11, livesStartX + i * 18, -2);
 
     // Level announcement
-    if (levelTimer > 60 && state === "play") {
+    if (levelTimer > 60) {
       const msgY = 105 + sin(levelTimer * 0.1) * 3;
-      text("LEVEL " + (level + 1), 143, flr(msgY), 3);
-      text("GET READY!", 136, flr(msgY) + 14, 2);
+      text("LEVEL " + (level + 1), 130, flr(msgY), 3);
+      text("GET READY!", 125, flr(msgY) + 14, 2);
     }
 
-    // Level clear message
     // Hurry warning
     if (hurryTimer < 150 && hurryTimer > 0 && flr(Mono.frame / 10) % 2 === 0) {
-      text("HURRY UP!", 138, 116, 3);
+      text("HURRY UP!", 125, 116, 3);
     }
     if (hurryTimer <= 0 && flr(Mono.frame / 15) % 2 === 0) {
-      text("HURRY!", 146, 116, 3);
+      text("HURRY!", 138, 116, 3);
     }
-    }
-  });
+  }
 
   function drawLevel() {
     if (!levelMap) return;
@@ -1076,7 +924,7 @@
       for (let i = items.length - 1; i >= 0; i--) {
         items[i].vy += GRAVITY;
         items[i].y += items[i].vy;
-        if (items[i].y > H + 16) items.splice(i, 1);
+        if (items[i].y > H + 32) items.splice(i, 1);
       }
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
@@ -1091,11 +939,13 @@
     draw() {
       cls(0);
       drawLevel();
-      for (const it of items) { if (it.life > 30 || flr(Mono.frame / 4) % 2 === 0) spr(it.type, it.x, it.y); }
+      for (const it of items) { if (it.life > 30 || flr(Mono.frame / 4) % 2 === 0) spr(it.type, flr(it.x), flr(it.y)); }
       for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
-      rectf(0, 0, W, 10, 0);
-      text("SCORE " + score, 4, 2, 3);
-      for (let i = 0; i < lives; i++) spr(11, W - 40 + i * 10, 2);
+      rectf(0, 0, W, 12, 0);
+      text("SCORE:" + score, 2, 2, 3);
+      const maxLivesShown = min(lives, 5);
+      const livesStartX = W - 18 * maxLivesShown - 2;
+      for (let i = 0; i < maxLivesShown; i++) spr(11, livesStartX + i * 18, -2);
       const msg = "LEVEL " + (level + 1) + " CLEAR!";
       text(msg, (W - msg.length * 5) / 2, H / 2 - 10, 3);
     }
@@ -1109,52 +959,50 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) Mono.go(TITLE);
+      if (btnp("a") || btnp("b")) Mono.go(TITLE);
     },
     draw() {
       cls(0);
       for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
       text("GAME OVER", W / 2 - 22, 90, 3);
-      text("SCORE: " + score, W / 2 - 18, 110, 2);
-      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 17, 140, 3);
+      text("SCORE: " + score, W / 2 - 30, 110, 2);
+      text("LEVEL: " + (level + 1), W / 2 - 25, 122, 2);
+      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 27, 150, 3);
     }
   });
 
   function drawTitleScreen() {
-
-
-    // Title screen
     const ty = 38 + sin(Mono.frame * 0.05) * 5;
 
-    text("BUBBLE BOBBLE", 128, flr(ty), 3);
-    text("BUBBLE BOBBLE", 129, flr(ty) + 1, 1);
-    rectf(100, flr(ty) + 12, 120, 1, 2);
+    text("BUBBLE BOBBLE", 95, flr(ty), 3);
+    text("BUBBLE BOBBLE", 96, flr(ty) + 1, 1);
+    rectf(80, flr(ty) + 12, 160, 1, 2);
 
     // Animated dragon
-    const bx = W / 2 - 20;
+    const bx = W / 2 - 30;
     spr(1, bx, flr(ty) + 24 + sin(Mono.frame * 0.1) * 3);
-    // Some floating bubbles
-    for (let i = 0; i < 5; i++) {
+    // Floating bubbles
+    for (let i = 0; i < 4; i++) {
       const bby = flr(ty) + 22 + sin(Mono.frame * 0.06 + i * 1.3) * 8;
-      const bbx = bx + 13 + i * 11;
+      const bbx = bx + 22 + i * 20;
       spr(3, bbx, bby);
     }
 
     // Show enemies
-    spr(5, bx - 11, flr(ty) + 24 + sin(Mono.frame * 0.08 + 2) * 3, true);
-    spr(6, bx + 67, flr(ty) + 24 + sin(Mono.frame * 0.08 + 4) * 3);
+    spr(5, bx - 18, flr(ty) + 24 + sin(Mono.frame * 0.08 + 2) * 3, true);
+    spr(6, bx + 100, flr(ty) + 24 + sin(Mono.frame * 0.08 + 4) * 3);
 
     if (flr(Mono.frame / 20) % 2 === 0)
-      text("PRESS START", 133, 135, 3);
+      text("PRESS START", 120, 140, 3);
 
     // Instructions
-    text("-HOW TO PLAY-", 128, 158, 2);
-    text("A  JUMP", 143, 168, 2);
-    text("B  SHOOT BUBBLE", 123, 176, 2);
-    text("POP BUBBLES TO", 126, 188, 2);
-    text("DEFEAT ENEMIES!", 123, 195, 2);
+    text("-HOW TO PLAY-", 105, 165, 2);
+    text("A  JUMP", 130, 178, 2);
+    text("B  SHOOT BUBBLE", 100, 188, 2);
+    text("POP BUBBLES TO", 103, 200, 2);
+    text("DEFEAT ENEMIES!", 100, 210, 2);
 
-    text("MONO DEMO V0.1", 118, 229, 1);
+    text("MONO DEMO V0.1", 105, 229, 1);
   }
 
   Mono.go(TITLE);

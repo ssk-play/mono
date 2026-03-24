@@ -11,7 +11,7 @@
   <canvas id="screen"></canvas>
 </div>
 <div id="controls">
-  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>A</span> SHOOT
+  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>A</span> SHOOT &nbsp;&nbsp; <span>1</span> HITBOXES
 </div>
 <script src="../../runtime/engine.js"></script>
 <script>
@@ -20,11 +20,14 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 to 16x16 upscale helper ---
+  function up(d){let o="";for(let r=0;r<8;r++){let row="";for(let c=0;c<8;c++){const ch=d[r*8+c];row+=ch+ch;}o+=row+row;}return o;}
+
+  // --- Sprites (all upscaled to 16x16 = 256 chars) ---
   // 1: Player ship (blaster pointing up)
-  defSprite(1,
+  defSprite(1, up(
     "00030000" +
     "00333000" +
     "00232000" +
@@ -33,9 +36,9 @@
     "33222330" +
     "03233200" +
     "00300300"
-  );
+  ));
   // 2: Centipede head (facing right, with eyes and mandibles)
-  defSprite(2,
+  defSprite(2, up(
     "01333100" +
     "13333310" +
     "33233230" +
@@ -44,9 +47,9 @@
     "33233230" +
     "13333310" +
     "01333100"
-  );
+  ));
   // 3: Centipede body segment (round with pattern)
-  defSprite(3,
+  defSprite(3, up(
     "01222100" +
     "12222210" +
     "22322320" +
@@ -55,9 +58,9 @@
     "22322320" +
     "12222210" +
     "01222100"
-  );
+  ));
   // 4: Mushroom (full health - 4 hits)
-  defSprite(4,
+  defSprite(4, up(
     "00333000" +
     "03333300" +
     "33233230" +
@@ -66,9 +69,9 @@
     "00211000" +
     "00211000" +
     "00111000"
-  );
+  ));
   // 5: Mushroom (3 hits left - slight damage)
-  defSprite(5,
+  defSprite(5, up(
     "00333000" +
     "03333300" +
     "33233230" +
@@ -77,9 +80,9 @@
     "00211000" +
     "00210000" +
     "00110000"
-  );
+  ));
   // 6: Mushroom (2 hits left - medium damage)
-  defSprite(6,
+  defSprite(6, up(
     "00333000" +
     "03333300" +
     "33033030" +
@@ -88,9 +91,9 @@
     "00210000" +
     "00210000" +
     "00100000"
-  );
+  ));
   // 7: Mushroom (1 hit left - nearly destroyed)
-  defSprite(7,
+  defSprite(7, up(
     "00330000" +
     "03330000" +
     "33033000" +
@@ -99,9 +102,9 @@
     "00200000" +
     "00100000" +
     "00000000"
-  );
+  ));
   // 8: Player bullet
-  defSprite(8,
+  defSprite(8, up(
     "00030000" +
     "00030000" +
     "00020000" +
@@ -110,9 +113,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 9: Spider (bouncy enemy in player area)
-  defSprite(9,
+  defSprite(9, up(
     "30000030" +
     "03300330" +
     "00333300" +
@@ -121,9 +124,9 @@
     "30333030" +
     "30033000" +
     "03000300"
-  );
+  ));
   // 10: Flea (drops down creating mushrooms)
-  defSprite(10,
+  defSprite(10, up(
     "00322000" +
     "00333000" +
     "03333300" +
@@ -132,9 +135,9 @@
     "00030000" +
     "00303000" +
     "03000300"
-  );
+  ));
   // 11: Explosion frame 1
-  defSprite(11,
+  defSprite(11, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -143,9 +146,9 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
   // 12: Explosion frame 2
-  defSprite(12,
+  defSprite(12, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -154,9 +157,9 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
   // 13: Life icon
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "00030000" +
     "00333000" +
@@ -165,9 +168,9 @@
     "33222330" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 14: Centipede head (facing left)
-  defSprite(14,
+  defSprite(14, up(
     "01333100" +
     "13333310" +
     "32332330" +
@@ -176,14 +179,15 @@
     "32332330" +
     "13333310" +
     "01333100"
-  );
+  ));
 
-  // --- Grid constants ---
-  const GRID_W = 40;   // 320 / 8
-  const GRID_H = 30;   // 240 / 8
-  const HUD_H = 2;     // top 2 rows for HUD
-  const PLAYER_ROWS = 6; // bottom 6 rows for player movement
-  const PLAYER_MIN_Y = (GRID_H - PLAYER_ROWS) * 8;
+  // --- Tile / grid size (now 16x16) ---
+  const T = 16;
+  const GRID_W = W / T;   // 320 / 16 = 20
+  const GRID_H = H / T;   // 240 / 16 = 15
+  const HUD_H = 1;        // top 1 row for HUD (16px)
+  const PLAYER_ROWS = 3;  // bottom 3 rows for player movement
+  const PLAYER_MIN_Y = (GRID_H - PLAYER_ROWS) * T;
 
   // --- Game state ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -191,10 +195,28 @@
   let score, lives, wave, waveTimer, waveMessage;
   let shootCooldown, respawnTimer;
   let fleaTimer, spiderTimer;
-  let titleCentipede; // decorative centipede on title screen
+
+  // --- Collision helpers ---
+  function boxOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax + aw > bx && ax < bx + bw && ay + ah > by && ay < by + bh;
+  }
+  // Circle-circle collision
+  function circCollide(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = dx * dx + dy * dy;
+    const rr = ar + br;
+    return dist < rr * rr;
+  }
+  // Circle-rect collision
+  function circRectCollide(cx, cy, cr, rx, ry, rw, rh) {
+    const nx = _max(rx, min(cx, rx + rw));
+    const ny = _max(ry, min(cy, ry + rh));
+    const dx = cx - nx, dy = cy - ny;
+    return dx * dx + dy * dy < cr * cr;
+  }
 
   function resetGame() {
-    player = { x: W / 2 - 4, y: H - 18, speed: 2.5 };
+    player = { x: W / 2 - 8, y: H - 24, speed: 2.5 };
     bullet = null;
     centipedes = [];
     mushrooms = {};
@@ -211,13 +233,11 @@
     respawnTimer = 0;
     fleaTimer = 200 + flr(rnd(200));
     spiderTimer = 150 + flr(rnd(150));
-    // Generate random mushroom field
     generateMushrooms();
     spawnWave();
   }
 
   function mushKey(gx, gy) { return gx + "," + gy; }
-
   function getMush(gx, gy) { return mushrooms[mushKey(gx, gy)] || 0; }
   function setMush(gx, gy, hp) {
     if (hp <= 0) delete mushrooms[mushKey(gx, gy)];
@@ -226,7 +246,6 @@
 
   function generateMushrooms() {
     mushrooms = {};
-    // Scatter mushrooms in the play area (not in HUD or bottom player rows)
     const count = 20 + flr(rnd(15));
     for (let i = 0; i < count; i++) {
       const gx = flr(rnd(GRID_W));
@@ -238,8 +257,7 @@
   function spawnWave() {
     wave++;
     waveMessage = 90;
-    // Create a centipede with length based on wave
-    const len = min(12, 8 + flr(wave / 2));
+    const len = min(10, 6 + flr(wave / 2));
     const startX = flr(rnd(GRID_W - len));
     const dir = rnd(1) < 0.5 ? 1 : -1;
     const segments = [];
@@ -247,8 +265,8 @@
       segments.push({
         gx: startX + i * (-dir),
         gy: HUD_H,
-        px: (startX + i * (-dir)) * 8,
-        py: HUD_H * 8,
+        px: (startX + i * (-dir)) * T,
+        py: HUD_H * T,
         dir: dir,
         isHead: i === 0,
         moveTimer: 0,
@@ -258,15 +276,14 @@
       });
     }
     centipedes.push(segments);
-    // Also spawn some solo heads in later waves
     if (wave > 2) {
-      const soloCount = min(flr(wave / 3), 4);
+      const soloCount = min(flr(wave / 3), 3);
       for (let i = 0; i < soloCount; i++) {
         const sx = flr(rnd(GRID_W));
         const sd = rnd(1) < 0.5 ? 1 : -1;
         centipedes.push([{
           gx: sx, gy: HUD_H,
-          px: sx * 8, py: HUD_H * 8,
+          px: sx * T, py: HUD_H * T,
           dir: sd, isHead: true,
           moveTimer: 0,
           speed: _max(1, 4 - flr(wave / 3)),
@@ -280,7 +297,7 @@
     explosions.push({ x: x, y: y, timer: 12 });
     for (let i = 0; i < 6; i++)
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(3) - 1.5, vy: rnd(3) - 1.5,
         life: 5 + flr(rnd(8)),
         color: flr(rnd(3)) + 1
@@ -302,6 +319,10 @@
     setTimeout(() => note(0, "G5", 0.08), 160);
     setTimeout(() => note(0, "C6", 0.12), 240);
   }
+
+  // --- Bullet center + radius (thin vertical shot, use small radius) ---
+  const BULLET_R = 3;
+  function bulletCenter(b) { return { cx: b.x + 8, cy: b.y + 4 }; }
 
   // --- Title Scene ---
   Mono.scene(TITLE, {
@@ -325,7 +346,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() { drawGameOver(); }
   });
@@ -334,33 +355,31 @@
   Mono.scene(PLAY, {
     init() { resetGame(); },
     update() {
-    // --- Play state ---
     if (waveMessage > 0) waveMessage--;
 
     // Respawn timer
     if (respawnTimer > 0) {
       respawnTimer--;
       if (respawnTimer === 0) {
-        player.x = W / 2 - 4;
-        player.y = H - 18;
+        player.x = W / 2 - 8;
+        player.y = H - 24;
       }
-      // Still update enemies and such during respawn
     }
 
-    // Player movement (arrows, constrained to bottom area)
+    // Player movement
     if (respawnTimer <= 0) {
       if (btn("left")) player.x -= player.speed;
       if (btn("right")) player.x += player.speed;
       if (btn("up")) player.y -= player.speed;
       if (btn("down")) player.y += player.speed;
-      player.x = _max(0, min(W - 8, player.x));
-      player.y = _max(PLAYER_MIN_Y, min(H - 10, player.y));
+      player.x = _max(0, min(W - T, player.x));
+      player.y = _max(PLAYER_MIN_Y, min(H - T - 2, player.y));
     }
 
     // Player shoot
     if (shootCooldown > 0) shootCooldown--;
     if (respawnTimer <= 0 && btnp("a") && !bullet && shootCooldown <= 0) {
-      bullet = { x: player.x + 0, y: player.y - 4 };
+      bullet = { x: player.x, y: player.y - 8 };
       shootCooldown = 4;
       shootSound();
     }
@@ -368,26 +387,25 @@
     // Update bullet
     if (bullet) {
       bullet.y -= 7;
-      if (bullet.y < 0) bullet = null;
+      if (bullet.y < -T) bullet = null;
     }
 
-    // Bullet collision: mushrooms
+    // Bullet collision: mushrooms (circle vs rect)
     if (bullet) {
-      const bgx = flr(bullet.x / 8);
-      const bgy = flr(bullet.y / 8);
-      // Check 2x2 grid cells around bullet
+      const bc = bulletCenter(bullet);
+      const bgx = flr(bc.cx / T);
+      const bgy = flr(bc.cy / T);
       for (let dy = -1; dy <= 0; dy++) {
-        for (let dx = 0; dx <= 0; dx++) {
+        for (let dx = -1; dx <= 1; dx++) {
           const cx = bgx + dx;
           const cy = bgy + dy;
+          if (cx < 0 || cx >= GRID_W || cy < 0 || cy >= GRID_H) continue;
           const mhp = getMush(cx, cy);
           if (mhp > 0) {
-            // Pixel-level check
-            const mx = cx * 8, my = cy * 8;
-            if (bullet.x + 8 > mx && bullet.x < mx + 8 && bullet.y + 8 > my && bullet.y < my + 8) {
+            const mx = cx * T, my = cy * T;
+            if (circRectCollide(bc.cx, bc.cy, BULLET_R, mx, my, T, T)) {
               setMush(cx, cy, mhp - 1);
               if (mhp - 1 <= 0) score += 1;
-              else score += 0;
               hitMushroomSound();
               bullet = null;
               break;
@@ -398,16 +416,16 @@
       }
     }
 
-    // Bullet collision: centipede segments
+    // Bullet collision: centipede segments (circle vs circle)
     if (bullet) {
+      const bc = bulletCenter(bullet);
       let hit = false;
       for (let ci = centipedes.length - 1; ci >= 0; ci--) {
         const segs = centipedes[ci];
         for (let si = segs.length - 1; si >= 0; si--) {
           const s = segs[si];
-          if (bullet.x + 8 > s.px && bullet.x < s.px + 8 &&
-              bullet.y + 8 > s.py && bullet.y < s.py + 8) {
-            // Hit!
+          const scx = s.px + 8, scy = s.py + 8;
+          if (circCollide(bc.cx, bc.cy, BULLET_R, scx, scy, 7)) {
             bullet = null;
             hit = true;
             const pts = s.isHead ? 100 : 10;
@@ -415,14 +433,14 @@
             addExplosion(s.px, s.py);
             hitCentiSound();
 
-            // Place a mushroom where segment died
-            const mgx = flr(s.px / 8);
-            const mgy = flr(s.py / 8);
+            // Place mushroom where segment died
+            const mgx = flr(s.px / T);
+            const mgy = flr(s.py / T);
             if (mgy >= HUD_H && mgy < GRID_H - 1) {
               setMush(mgx, mgy, 4);
             }
 
-            // Split centipede: segments before become one chain, segments after become another
+            // Split centipede
             if (segs.length === 1) {
               centipedes.splice(ci, 1);
             } else {
@@ -430,7 +448,6 @@
               const after = segs.slice(si + 1);
               centipedes.splice(ci, 1);
               if (before.length > 0) {
-                // Reverse direction of the "before" part (it was following)
                 before[before.length - 1].isHead = true;
                 centipedes.push(before);
               }
@@ -446,11 +463,11 @@
       }
     }
 
-    // Bullet collision: spider
+    // Bullet collision: spider (circle vs circle)
     if (bullet && spider) {
-      if (bullet.x + 8 > spider.x && bullet.x < spider.x + 8 &&
-          bullet.y + 8 > spider.y && bullet.y < spider.y + 8) {
-        // Distance-based scoring
+      const bc = bulletCenter(bullet);
+      const scx = spider.x + 8, scy = spider.y + 8;
+      if (circCollide(bc.cx, bc.cy, BULLET_R, scx, scy, 7)) {
         const dist = _abs(player.x - spider.x) + _abs(player.y - spider.y);
         if (dist < 40) score += 900;
         else if (dist < 80) score += 600;
@@ -462,10 +479,10 @@
       }
     }
 
-    // Bullet collision: flea
+    // Bullet collision: flea (circle vs rect)
     if (bullet && flea) {
-      if (bullet.x + 8 > flea.x && bullet.x < flea.x + 8 &&
-          bullet.y + 8 > flea.y && bullet.y < flea.y + 8) {
+      const bc = bulletCenter(bullet);
+      if (circRectCollide(bc.cx, bc.cy, BULLET_R, flea.x, flea.y, T, T)) {
         flea.hp--;
         bullet = null;
         if (flea.hp <= 0) {
@@ -480,34 +497,26 @@
     // Update centipedes
     for (let ci = centipedes.length - 1; ci >= 0; ci--) {
       const segs = centipedes[ci];
-      // Move head, body follows
       const head = segs[0];
       head.moveTimer--;
       if (head.moveTimer <= 0) {
         head.moveTimer = head.speed;
 
-        // Store previous positions for followers
         const prevPositions = segs.map(s => ({ gx: s.gx, gy: s.gy, dir: s.dir }));
 
         if (head.descending) {
-          // Move down one row
           head.gy++;
           head.descending = false;
-          // Reverse direction
           head.dir = -head.dir;
-          // If reached bottom, wrap to top
           if (head.gy >= GRID_H - 1) {
             head.gy = HUD_H;
           }
         } else {
-          // Try to move horizontally
           const nextX = head.gx + head.dir;
-          // Check if we hit a wall or mushroom
           const hitWall = nextX < 0 || nextX >= GRID_W;
           const hitMush = !hitWall && getMush(nextX, head.gy) > 0;
 
           if (hitWall || hitMush) {
-            // Descend
             head.descending = true;
             head.gy++;
             head.dir = -head.dir;
@@ -526,28 +535,26 @@
           segs[si].dir = prevPositions[si - 1].dir;
         }
 
-        // Update pixel positions (smooth interpolation target)
         for (const s of segs) {
-          s.px = s.gx * 8;
-          s.py = s.gy * 8;
+          s.px = s.gx * T;
+          s.py = s.gy * T;
         }
       } else {
-        // Smooth interpolation between grid positions
         for (const s of segs) {
-          const tx = s.gx * 8;
-          const ty = s.gy * 8;
+          const tx = s.gx * T;
+          const ty = s.gy * T;
           s.px += (tx - s.px) * 0.4;
           s.py += (ty - s.py) * 0.4;
         }
       }
     }
 
-    // Centipede-player collision
+    // Centipede-player collision (circle vs rect)
     if (respawnTimer <= 0) {
       for (const segs of centipedes) {
         for (const s of segs) {
-          if (player.x + 8 > s.px && player.x < s.px + 8 &&
-              player.y + 8 > s.py && player.y < s.py + 8) {
+          const scx = s.px + 8, scy = s.py + 8;
+          if (circRectCollide(scx, scy, 7, player.x + 2, player.y + 2, 12, 12)) {
             playerDied();
             break;
           }
@@ -566,22 +573,20 @@
         spider.vy = (rnd(3) - 1.5) * 1.5;
         spider.bounceTimer = 10 + flr(rnd(20));
       }
-      // Keep spider in player area
-      if (spider.x < 0 || spider.x > W - 8) spider.vx = -spider.vx;
-      if (spider.y < PLAYER_MIN_Y - 16) spider.vy = _abs(spider.vy);
-      if (spider.y > H - 10) spider.vy = -_abs(spider.vy);
-      spider.x = _max(0, min(W - 8, spider.x));
+      if (spider.x < 0 || spider.x > W - T) spider.vx = -spider.vx;
+      if (spider.y < PLAYER_MIN_Y - 24) spider.vy = _abs(spider.vy);
+      if (spider.y > H - T - 2) spider.vy = -_abs(spider.vy);
+      spider.x = _max(0, min(W - T, spider.x));
       // Spider eats mushrooms it touches
-      const sgx = flr((spider.x + 4) / 8);
-      const sgy = flr((spider.y + 4) / 8);
+      const sgx = flr((spider.x + 8) / T);
+      const sgy = flr((spider.y + 8) / T);
       if (getMush(sgx, sgy) > 0 && rnd(1) < 0.3) setMush(sgx, sgy, 0);
-      // Spider leaves after a while
       spider.life--;
       if (spider.life <= 0) spider = null;
-      // Spider-player collision
+      // Spider-player collision (circle vs rect)
       if (spider && respawnTimer <= 0) {
-        if (player.x + 8 > spider.x && player.x < spider.x + 8 &&
-            player.y + 8 > spider.y && player.y < spider.y + 8) {
+        const scx = spider.x + 8, scy = spider.y + 8;
+        if (circRectCollide(scx, scy, 7, player.x + 2, player.y + 2, 12, 12)) {
           addExplosion(spider.x, spider.y);
           spider = null;
           playerDied();
@@ -590,7 +595,7 @@
     }
     spiderTimer--;
     if (spiderTimer <= 0 && !spider) {
-      const side = rnd(1) < 0.5 ? 0 : W - 8;
+      const side = rnd(1) < 0.5 ? 0 : W - T;
       spider = {
         x: side, y: PLAYER_MIN_Y + rnd(30),
         vx: side === 0 ? 2 : -2, vy: rnd(2) - 1,
@@ -602,18 +607,16 @@
     // Flea AI
     if (flea) {
       flea.y += flea.speed;
-      // Drop mushrooms as it falls
-      const fgy = flr(flea.y / 8);
-      const fgx = flr(flea.x / 8);
+      const fgy = flr(flea.y / T);
+      const fgx = flr(flea.x / T);
       if (fgy !== flea.lastDropY && fgy >= HUD_H && fgy < GRID_H - PLAYER_ROWS && rnd(1) < 0.4) {
         if (getMush(fgx, fgy) === 0) setMush(fgx, fgy, 4);
         flea.lastDropY = fgy;
       }
-      if (flea.y > H + 8) flea = null;
-      // Flea-player collision
+      if (flea.y > H + T) flea = null;
+      // Flea-player collision (rect vs rect)
       if (flea && respawnTimer <= 0) {
-        if (player.x + 8 > flea.x && player.x < flea.x + 8 &&
-            player.y + 8 > flea.y && player.y < flea.y + 8) {
+        if (boxOverlap(player.x + 2, player.y + 2, 12, 12, flea.x, flea.y, T, T)) {
           addExplosion(flea.x, flea.y);
           flea = null;
           playerDied();
@@ -621,10 +624,9 @@
       }
     }
     fleaTimer--;
-    // Spawn flea when mushroom count in player area is low
     if (fleaTimer <= 0 && !flea) {
-      const fx = flr(rnd(GRID_W)) * 8;
-      flea = { x: fx, y: -8, speed: 2 + wave * 0.2, hp: 2, lastDropY: -1 };
+      const fx = flr(rnd(GRID_W)) * T;
+      flea = { x: fx, y: -T, speed: 2 + wave * 0.2, hp: 2, lastDropY: -1 };
       fleaTimer = 300 + flr(rnd(300));
     }
 
@@ -672,56 +674,67 @@
   }
 
   // ============================================================
-  // Play Draw (inline in scene would be too large, so using a function)
+  // Play Draw
   // ============================================================
   function drawPlay() {
     cls(0);
-
-    // --- Play state rendering ---
 
     // Draw mushrooms
     for (const key in mushrooms) {
       const hp = mushrooms[key];
       const [gxs, gys] = key.split(",");
       const gx = parseInt(gxs), gy = parseInt(gys);
-      const sprId = 4 + (4 - hp); // 4=full, 5=3hp, 6=2hp, 7=1hp
-      spr(sprId, gx * 8, gy * 8);
+      const sprId = 4 + (4 - hp);
+      spr(sprId, gx * T, gy * T);
+      dbg(gx * T, gy * T, T, T);
     }
 
     // Draw centipedes
     for (const segs of centipedes) {
       for (let si = segs.length - 1; si >= 0; si--) {
         const s = segs[si];
+        const sx = flr(s.px), sy = flr(s.py);
         if (s.isHead) {
-          spr(s.dir > 0 ? 2 : 14, flr(s.px), flr(s.py));
+          spr(s.dir > 0 ? 2 : 14, sx, sy);
         } else {
-          spr(3, flr(s.px), flr(s.py));
+          spr(3, sx, sy);
         }
+        dbgC(sx + 8, sy + 8, 7);
       }
     }
 
     // Draw spider
     if (spider) {
-      // Spider flickers/animates
+      const sx = flr(spider.x), sy = flr(spider.y);
       if (flr(Mono.frame / 4) % 2 === 0) {
-        spr(9, flr(spider.x), flr(spider.y));
+        spr(9, sx, sy);
       } else {
-        spr(9, flr(spider.x), flr(spider.y) + 1);
+        spr(9, sx, sy + 1);
       }
+      dbgC(sx + 8, sy + 8, 7);
     }
 
     // Draw flea
     if (flea) {
-      spr(10, flr(flea.x), flr(flea.y));
+      const fx = flr(flea.x), fy = flr(flea.y);
+      spr(10, fx, fy);
+      dbg(fx, fy, T, T);
     }
 
     // Draw bullet
-    if (bullet) spr(8, flr(bullet.x), flr(bullet.y));
+    if (bullet) {
+      const bx = flr(bullet.x), by = flr(bullet.y);
+      spr(8, bx, by);
+      const bc = bulletCenter(bullet);
+      dbgC(flr(bc.cx), flr(bc.cy), BULLET_R);
+    }
 
     // Draw player
     if (respawnTimer <= 0 || flr(Mono.frame / 4) % 2 === 0) {
       if (respawnTimer <= 0) {
-        spr(1, flr(player.x), flr(player.y));
+        const px = flr(player.x), py = flr(player.y);
+        spr(1, px, py);
+        dbg(px + 2, py + 2, 12, 12);
       }
     }
 
@@ -734,11 +747,14 @@
     // Particles
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
-    // HUD
-    rectf(0, 0, W, HUD_H * 8, 0);
-    text("SCORE:" + score, 4, 3, 3);
-    text("WAVE:" + wave, W / 2 - 15, 3, 2);
-    for (let i = 0; i < lives; i++) spr(13, W - 30 + i * 10, 2);
+    // HUD (16px tall bar)
+    rectf(0, 0, W, T, 0);
+    text("SCORE:" + score, 2, 5, 3);
+    text("W:" + wave, W / 2 - 10, 5, 2);
+    // Lives icons - max 5 shown, clamped to right side within screen
+    const maxLivesShown = min(lives, 5);
+    const livesStartX = W - 4 - maxLivesShown * 18;
+    for (let i = 0; i < maxLivesShown; i++) spr(13, livesStartX + i * 18, 0);
 
     // Player area divider line (subtle)
     for (let x = 0; x < W; x += 4) pix(x, PLAYER_MIN_Y - 1, 1);
@@ -754,35 +770,33 @@
   function drawTitle() {
     const ty = 38 + sin(Mono.frame * 0.04) * 4;
 
-    // Title text
     text("CENTIPEDE", W / 2 - 25, flr(ty), 3);
     rectf(W / 2 - 33, flr(ty) + 10, 67, 1, 2);
 
     // Animated centipede on title
-    const cx = W / 2 - 27;
+    const cx = W / 2 - 50;
     const cy = flr(ty) + 19;
-    spr(2, cx + flr(sin(Mono.frame * 0.1) * 8), cy);
-    for (let i = 1; i < 8; i++) {
-      spr(3, cx + flr(sin(Mono.frame * 0.1 - i * 0.5) * 8) + i * 9, cy + flr(sin(Mono.frame * 0.08 + i) * 2));
+    spr(2, cx + flr(sin(Mono.frame * 0.1) * 12), cy);
+    for (let i = 1; i < 6; i++) {
+      spr(3, cx + flr(sin(Mono.frame * 0.1 - i * 0.5) * 12) + i * 17, cy + flr(sin(Mono.frame * 0.08 + i) * 2));
     }
 
     // Decorative mushrooms
-    const mx = W / 2 - 20;
-    const my = flr(ty) + 38;
-    for (let i = 0; i < 7; i++) {
-      spr(4, mx + i * 10 + flr(sin(i + Mono.frame * 0.02) * 2), my);
+    const mx = W / 2 - 40;
+    const my = flr(ty) + 42;
+    for (let i = 0; i < 5; i++) {
+      spr(4, mx + i * 18 + flr(sin(i + Mono.frame * 0.02) * 2), my);
     }
 
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 42, 135, 3);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 42, 140, 3);
 
     // Score table
-    text("-SCORE TABLE-", W / 2 - 35, 158, 2);
-    spr(2, W / 2 - 27, 167); text("  HEAD   100 PTS", W / 2 - 19, 168, 2);
-    spr(3, W / 2 - 27, 177); text("  BODY    10 PTS", W / 2 - 19, 178, 2);
-    spr(9, W / 2 - 27, 187); text("  SPIDER 300-900", W / 2 - 19, 188, 2);
-    spr(10, W / 2 - 27, 197); text("  FLEA   200 PTS", W / 2 - 19, 198, 2);
+    text("-SCORE TABLE-", W / 2 - 35, 162, 2);
+    spr(2, W / 2 - 30, 172); text("HEAD  100", W / 2 - 10, 176, 2);
+    spr(3, W / 2 - 30, 190); text("BODY   10", W / 2 - 10, 194, 2);
+    spr(9, W / 2 - 30, 208); text("SPIDER 300-900", W / 2 - 10, 212, 2);
 
-    text("MONO DEMO V0.1", W / 2 - 45, 229, 1);
+    text("MONO DEMO", W / 2 - 28, 232, 1);
   }
 
   function drawGameOver() {
@@ -791,18 +805,18 @@
       const hp = mushrooms[key];
       const [gxs, gys] = key.split(",");
       const gx = parseInt(gxs), gy = parseInt(gys);
-      spr(4 + (4 - hp), gx * 8, gy * 8);
+      spr(4 + (4 - hp), gx * T, gy * T);
     }
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
     // Dark overlay
-    rectf(W / 2 - 47, 75, 93, 53, 0);
-    rect(W / 2 - 47, 75, 93, 53, 1);
+    rectf(W / 2 - 55, 75, 110, 55, 0);
+    rect(W / 2 - 55, 75, 110, 55, 1);
 
     text("GAME OVER", W / 2 - 25, 84, 3);
-    text("SCORE: " + score, W / 2 - 25, 98, 2);
-    text("WAVE: " + wave, W / 2 - 18, 107, 2);
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 52, 150, 3);
+    text("SCORE:" + score, W / 2 - 25, 98, 2);
+    text("WAVE:" + wave, W / 2 - 18, 108, 2);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 42, 150, 3);
   }
 
   // ============================================================

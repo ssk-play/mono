@@ -22,10 +22,13 @@
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
           min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites ---
+  // --- 16x16 upscale helper ---
+  function up(d){let o="";for(let r=0;r<8;r++){let row="";for(let c=0;c<8;c++){const ch=d[r*8+c];row+=ch+ch;}o+=row+row;}return o;}
+
+  // --- Sprites (8x8 data upscaled to 16x16) ---
 
   // 1: Player facing right (Dig Dug guy with helmet and pump)
-  defSprite(1,
+  defSprite(1, up(
     "00333000" +
     "03222300" +
     "03232300" +
@@ -34,9 +37,9 @@
     "00232000" +
     "00211000" +
     "00100100"
-  );
+  ));
   // 2: Player facing left
-  defSprite(2,
+  defSprite(2, up(
     "00333000" +
     "03222300" +
     "03232300" +
@@ -45,9 +48,9 @@
     "00232000" +
     "00011200" +
     "00100100"
-  );
+  ));
   // 3: Player facing up
-  defSprite(3,
+  defSprite(3, up(
     "00333000" +
     "03222300" +
     "03222300" +
@@ -56,9 +59,9 @@
     "02333200" +
     "00100100" +
     "00100100"
-  );
+  ));
   // 4: Player facing down
-  defSprite(4,
+  defSprite(4, up(
     "00100100" +
     "00100100" +
     "02333200" +
@@ -67,10 +70,10 @@
     "03222300" +
     "03232300" +
     "00333000"
-  );
+  ));
 
   // 5: Pooka (round enemy with goggles)
-  defSprite(5,
+  defSprite(5, up(
     "00333000" +
     "03333300" +
     "32233220" +
@@ -79,9 +82,9 @@
     "03333300" +
     "03300330" +
     "03000030"
-  );
+  ));
   // 6: Pooka inflated 1
-  defSprite(6,
+  defSprite(6, up(
     "03333300" +
     "33333330" +
     "32233220" +
@@ -90,9 +93,9 @@
     "33333330" +
     "33333330" +
     "03333300"
-  );
+  ));
   // 7: Pooka inflated 2 (about to pop)
-  defSprite(7,
+  defSprite(7, up(
     "33333330" +
     "33333330" +
     "32233220" +
@@ -101,10 +104,10 @@
     "33333330" +
     "33333330" +
     "33333330"
-  );
+  ));
 
   // 8: Fygar (dragon enemy)
-  defSprite(8,
+  defSprite(8, up(
     "00033300" +
     "00333330" +
     "03322330" +
@@ -113,9 +116,9 @@
     "03233300" +
     "03300330" +
     "03000030"
-  );
+  ));
   // 9: Fygar inflated 1
-  defSprite(9,
+  defSprite(9, up(
     "00333300" +
     "03333330" +
     "33322330" +
@@ -124,9 +127,9 @@
     "33333330" +
     "33333330" +
     "03333300"
-  );
+  ));
   // 10: Fygar inflated 2
-  defSprite(10,
+  defSprite(10, up(
     "33333330" +
     "33333330" +
     "33322330" +
@@ -135,10 +138,10 @@
     "33333330" +
     "33333330" +
     "33333330"
-  );
+  ));
 
   // 11: Rock
-  defSprite(11,
+  defSprite(11, up(
     "01111100" +
     "12222210" +
     "12121210" +
@@ -147,9 +150,9 @@
     "12222210" +
     "12222210" +
     "01111100"
-  );
+  ));
   // 12: Rock cracking
-  defSprite(12,
+  defSprite(12, up(
     "01111100" +
     "12202210" +
     "12021210" +
@@ -158,10 +161,10 @@
     "12200210" +
     "12222210" +
     "01111100"
-  );
+  ));
 
   // 13: Hose segment horizontal
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -170,10 +173,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 14: Life icon (small player)
-  defSprite(14,
+  defSprite(14, up(
     "00000000" +
     "00330000" +
     "03220300" +
@@ -182,10 +185,10 @@
     "00110000" +
     "00100000" +
     "00000000"
-  );
+  ));
 
-  // 15: Ghost (enemy in ghost mode — semi-transparent look)
-  defSprite(15,
+  // 15: Ghost (enemy in ghost mode)
+  defSprite(15, up(
     "00111000" +
     "01111100" +
     "01211200" +
@@ -194,10 +197,10 @@
     "01111100" +
     "01010100" +
     "00000000"
-  );
+  ));
 
   // 16: Fygar fire breath
-  defSprite(16,
+  defSprite(16, up(
     "00000000" +
     "00000030" +
     "00003330" +
@@ -206,10 +209,10 @@
     "00003330" +
     "00000030" +
     "00000000"
-  );
+  ));
 
   // 17: Flower/veggie bonus
-  defSprite(17,
+  defSprite(17, up(
     "00030000" +
     "00323000" +
     "03232300" +
@@ -218,15 +221,15 @@
     "00020000" +
     "00121000" +
     "00020000"
-  );
+  ));
 
-  // --- Grid constants ---
-  const GRID_W = 28;     // grid columns (playfield)
-  const GRID_H = 28;     // grid rows
-  const CELL = 8;        // cell size in pixels
-  const FIELD_X = 48;    // playfield x offset (centered in 320)
+  // --- Grid constants (updated for 16x16 sprites) ---
+  const GRID_W = 14;     // grid columns (playfield fits 14*16=224 in ~240 zone)
+  const GRID_H = 13;     // grid rows (13*16=208 +18 HUD = 226 < 240)
+  const CELL = 16;       // cell size in pixels (16x16)
+  const FIELD_X = 48;    // playfield x offset (centered: (320-224)/2 = 48)
   const FIELD_Y = 18;    // playfield y offset (leave room for HUD)
-  const SKY_ROWS = 2;    // top rows are sky (no dirt)
+  const SKY_ROWS = 1;    // top rows are sky (no dirt)
 
   // Dirt grid: 0=empty(tunnel), 1=dirt
   let dirt = [];
@@ -284,6 +287,25 @@
     return { x: flr((px - FIELD_X) / CELL), y: flr((py - FIELD_Y) / CELL) };
   }
 
+  // --- Collision helpers ---
+  // AABB rect collision
+  function rectOverlap(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
+  }
+
+  // Circle collision (center+radius)
+  function circCollide(cx1, cy1, r1, cx2, cy2, r2) {
+    const dx = cx1 - cx2;
+    const dy = cy1 - cy2;
+    const distSq = dx * dx + dy * dy;
+    const rSum = r1 + r2;
+    return distSq < rSum * rSum;
+  }
+
+  // Entity center helpers (16x16 sprites)
+  function entityCX(e) { return e.px + 8; }
+  function entityCY(e) { return e.py + 8; }
+
   function resetGame() {
     score = 0;
     lives = 3;
@@ -323,46 +345,45 @@
 
     // Carve initial tunnels (horizontal paths at various depths)
     // Tunnel row 1
-    for (let x = 4; x < GRID_W - 4; x++) {
-      digAt(x, SKY_ROWS + 4);
+    for (let x = 2; x < GRID_W - 2; x++) {
+      digAt(x, SKY_ROWS + 2);
     }
     // Tunnel row 2
-    for (let x = 2; x < GRID_W - 2; x++) {
-      digAt(x, SKY_ROWS + 10);
+    for (let x = 1; x < GRID_W - 1; x++) {
+      digAt(x, SKY_ROWS + 5);
     }
     // Tunnel row 3
-    for (let x = 6; x < GRID_W - 6; x++) {
-      digAt(x, SKY_ROWS + 16);
+    for (let x = 3; x < GRID_W - 3; x++) {
+      digAt(x, SKY_ROWS + 8);
     }
     // Tunnel row 4 (deeper)
-    for (let x = 3; x < GRID_W - 3; x++) {
-      digAt(x, SKY_ROWS + 22);
+    for (let x = 1; x < GRID_W - 1; x++) {
+      digAt(x, SKY_ROWS + 11);
     }
     // Vertical connector left
-    for (let y = SKY_ROWS + 4; y <= SKY_ROWS + 10; y++) digAt(5, y);
+    for (let y = SKY_ROWS + 2; y <= SKY_ROWS + 5; y++) digAt(3, y);
     // Vertical connector right
-    for (let y = SKY_ROWS + 10; y <= SKY_ROWS + 16; y++) digAt(GRID_W - 7, y);
+    for (let y = SKY_ROWS + 5; y <= SKY_ROWS + 8; y++) digAt(GRID_W - 4, y);
     // Player start tunnel (from sky down)
-    for (let y = SKY_ROWS; y <= SKY_ROWS + 4; y++) {
+    for (let y = SKY_ROWS; y <= SKY_ROWS + 2; y++) {
       digAt(flr(GRID_W / 2), y);
       digAt(flr(GRID_W / 2) - 1, y);
     }
 
     // Spawn enemies
-    const numPookas = min(3 + level, 6);
+    const numPookas = min(3 + level, 5);
     const numFygars = min(1 + flr(level / 2), 3);
 
     // Enemy spawn positions (on tunnels)
     const spawnPositions = [
-      { gx: 6, gy: SKY_ROWS + 4 },
-      { gx: GRID_W - 7, gy: SKY_ROWS + 4 },
-      { gx: 4, gy: SKY_ROWS + 10 },
-      { gx: GRID_W - 5, gy: SKY_ROWS + 10 },
-      { gx: 8, gy: SKY_ROWS + 16 },
-      { gx: GRID_W - 9, gy: SKY_ROWS + 16 },
-      { gx: 5, gy: SKY_ROWS + 22 },
-      { gx: GRID_W - 6, gy: SKY_ROWS + 22 },
-      { gx: 12, gy: SKY_ROWS + 22 },
+      { gx: 3, gy: SKY_ROWS + 2 },
+      { gx: GRID_W - 4, gy: SKY_ROWS + 2 },
+      { gx: 2, gy: SKY_ROWS + 5 },
+      { gx: GRID_W - 3, gy: SKY_ROWS + 5 },
+      { gx: 4, gy: SKY_ROWS + 8 },
+      { gx: GRID_W - 5, gy: SKY_ROWS + 8 },
+      { gx: 3, gy: SKY_ROWS + 11 },
+      { gx: GRID_W - 4, gy: SKY_ROWS + 11 },
     ];
 
     for (let i = 0; i < numPookas + numFygars && i < spawnPositions.length; i++) {
@@ -396,10 +417,10 @@
 
     // Spawn rocks
     const rockPositions = [
-      { gx: 10, gy: SKY_ROWS + 2 },
-      { gx: GRID_W - 11, gy: SKY_ROWS + 8 },
-      { gx: 7, gy: SKY_ROWS + 14 },
-      { gx: GRID_W - 8, gy: SKY_ROWS + 20 },
+      { gx: 5, gy: SKY_ROWS + 1 },
+      { gx: GRID_W - 6, gy: SKY_ROWS + 4 },
+      { gx: 4, gy: SKY_ROWS + 7 },
+      { gx: GRID_W - 5, gy: SKY_ROWS + 10 },
     ];
     for (let i = 0; i < min(2 + flr(level / 2), 4); i++) {
       if (i < rockPositions.length) {
@@ -505,7 +526,7 @@
   function addParticles(x, y, count, col) {
     for (let i = 0; i < count; i++) {
       particles.push({
-        x: x + rnd(8), y: y + rnd(8),
+        x: x + rnd(16), y: y + rnd(16),
         vx: rnd(3) - 1.5, vy: rnd(3) - 1.5,
         life: 8 + flr(rnd(12)),
         color: col || (flr(rnd(3)) + 1)
@@ -534,7 +555,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() { drawGameOver(); }
   });
@@ -637,7 +658,7 @@
               if (e.inflate >= 3) {
                 // Pop!
                 e.alive = false;
-                const depthBonus = flr((e.gy - SKY_ROWS) / 7);
+                const depthBonus = flr((e.gy - SKY_ROWS) / 4);
                 const pts = (e.type === "fygar" ? 300 : 200) + depthBonus * 100;
                 score += pts;
                 addScorePopup(e.px, e.py, pts);
@@ -718,10 +739,6 @@
           }
         }
         moveStep(e, e.speed * 0.7);
-        // Dig tunnels as ghost exits
-        if (!e.moving && isTunnel(e.gx, e.gy)) {
-          // now in tunnel
-        }
       } else {
         // Normal tunnel movement
         if (!e.moving) {
@@ -742,7 +759,6 @@
                 // Try to find path sideways
                 const dirs = [0, 1, 2, 3].filter(d => canMoveEntity(e.gx, e.gy, d, false));
                 if (dirs.length > 0) {
-                  // Prefer up, then horizontal toward center
                   const best = dirs.sort((a, b) => {
                     const ay = e.gy + DY[a], by = e.gy + DY[b];
                     return ay - by; // prefer lower y (upward)
@@ -755,7 +771,7 @@
                 }
               }
             } else {
-              // At surface — run off screen
+              // At surface - run off screen
               if (e.gx < GRID_W / 2) {
                 if (canMoveEntity(e.gx, e.gy, 1, false)) startMove(e, 1, false);
                 else startMove(e, 0, false);
@@ -771,15 +787,13 @@
             // Chase player through tunnels
             const dx = player.gx - e.gx;
             const dy = player.gy - e.gy;
-            // Determine preferred direction
             let preferred = [];
             if (_abs(dx) > _abs(dy)) {
               preferred = dx > 0 ? [0, 3, 2, 1] : [1, 2, 3, 0];
             } else {
               preferred = dy > 0 ? [3, 0, 1, 2] : [2, 1, 0, 3];
             }
-            // Don't reverse unless no choice
-            const reverseDir = e.dir ^ 1; // 0<->1, 2<->3
+            const reverseDir = e.dir ^ 1;
             let moved = false;
             for (const d of preferred) {
               if (d === reverseDir && preferred.filter(dd => canMoveEntity(e.gx, e.gy, dd, false)).length > 1) continue;
@@ -790,7 +804,6 @@
               }
             }
             if (!moved) {
-              // Try reverse
               if (canMoveEntity(e.gx, e.gy, reverseDir, false)) {
                 startMove(e, reverseDir, false);
               }
@@ -805,7 +818,6 @@
         e.fireTimer--;
         if (e.fireTimer <= 0) {
           e.fireTimer = 60 + flr(rnd(90));
-          // Fire in direction facing if player is roughly in that direction
           const dx = player.px - e.px;
           if ((e.dir === 0 && dx > 0) || (e.dir === 1 && dx < 0)) {
             e.fireActive = true;
@@ -820,13 +832,16 @@
           e.fireActive = false;
           e.fireLen = 0;
         }
-        // Check fire hit player
+        // Check fire hit player (circle collision on fire segments)
         const fireReach = flr(e.fireLen);
         for (let d = 1; d <= fireReach; d++) {
           const fx = e.gx + DX[e.fireDir] * d;
           const fy = e.gy;
           if (isDirt(fx, fy)) break;
-          if (player.alive && player.gx === fx && player.gy === fy) {
+          // Circle collision: fire center vs player center
+          const fireCX = FIELD_X + fx * CELL + 8;
+          const fireCY = FIELD_Y + fy * CELL + 8;
+          if (player.alive && circCollide(fireCX, fireCY, 7, entityCX(player), entityCY(player), 6)) {
             killPlayer();
             break;
           }
@@ -834,14 +849,20 @@
       }
     }
 
-    // Enemy-player collision
+    // Enemy-player collision (circle-based for round Pooka, rect for Fygar)
     for (const e of enemies) {
       if (!e.alive || !player.alive) continue;
       if (e.inflate > 0) continue;
-      const dx = _abs(e.px - player.px);
-      const dy = _abs(e.py - player.py);
-      if (dx < 6 && dy < 6) {
-        killPlayer();
+      if (e.type === "pooka") {
+        // Pooka is round - circle collision
+        if (circCollide(entityCX(e), entityCY(e), 7, entityCX(player), entityCY(player), 6)) {
+          killPlayer();
+        }
+      } else {
+        // Fygar - rect collision
+        if (rectOverlap(e.px + 2, e.py + 2, 12, 12, player.px + 2, player.py + 2, 12, 12)) {
+          killPlayer();
+        }
       }
     }
 
@@ -870,45 +891,48 @@
         r.fallSpeed = min(r.fallSpeed + 0.3, 4);
         r.py += r.fallSpeed;
         // Update grid position
-        const newGy = flr((r.py - FIELD_Y + 4) / CELL);
+        const newGy = flr((r.py - FIELD_Y + 8) / CELL);
         r.gy = newGy;
-        r.gx = flr((r.px - FIELD_X + 4) / CELL);
+        r.gx = flr((r.px - FIELD_X + 8) / CELL);
 
-        // Check collision with enemies
+        // Check collision with enemies (circle for Pooka, rect for Fygar)
         for (const e of enemies) {
           if (!e.alive) continue;
-          const dx = _abs(e.px - r.px);
-          const dy = _abs(e.py - r.py);
-          if (dx < 6 && dy < 6) {
+          const rockCX = r.px + 8;
+          const rockCY = r.py + 8;
+          let hit = false;
+          if (e.type === "pooka") {
+            hit = circCollide(rockCX, rockCY, 7, entityCX(e), entityCY(e), 7);
+          } else {
+            hit = rectOverlap(r.px + 1, r.py + 1, 14, 14, e.px + 2, e.py + 2, 12, 12);
+          }
+          if (hit) {
             e.alive = false;
             r.crushedEnemies++;
             addParticles(e.px, e.py, 8, 2);
             crushSound();
-            // Bonus: more points for crushing multiple enemies with one rock
             const pts = r.crushedEnemies === 1 ? 1000 : r.crushedEnemies * 1000;
             score += pts;
             addScorePopup(e.px, e.py, pts);
           }
         }
 
-        // Check collision with player
+        // Check collision with player (rect)
         if (player.alive) {
-          const dx = _abs(player.px - r.px);
-          const dy = _abs(player.py - r.py);
-          if (dx < 6 && dy < 6) {
+          if (rectOverlap(r.px + 1, r.py + 1, 14, 14, player.px + 2, player.py + 2, 12, 12)) {
             killPlayer();
           }
         }
 
         // Check landing
-        const checkGy = flr((r.py - FIELD_Y + 8) / CELL);
+        const checkGy = flr((r.py - FIELD_Y + 16) / CELL);
         if (checkGy >= GRID_H || (isDirt(r.gx, checkGy) && r.py >= FIELD_Y + (checkGy - 1) * CELL)) {
           r.state = "landed";
           r.landTimer = 30;
           r.py = FIELD_Y + (checkGy - 1) * CELL;
           r.gy = checkGy - 1;
           crushSound();
-          addParticles(r.px, r.py + 8, 6, 1);
+          addParticles(r.px, r.py + 16, 6, 1);
         }
         // Also stop at bottom
         if (r.py >= FIELD_Y + (GRID_H - 1) * CELL) {
@@ -973,16 +997,15 @@
           // Dirt - vary shade by depth
           const depth = gy - SKY_ROWS;
           let col;
-          if (depth < 6) col = 2;       // light dirt
-          else if (depth < 13) col = 1;  // medium dirt
-          else if (depth < 20) col = 1;  // dark dirt
-          else col = 1;
+          if (depth < 3) col = 2;       // light dirt
+          else if (depth < 7) col = 1;  // medium dirt
+          else col = 1;                  // dark dirt
           // Draw dirt cell with subtle pattern
           rectf(px, py, CELL, CELL, col);
-          // Add texture dots
-          if ((gx + gy) % 3 === 0) pix(px + 2, py + 2, col === 2 ? 3 : 2);
-          if ((gx + gy) % 5 === 0) pix(px + 5, py + 5, col === 2 ? 3 : 2);
-          if ((gx + gy) % 4 === 1) pix(px + 6, py + 1, col === 2 ? 1 : 2);
+          // Add texture dots (scaled for 16x16 cells)
+          if ((gx + gy) % 3 === 0) pix(px + 4, py + 4, col === 2 ? 3 : 2);
+          if ((gx + gy) % 5 === 0) pix(px + 10, py + 10, col === 2 ? 3 : 2);
+          if ((gx + gy) % 4 === 1) pix(px + 12, py + 2, col === 2 ? 1 : 2);
         } else {
           // Tunnel - dark background
           rectf(px, py, CELL, CELL, 0);
@@ -1014,26 +1037,22 @@
     }
 
     // Draw depth indicators on the left side
-    const depthColors = [
-      { y: SKY_ROWS, label: "" },
-    ];
-    // Layer markers
     for (let i = 0; i < 4; i++) {
-      const ly = FIELD_Y + (SKY_ROWS + i * 7) * CELL;
-      rectf(FIELD_X - 2, ly, 2, 6, 2);
+      const ly = FIELD_Y + (SKY_ROWS + i * 3) * CELL;
+      rectf(FIELD_X - 3, ly, 3, 8, 2);
     }
 
     // Draw surface (flowers/plants on sky row)
     for (let gx = 0; gx < GRID_W; gx++) {
       const px = FIELD_X + gx * CELL;
       const py = FIELD_Y + (SKY_ROWS - 1) * CELL;
-      if (gx % 5 === 0) {
-        // Little plant
-        pix(px + 3, py + 5, 2);
-        pix(px + 3, py + 4, 2);
-        pix(px + 2, py + 3, 2);
-        pix(px + 4, py + 3, 2);
-        pix(px + 3, py + 2, 3);
+      if (gx % 3 === 0) {
+        // Little plant (scaled up)
+        pix(px + 6, py + 10, 2);
+        pix(px + 6, py + 8, 2);
+        pix(px + 4, py + 6, 2);
+        pix(px + 8, py + 6, 2);
+        pix(px + 6, py + 4, 3);
       }
     }
 
@@ -1047,6 +1066,8 @@
       const rx = r.state === "shaking" ? r.px + flr(rnd(3)) - 1 : r.px;
       const sprId = r.state === "shaking" || r.state === "falling" ? 12 : 11;
       spr(sprId, flr(rx), flr(r.py));
+      // Debug hitbox: rock rect
+      Mono.dbg(r.px + 1, r.py + 1, 14, 14);
     }
 
     // Draw enemies
@@ -1072,6 +1093,13 @@
         spr(sprId, ex, ey, flipX);
       }
 
+      // Debug hitboxes: circle for Pooka, rect for Fygar
+      if (e.type === "pooka") {
+        Mono.dbgC(entityCX(e), entityCY(e), 7);
+      } else {
+        Mono.dbg(e.px + 2, e.py + 2, 12, 12);
+      }
+
       // Draw fygar fire
       if (e.fireActive && e.type === "fygar") {
         const fireReach = flr(e.fireLen);
@@ -1079,6 +1107,8 @@
           const fx = ex + DX[e.fireDir] * d * CELL;
           const fy = ey;
           spr(16, fx, fy, e.fireDir === 1);
+          // Debug: circle for fire segment
+          Mono.dbgC(fx + 8, fy + 8, 7);
         }
       }
     }
@@ -1086,21 +1116,25 @@
     // Draw hose
     if (hoseActive && hoseLen > 0) {
       const hLen = flr(hoseLen);
-      const startX = player.px + 4 + DX[hoseDir] * 4;
-      const startY = player.py + 4 + DY[hoseDir] * 4;
+      const startX = player.px + 8 + DX[hoseDir] * 8;
+      const startY = player.py + 8 + DY[hoseDir] * 8;
       const endX = startX + DX[hoseDir] * hLen * CELL;
       const endY = startY + DY[hoseDir] * hLen * CELL;
       // Draw hose line
       line(flr(startX), flr(startY), flr(endX), flr(endY), 3);
       line(flr(startX), flr(startY) + 1, flr(endX), flr(endY) + 1, 2);
-      // Hose tip
-      circf(flr(endX), flr(endY), 2, 3);
+      // Hose tip (circle)
+      circf(flr(endX), flr(endY), 3, 3);
+      // Debug: hose tip
+      Mono.dbgC(flr(endX), flr(endY), 3);
     }
 
     // Draw player
     if (player.alive) {
       const pSpr = player.dir === 0 ? 1 : player.dir === 1 ? 2 : player.dir === 2 ? 3 : 4;
       spr(pSpr, flr(player.px), flr(player.py));
+      // Debug: player hitbox (circle since player is round-ish)
+      Mono.dbgC(entityCX(player), entityCY(player), 6);
     }
 
     // Particles
@@ -1114,21 +1148,24 @@
       text(String(sp.pts), flr(sp.x) - 4, flr(sp.y), alpha);
     }
 
-    // HUD
-    rectf(0, 0, W, 15, 0);
-    text("SCORE:" + score, 3, 2, 3);
-    text("LV:" + level, W / 2 - 10, 2, 2);
-    for (let i = 0; i < lives; i++) spr(14, W - 33 + i * 7, 2);
+    // HUD (within 320x240 bounds)
+    rectf(0, 0, W, 16, 0);
+    text("SCORE:" + score, 3, 3, 3);
+    text("LV:" + level, 140, 3, 2);
+    // Lives icons: spaced properly to stay within 320 width (each icon 16px + 2px gap)
+    for (let i = 0; i < lives; i++) spr(14, W - 56 + i * 18, 0);
 
     // Level clear message
     if (levelClearShowing) {
-      rectf(FIELD_X + 27, FIELD_Y + 60, 93, 23, 0);
-      rect(FIELD_X + 27, FIELD_Y + 60, 93, 23, 3);
-      text("ROUND CLEAR!", FIELD_X + 44, FIELD_Y + 68, 3);
+      const msgX = FIELD_X + flr((GRID_W * CELL - 110) / 2);
+      const msgY = FIELD_Y + flr((GRID_H * CELL - 24) / 2);
+      rectf(msgX, msgY, 110, 24, 0);
+      rect(msgX, msgY, 110, 24, 3);
+      text("ROUND CLEAR!", msgX + 12, msgY + 8, 3);
     }
 
-    // Bottom info
-    text("ROUND " + level, 3, H - 8, 1);
+    // Bottom info (within bounds)
+    text("ROUND " + level, 3, H - 10, 1);
   }
 
   function drawTitle() {
@@ -1143,47 +1180,47 @@
       }
     }
 
-    const ty = 38 + sin(Mono.frame * 0.04) * 3;
+    const ty = 28 + sin(Mono.frame * 0.04) * 3;
 
     // Title
-    text("DIG DUG", 143, flr(ty), 3);
-    text("DIG DUG", 144, flr(ty) + 1, 1);
-    rectf(113, flr(ty) + 12, 93, 1, 2);
+    text("DIG DUG", 130, flr(ty), 3);
+    text("DIG DUG", 131, flr(ty) + 1, 1);
+    rectf(100, flr(ty) + 12, 120, 1, 2);
 
-    // Show characters
-    const bx = W / 2 - 33;
-    const by = flr(ty) + 23;
+    // Show characters (16x16 sprites)
+    const bx = W / 2 - 44;
+    const by = flr(ty) + 20;
     spr(1, bx, by + sin(Mono.frame * 0.06) * 3);
-    spr(5, bx + 20, by + 2 + sin(Mono.frame * 0.06 + 1) * 3);
-    spr(8, bx + 40, by + sin(Mono.frame * 0.06 + 2) * 3);
-    spr(11, bx + 60, by + 2 + sin(Mono.frame * 0.06 + 3) * 2);
+    spr(5, bx + 24, by + 2 + sin(Mono.frame * 0.06 + 1) * 3);
+    spr(8, bx + 48, by + sin(Mono.frame * 0.06 + 2) * 3);
+    spr(11, bx + 72, by + 2 + sin(Mono.frame * 0.06 + 3) * 2);
 
     if (flr(Mono.frame / 20) % 2 === 0) {
-      text("PRESS START", 120, 131, 3);
+      text("PRESS START", 118, 120, 3);
     }
 
     // Score table
-    text("-HOW TO PLAY-", 128, 150, 2);
-    spr(5, 107, 161); text("POOKA   200 PTS", 119, 162, 2);
-    spr(8, 107, 171); text("FYGAR   300 PTS", 119, 173, 2);
-    spr(11, 107, 182); text("ROCK  1000 PTS", 119, 183, 2);
+    text("-HOW TO PLAY-", 115, 140, 2);
+    spr(5, 90, 152); text("POOKA   200 PTS", 110, 156, 2);
+    spr(8, 90, 170); text("FYGAR   300 PTS", 110, 174, 2);
+    spr(11, 90, 188); text("ROCK  1000 PTS", 110, 192, 2);
 
-    text("DIG TUNNELS  PUMP ENEMIES", 98, 203, 2);
-    text("DROP ROCKS FOR BONUS!", 108, 212, 2);
+    text("DIG TUNNELS  PUMP ENEMIES", 70, 212, 2);
+    text("DROP ROCKS FOR BONUS!", 82, 222, 2);
 
-    text("MONO DEMO V0.1", 118, 229, 1);
+    text("MONO DEMO V0.1", 118, 232, 1);
   }
 
   function drawGameOver() {
     cls(0);
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
-    text("GAME OVER", 138, 75, 3);
-    text("SCORE: " + score, 127, 98, 2);
-    text("ROUND: " + level, 130, 111, 2);
+    text("GAME OVER", 125, 75, 3);
+    text("SCORE: " + score, 115, 98, 2);
+    text("ROUND: " + level, 118, 111, 2);
 
     if (flr(Mono.frame / 20) % 2 === 0) {
-      text("PRESS START", 113, 150, 3);
+      text("PRESS START", 118, 150, 3);
     }
   }
 

@@ -22,10 +22,14 @@
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
           min, max: _max, sin, cos } = Mono;
   const sprT = Mono.sprT;
+  const FONT_W = 4;
 
-  // --- Sprites ---
+  // --- 8→16 upscale helper ---
+  function up(d){let o="";for(let r=0;r<8;r++){let row="";for(let c=0;c<8;c++){const ch=d[r*8+c];row+=ch+ch;}o+=row+row;}return o;}
+
+  // --- Sprites (16x16 via upscale) ---
   // 1: Player facing right (doodle character)
-  defSprite(1,
+  defSprite(1, up(
     "00233200" +
     "02333320" +
     "02313120" +
@@ -34,9 +38,9 @@
     "01233210" +
     "00122100" +
     "02100120"
-  );
+  ));
   // 2: Player facing left
-  defSprite(2,
+  defSprite(2, up(
     "00233200" +
     "02333320" +
     "02131320" +
@@ -45,9 +49,9 @@
     "01233210" +
     "00122100" +
     "02100120"
-  );
+  ));
   // 3: Bullet (upward projectile)
-  defSprite(3,
+  defSprite(3, up(
     "00030000" +
     "00030000" +
     "00020000" +
@@ -56,9 +60,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 4: Enemy type A (blob monster)
-  defSprite(4,
+  defSprite(4, up(
     "00222200" +
     "02333320" +
     "23133130" +
@@ -67,9 +71,9 @@
     "02333320" +
     "00233200" +
     "02000020"
-  );
+  ));
   // 5: Enemy type B (flying creature with wings)
-  defSprite(5,
+  defSprite(5, up(
     "20000002" +
     "32000023" +
     "03222230" +
@@ -78,9 +82,9 @@
     "03222230" +
     "00200200" +
     "00000000"
-  );
+  ));
   // 6: Jetpack powerup
-  defSprite(6,
+  defSprite(6, up(
     "00000000" +
     "03300330" +
     "03200320" +
@@ -89,9 +93,9 @@
     "02222220" +
     "01111110" +
     "00100100"
-  );
+  ));
   // 7: Spring shoes powerup
-  defSprite(7,
+  defSprite(7, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -100,9 +104,9 @@
     "03300330" +
     "33333333" +
     "23232323"
-  );
+  ));
   // 8: Player with jetpack
-  defSprite(8,
+  defSprite(8, up(
     "00233200" +
     "32333323" +
     "32313123" +
@@ -111,9 +115,9 @@
     "01233210" +
     "00122100" +
     "02100120"
-  );
+  ));
   // 9: Jetpack flame frame 1
-  defSprite(9,
+  defSprite(9, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -122,9 +126,9 @@
     "03000300" +
     "02300230" +
     "01230123"
-  );
+  ));
   // 10: Jetpack flame frame 2
-  defSprite(10,
+  defSprite(10, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -133,7 +137,7 @@
     "00300030" +
     "03230323" +
     "02130213"
-  );
+  ));
 
   // --- Platform types ---
   const PLAT_NORMAL = 0;
@@ -156,6 +160,20 @@
   let titleBounce;
 
   bestScore = 0;
+
+  // --- Collision helpers ---
+  // Circle-vs-circle collision (center+radius)
+  function circCollide(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = dx * dx + dy * dy;
+    const rSum = ar + br;
+    return dist < rSum * rSum;
+  }
+
+  // Rect-vs-rect AABB collision
+  function rectCollide(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
 
   // --- Particle system ---
   function spawnParticles(x, y, count, color, spread) {
@@ -221,8 +239,8 @@
       // Spawn enemy near platform at higher altitudes
       if (difficultyLevel > 0.15 && rnd(1) < 0.04 + difficultyLevel * 0.03) {
         enemies.push({
-          x: flr(rnd(W - 8)),
-          y: plat.y - 18 - flr(rnd(20)),
+          x: flr(rnd(W - 16)),
+          y: plat.y - 26 - flr(rnd(20)),
           type: rnd(1) > 0.5 ? 0 : 1,
           vx: (rnd(1) > 0.5 ? 1 : -1) * (0.5 + rnd(1)),
           alive: true,
@@ -233,8 +251,8 @@
       // Spawn powerup
       if (rnd(1) < 0.015) {
         powerups.push({
-          x: plat.x + 8,
-          y: plat.y - 10,
+          x: plat.x + 4,
+          y: plat.y - 18,
           type: rnd(1) > 0.5 ? "jetpack" : "spring_shoes",
           alive: true
         });
@@ -244,7 +262,7 @@
 
   function resetGame() {
     player = {
-      x: W / 2 - 4,
+      x: W / 2 - 8,
       y: H - 30,
       vx: 0,
       vy: 0,
@@ -363,6 +381,9 @@
     // Fill highlight
     rectf(sx + 2, sy + 1, PLAT_W - 4, 1, 3);
 
+    // Debug hitbox for platform top surface
+    Mono.dbg(sx, sy, PLAT_W, PLAT_DRAW_H);
+
     // Type decorations
     if (p.type === PLAT_MOVING) {
       // Small arrow marks
@@ -406,24 +427,27 @@
     if (jetpackTimer > 0) {
       sprT(8, sx, sy, player.facing < 0);
       // Flame
-      sprT(Mono.frame % 6 < 3 ? 9 : 10, sx, sy + 8, player.facing < 0);
+      sprT(Mono.frame % 6 < 3 ? 9 : 10, sx, sy + 16, player.facing < 0);
     } else {
       sprT(player.facing > 0 ? 1 : 2, sx, sy);
     }
 
+    // Debug: player hitbox (circle at center)
+    Mono.dbgC(sx + 8, sy + 8, 7);
+
     // Spring shoes visual
     if (springShoeCount > 0) {
-      pix(sx + 1, sy + 7, 0);
-      pix(sx + 2, sy + 7, 0);
-      pix(sx + 5, sy + 7, 0);
-      pix(sx + 6, sy + 7, 0);
+      pix(sx + 2, sy + 14, 0);
+      pix(sx + 4, sy + 14, 0);
+      pix(sx + 10, sy + 14, 0);
+      pix(sx + 12, sy + 14, 0);
     }
 
     // Nose/snout for doodle look
     if (player.facing > 0) {
-      pix(sx + 7, sy + 3, 0);
+      pix(sx + 14, sy + 6, 0);
     } else {
-      pix(sx, sy + 3, 0);
+      pix(sx, sy + 6, 0);
     }
   }
 
@@ -444,8 +468,8 @@
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("a") && shootCooldown <= 0) {
       bullets.push({
-        x: player.x + 0,
-        y: player.y - 2,
+        x: player.x + 4,
+        y: player.y - 4,
         vy: -8,
         alive: true
       });
@@ -459,8 +483,8 @@
       player.vy = -5;
       if (Mono.frame % 6 === 0) sfxJetpack();
       if (Mono.frame % 3 === 0) {
-        spawnParticles(player.x + 2, player.y + 10, 1, 1, 2);
-        spawnParticles(player.x + 6, player.y + 10, 1, 1, 2);
+        spawnParticles(player.x + 4, player.y + 18, 1, 1, 2);
+        spawnParticles(player.x + 12, player.y + 18, 1, 1, 2);
       }
     } else {
       // Gravity
@@ -473,8 +497,8 @@
     player.y += player.vy;
 
     // Horizontal wrapping
-    if (player.x > W) player.x = -8;
-    if (player.x < -8) player.x = W;
+    if (player.x > W) player.x = -16;
+    if (player.x < -16) player.x = W;
 
     // Platform collision (only when falling)
     if (player.vy > 0 && jetpackTimer <= 0) {
@@ -483,13 +507,13 @@
         if (p.type === PLAT_BREAKABLE && p.crumbleTimer > 0) continue;
         if (p.type === PLAT_DISAPPEARING && p.alpha <= 0) continue;
 
-        const playerBottom = player.y + 8;
+        const playerBottom = player.y + 16;
         const prevBottom = playerBottom - player.vy;
 
-        if (player.x + 6 > p.x && player.x + 2 < p.x + PLAT_W &&
+        if (player.x + 12 > p.x && player.x + 4 < p.x + PLAT_W &&
             prevBottom <= p.y + 2 && playerBottom >= p.y) {
 
-          player.y = p.y - 8;
+          player.y = p.y - 16;
           const bounceForce = springShoeCount > 0 ? -9.5 : -7.2;
 
           if (p.type === PLAT_SPRING) {
@@ -557,14 +581,16 @@
       b.y += b.vy;
       if (b.y < cameraY - 20) b.alive = false;
 
-      // Bullet hits enemy
+      // Bullet hits enemy (circle collision: bullet center vs enemy center)
       for (const e of enemies) {
         if (!e.alive) continue;
-        if (b.x + 8 > e.x - 2 && b.x < e.x + 10 && b.y + 8 > e.y - 2 && b.y < e.y + 10) {
+        // Bullet center: b.x+8, b.y+4; radius ~4
+        // Enemy center: e.x+8, e.y+8; radius ~7
+        if (circCollide(b.x + 8, b.y + 4, 4, e.x + 8, e.y + 8, 7)) {
           e.alive = false;
           b.alive = false;
           sfxEnemyHit();
-          spawnParticles(e.x + 4, e.y + 4, 8, 1, 4);
+          spawnParticles(e.x + 8, e.y + 8, 8, 1, 4);
           score += 50;
         }
       }
@@ -575,37 +601,41 @@
     for (const e of enemies) {
       if (!e.alive) continue;
       e.x += e.vx;
-      if (e.x < 0 || e.x > W - 8) e.vx = -e.vx;
+      if (e.x < 0 || e.x > W - 16) e.vx = -e.vx;
       e.frame++;
 
+      // Player center and enemy center for circle collision
+      const pcx = player.x + 8, pcy = player.y + 8, pr = 6;
+      const ecx = e.x + 8, ecy = e.y + 8, er = 6;
+
       // Player stomps enemy from above
-      if (player.vy > 0 &&
-          player.x + 6 > e.x && player.x + 2 < e.x + 8 &&
-          player.y + 8 > e.y && player.y + 4 < e.y + 4) {
+      if (player.vy > 0 && pcy < ecy &&
+          circCollide(pcx, pcy + 8, 4, ecx, ecy - 2, 6)) {
         e.alive = false;
         player.vy = -9;
         sfxEnemyHit();
-        spawnParticles(e.x + 4, e.y + 4, 6, 1, 3);
+        spawnParticles(ecx, ecy, 6, 1, 3);
         score += 30;
         continue;
       }
-      // Enemy hits player from side/below
-      if (player.x + 5 > e.x + 1 && player.x + 3 < e.x + 7 &&
-          player.y + 6 > e.y + 2 && player.y + 2 < e.y + 6 &&
-          !(player.vy > 0 && player.y + 4 < e.y + 2)) {
+      // Enemy hits player from side/below (circle collision)
+      if (circCollide(pcx, pcy, pr, ecx, ecy, er) &&
+          !(player.vy > 0 && pcy + 4 < ecy)) {
         deathTimer = 60;
         sfxDeath();
-        spawnParticles(player.x + 4, player.y + 4, 12, 0, 5);
+        spawnParticles(pcx, pcy, 12, 0, 5);
         Mono.go(DYING); return;
       }
     }
 
-    // Powerup collection
+    // Powerup collection (circle collision)
     for (const pu of powerups) {
       if (!pu.alive) continue;
       if (pu.y - cameraY > H + 30) { pu.alive = false; continue; }
-      if (player.x + 7 > pu.x && player.x < pu.x + 8 &&
-          player.y + 8 > pu.y && player.y < pu.y + 8) {
+      // Player center vs powerup center
+      const pcx = player.x + 8, pcy = player.y + 8;
+      const pucx = pu.x + 8, pucy = pu.y + 8;
+      if (circCollide(pcx, pcy, 7, pucx, pucy, 7)) {
         pu.alive = false;
         sfxPowerup();
         if (pu.type === "jetpack") {
@@ -647,8 +677,9 @@
       if (!pu.alive) continue;
       const sx = flr(pu.x);
       const sy = flr(pu.y - cameraY);
-      if (sy > -10 && sy < H + 10) {
+      if (sy > -16 && sy < H + 16) {
         sprT(pu.type === "jetpack" ? 6 : 7, sx, sy);
+        Mono.dbgC(sx + 8, sy + 8, 7);
       }
     }
 
@@ -657,8 +688,9 @@
       if (!e.alive) continue;
       const sx = flr(e.x);
       const sy = flr(e.y - cameraY);
-      if (sy > -10 && sy < H + 10) {
+      if (sy > -16 && sy < H + 16) {
         sprT(e.type === 0 ? 4 : 5, sx, sy, e.frame % 20 < 10);
+        Mono.dbgC(sx + 8, sy + 8, 6);
       }
     }
 
@@ -667,8 +699,9 @@
       if (!b.alive) continue;
       const sx = flr(b.x);
       const sy = flr(b.y - cameraY);
-      if (sy > -10 && sy < H + 10) {
+      if (sy > -16 && sy < H + 16) {
         sprT(3, sx, sy);
+        Mono.dbgC(sx + 8, sy + 4, 4);
       }
     }
 
@@ -687,13 +720,17 @@
     // HUD bar
     rectf(0, 0, W, 12, 3);
     line(0, 12, W - 1, 12, 2);
-    text("SCORE: " + score + "M", 4, 3, 0);
+    text("SCORE:" + score + "M", 2, 3, 0);
 
     if (jetpackTimer > 0) {
-      text("JETPACK: " + flr(jetpackTimer / 30 + 1) + "S", W / 2 - 27, 3, 1);
+      const jtStr = "JET:" + flr(jetpackTimer / 30 + 1) + "S";
+      const jtW = jtStr.length * (FONT_W + 1);
+      text(jtStr, flr((W - jtW) / 2), 3, 1);
     }
     if (springShoeCount > 0) {
-      text("SPRINGS: " + springShoeCount, W - 53, 3, 1);
+      const spStr = "SPR:" + springShoeCount;
+      const spW = spStr.length * (FONT_W + 1);
+      text(spStr, W - spW - 2, 3, 1);
     }
   }
 
@@ -727,24 +764,24 @@
     textCenter("DOODLE JUMP", titleY, 0);
     textCenter("MONO EDITION", titleY + 18, 1);
 
-    // Bouncing character preview
+    // Bouncing character preview (16x16 sprite)
     const charY = 98 + flr(sin(titleBounce * 0.15) * 14);
-    sprT(1, W / 2 - 4, charY);
-    pix(W / 2 + 3, charY + 3, 0);
+    sprT(1, W / 2 - 8, charY);
+    pix(W / 2 + 6, charY + 6, 0);
 
     // Decorative platforms
-    rectf(W / 2 - 11, charY + 22, 22, 4, 1);
-    line(W / 2 - 11, charY + 21, W / 2 + 10, charY + 21, 0);
-    line(W / 2 - 11, charY + 26, W / 2 + 10, charY + 26, 0);
+    rectf(W / 2 - 11, charY + 28, 22, 4, 1);
+    line(W / 2 - 11, charY + 27, W / 2 + 10, charY + 27, 0);
+    line(W / 2 - 11, charY + 32, W / 2 + 10, charY + 32, 0);
 
-    rectf(W / 2 + 33, charY + 2, 22, 4, 1);
-    rectf(W / 2 - 47, charY + 8, 22, 4, 1);
+    rectf(W / 2 + 33, charY + 4, 22, 4, 1);
+    rectf(W / 2 - 47, charY + 10, 22, 4, 1);
 
     textCenter("PRESS START", 169, 0);
-    textCenter("ARROWS: MOVE   Z: SHOOT", 184, 1);
+    textCenter("ARROWS:MOVE  Z:SHOOT", 184, 1);
 
     if (bestScore > 0) {
-      textCenter("BEST: " + bestScore + "M", 203, 1);
+      textCenter("BEST:" + bestScore + "M", 203, 1);
     }
 
     textCenter("MONO V0.1", H - 14, 2);
@@ -767,13 +804,13 @@
     }
 
     textCenter("GAME OVER!", 60, 0);
-    textCenter("HEIGHT: " + score + "M", 90, 0);
+    textCenter("HEIGHT:" + score + "M", 90, 0);
 
     if (score >= bestScore) {
       textCenter("NEW BEST!", 111, 1);
     }
 
-    textCenter("BEST: " + bestScore + "M", 131, 1);
+    textCenter("BEST:" + bestScore + "M", 131, 1);
     textCenter("PRESS START", 169, 0);
   }
 
@@ -816,7 +853,7 @@
 
     rectf(0, 0, W, 12, 3);
     line(0, 12, W - 1, 12, 2);
-    text("SCORE: " + score + "M", 4, 3, 0);
+    text("SCORE:" + score + "M", 2, 3, 0);
   }
 
   // --- Scenes ---

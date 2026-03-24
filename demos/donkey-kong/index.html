@@ -22,10 +22,24 @@
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
           min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 -> 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (all upscaled to 16x16) ---
 
   // 1: Mario standing right
-  defSprite(1,
+  defSprite(1, up(
     "00333000" +
     "03333300" +
     "00221000" +
@@ -34,9 +48,9 @@
     "02233200" +
     "00322300" +
     "00300300"
-  );
+  ));
   // 2: Mario walking right frame 1
-  defSprite(2,
+  defSprite(2, up(
     "00333000" +
     "03333300" +
     "00221000" +
@@ -45,9 +59,9 @@
     "02233200" +
     "00322300" +
     "03000030"
-  );
+  ));
   // 3: Mario jumping right
-  defSprite(3,
+  defSprite(3, up(
     "00033300" +
     "00333330" +
     "00022100" +
@@ -56,9 +70,9 @@
     "00233200" +
     "00322300" +
     "00300300"
-  );
+  ));
   // 4: Mario climbing frame 1
-  defSprite(4,
+  defSprite(4, up(
     "00333000" +
     "03333300" +
     "00221000" +
@@ -67,9 +81,9 @@
     "00233000" +
     "00322300" +
     "03000030"
-  );
+  ));
   // 5: Mario climbing frame 2
-  defSprite(5,
+  defSprite(5, up(
     "00333000" +
     "03333300" +
     "00122000" +
@@ -78,9 +92,9 @@
     "00033200" +
     "00322300" +
     "03000030"
-  );
+  ));
   // 6: Mario with hammer (right)
-  defSprite(6,
+  defSprite(6, up(
     "33333000" +
     "33333000" +
     "00221000" +
@@ -89,10 +103,10 @@
     "02233200" +
     "00322300" +
     "00300300"
-  );
+  ));
 
   // 10: Donkey Kong frame 1 (top-left 8x8 of 16x16)
-  defSprite(10,
+  defSprite(10, up(
     "00022200" +
     "00233320" +
     "02332220" +
@@ -101,9 +115,9 @@
     "00233200" +
     "02222230" +
     "02222230"
-  );
+  ));
   // 11: DK top-right
-  defSprite(11,
+  defSprite(11, up(
     "02220000" +
     "02333200" +
     "02223320" +
@@ -112,9 +126,9 @@
     "00233200" +
     "03222220" +
     "03222220"
-  );
+  ));
   // 12: DK bottom-left
-  defSprite(12,
+  defSprite(12, up(
     "03222200" +
     "03322230" +
     "02332330" +
@@ -123,9 +137,9 @@
     "02300320" +
     "03200230" +
     "03300330"
-  );
+  ));
   // 13: DK bottom-right
-  defSprite(13,
+  defSprite(13, up(
     "00222230" +
     "03222330" +
     "03332320" +
@@ -134,9 +148,9 @@
     "02300320" +
     "03200230" +
     "03300330"
-  );
+  ));
   // 14: DK throwing arm (top-left variant)
-  defSprite(14,
+  defSprite(14, up(
     "00022200" +
     "00233320" +
     "02332220" +
@@ -145,10 +159,10 @@
     "00233200" +
     "02222230" +
     "32222230"
-  );
+  ));
 
   // 20: Barrel rolling frame 1
-  defSprite(20,
+  defSprite(20, up(
     "00222200" +
     "02111120" +
     "21211210" +
@@ -157,9 +171,9 @@
     "21211210" +
     "02111120" +
     "00222200"
-  );
+  ));
   // 21: Barrel rolling frame 2
-  defSprite(21,
+  defSprite(21, up(
     "00222200" +
     "02111120" +
     "21112110" +
@@ -168,10 +182,10 @@
     "21121110" +
     "02111120" +
     "00222200"
-  );
+  ));
 
   // 25: Pauline
-  defSprite(25,
+  defSprite(25, up(
     "00333000" +
     "03323300" +
     "00333000" +
@@ -180,9 +194,9 @@
     "02333200" +
     "00232000" +
     "00300300"
-  );
+  ));
   // 26: Pauline "HELP!" frame
-  defSprite(26,
+  defSprite(26, up(
     "03030300" +
     "00333000" +
     "03323300" +
@@ -191,10 +205,10 @@
     "00333000" +
     "00232000" +
     "00300300"
-  );
+  ));
 
   // 30: Girder tile
-  defSprite(30,
+  defSprite(30, up(
     "22222222" +
     "13131313" +
     "31313131" +
@@ -203,9 +217,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 31: Ladder tile
-  defSprite(31,
+  defSprite(31, up(
     "20000020" +
     "20000020" +
     "22222220" +
@@ -214,9 +228,9 @@
     "20000020" +
     "22222220" +
     "20000020"
-  );
+  ));
   // 32: Broken ladder (partial)
-  defSprite(32,
+  defSprite(32, up(
     "20000020" +
     "20000020" +
     "00000000" +
@@ -225,10 +239,10 @@
     "20000000" +
     "00000020" +
     "20000020"
-  );
+  ));
 
   // 35: Hammer powerup
-  defSprite(35,
+  defSprite(35, up(
     "03333300" +
     "03333300" +
     "00300000" +
@@ -237,10 +251,10 @@
     "00300000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 36: Oil drum
-  defSprite(36,
+  defSprite(36, up(
     "02222200" +
     "23333320" +
     "21131110" +
@@ -249,10 +263,10 @@
     "21113110" +
     "23333320" +
     "02222200"
-  );
+  ));
 
   // 37: Fire enemy
-  defSprite(37,
+  defSprite(37, up(
     "00302000" +
     "03020300" +
     "02303020" +
@@ -261,10 +275,10 @@
     "03232300" +
     "00323000" +
     "00020000"
-  );
+  ));
 
   // 38: Hat/purse/umbrella collectible
-  defSprite(38,
+  defSprite(38, up(
     "00333000" +
     "03333300" +
     "33333330" +
@@ -273,10 +287,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 39: Heart (bonus item)
-  defSprite(39,
+  defSprite(39, up(
     "03303300" +
     "33333330" +
     "33333330" +
@@ -285,10 +299,10 @@
     "00333000" +
     "00030000" +
     "00000000"
-  );
+  ));
 
   // 40: Life icon (small mario)
-  defSprite(40,
+  defSprite(40, up(
     "00000000" +
     "00330000" +
     "03333000" +
@@ -297,10 +311,10 @@
     "00233000" +
     "00300000" +
     "00000000"
-  );
+  ));
 
   // --- Level definitions ---
-  // Each level defines girder segments, ladders, DK position, Pauline position, and items
+  // Coordinate offsets updated for 16x16 sprites
   // Girders: {x1, y, x2} - sloped from (x1,y) to (x2, y + slope)
   // Ladders: {x, y1, y2} - from y1 (top) to y2 (bottom)
 
@@ -310,17 +324,11 @@
   LEVELS[0] = {
     name: "25M",
     girders: [
-      // Bottom floor
       { x1: 0, y: 216, x2: 320, slope: 0 },
-      // Girder 2 (slopes right-to-left going up)
       { x1: 21, y: 180, x2: 307, slope: -9 },
-      // Girder 3 (slopes left-to-right)
       { x1: 13, y: 144, x2: 299, slope: 9 },
-      // Girder 4 (slopes right-to-left)
       { x1: 21, y: 108, x2: 307, slope: -9 },
-      // Girder 5 (slopes left-to-right)
       { x1: 13, y: 72, x2: 299, slope: 9 },
-      // Top platform (DK's platform)
       { x1: 40, y: 39, x2: 187, slope: 0 },
     ],
     ladders: [
@@ -339,7 +347,7 @@
     ],
     dk: { x: 53, y: 15 },
     pauline: { x: 112, y: 15 },
-    playerStart: { x: 27, y: 210 },
+    playerStart: { x: 27, y: 200 },
     hammers: [
       { x: 27, y: 134 },
       { x: 267, y: 62 },
@@ -347,7 +355,7 @@
     items: [
       { x: 200, y: 135, spr: 38 },
     ],
-    oilDrum: { x: 11, y: 210 },
+    oilDrum: { x: 11, y: 200 },
     barrelSpawn: true,
   };
 
@@ -380,15 +388,15 @@
     ],
     dk: { x: 53, y: 18 },
     pauline: { x: 112, y: 18 },
-    playerStart: { x: 27, y: 210 },
+    playerStart: { x: 27, y: 200 },
     hammers: [
-      { x: 280, y: 164 },
-      { x: 40, y: 80 },
+      { x: 280, y: 158 },
+      { x: 40, y: 74 },
     ],
     items: [
-      { x: 280, y: 123, spr: 39 },
+      { x: 280, y: 116, spr: 39 },
     ],
-    oilDrum: { x: 11, y: 210 },
+    oilDrum: { x: 11, y: 200 },
     barrelSpawn: true,
   };
 
@@ -420,15 +428,15 @@
     ],
     dk: { x: 64, y: 15 },
     pauline: { x: 117, y: 15 },
-    playerStart: { x: 27, y: 210 },
+    playerStart: { x: 27, y: 200 },
     hammers: [
-      { x: 253, y: 98 },
+      { x: 253, y: 92 },
     ],
     items: [
-      { x: 173, y: 98, spr: 38 },
-      { x: 67, y: 171, spr: 39 },
+      { x: 173, y: 92, spr: 38 },
+      { x: 67, y: 164, spr: 39 },
     ],
-    oilDrum: { x: 11, y: 210 },
+    oilDrum: { x: 11, y: 200 },
     barrelSpawn: true,
   };
 
@@ -458,18 +466,49 @@
     brokenLadders: [],
     dk: { x: 53, y: 18 },
     pauline: { x: 119, y: 18 },
-    playerStart: { x: 27, y: 210 },
+    playerStart: { x: 27, y: 200 },
     hammers: [
-      { x: 280, y: 170 },
-      { x: 27, y: 68 },
+      { x: 280, y: 164 },
+      { x: 27, y: 62 },
     ],
     items: [
-      { x: 227, y: 101, spr: 39 },
-      { x: 93, y: 171, spr: 38 },
+      { x: 227, y: 95, spr: 39 },
+      { x: 93, y: 164, spr: 38 },
     ],
-    oilDrum: { x: 11, y: 210 },
+    oilDrum: { x: 11, y: 200 },
     barrelSpawn: true,
   };
+
+  // --- Collision helpers ---
+  // Circle collision for round objects (barrels, fireballs)
+  function circCollides(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx;
+    const dy = ay - by;
+    const dist = dx * dx + dy * dy;
+    const radSum = ar + br;
+    return dist < radSum * radSum;
+  }
+
+  // Player hitbox: center + half-size (rect-based)
+  function playerCenter() {
+    return { cx: player.x + 8, cy: player.y + 8 };
+  }
+  // Barrel/fire center + radius (circle-based)
+  function barrelCenter(b) {
+    return { cx: b.x + 8, cy: b.y + 8, r: 7 };
+  }
+  function fireCenter(f) {
+    return { cx: f.x + 8, cy: f.y + 8, r: 6 };
+  }
+
+  // Check circle vs rect overlap (player rect vs round enemy circle)
+  function circRectCollides(cx, cy, cr, rx, ry, rw, rh) {
+    const nearX = _abs(cx - (rx + rw / 2)) < rw / 2 ? cx : (cx < rx ? rx : rx + rw);
+    const nearY = _abs(cy - (ry + rh / 2)) < rh / 2 ? cy : (cy < ry ? ry : ry + rh);
+    const dx = cx - nearX;
+    const dy = cy - nearY;
+    return (dx * dx + dy * dy) < (cr * cr);
+  }
 
   // --- Game State ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -485,8 +524,10 @@
   let walkFrame, walkTimer;
   let highScore = 0;
 
+  // Sprite size constant (now 16x16)
+  const SS = 16;
+
   function getGirderY(girder, x) {
-    // Returns the Y position of a girder at a given X
     if (x < girder.x1 || x > girder.x2) return -999;
     const t = (x - girder.x1) / (girder.x2 - girder.x1);
     return girder.y + t * girder.slope;
@@ -506,7 +547,7 @@
   function isOnLadder(x, y) {
     const allLadders = levelData.ladders.concat(levelData.brokenLadders || []);
     for (const l of allLadders) {
-      if (_abs(x - l.x) < 6 && y >= l.y1 - 4 && y <= l.y2 + 4) {
+      if (_abs(x - l.x) < 8 && y >= l.y1 - 4 && y <= l.y2 + 4) {
         return l;
       }
     }
@@ -516,7 +557,7 @@
   function isNearLadderTop(x, y) {
     const allLadders = levelData.ladders.concat(levelData.brokenLadders || []);
     for (const l of allLadders) {
-      if (_abs(x - l.x) < 6 && _abs(y - l.y1) < 6) {
+      if (_abs(x - l.x) < 8 && _abs(y - l.y1) < 8) {
         return l;
       }
     }
@@ -526,7 +567,7 @@
   function isNearLadderBottom(x, y) {
     const allLadders = levelData.ladders.concat(levelData.brokenLadders || []);
     for (const l of allLadders) {
-      if (_abs(x - l.x) < 6 && _abs(y - l.y2) < 8) {
+      if (_abs(x - l.x) < 8 && _abs(y - l.y2) < 10) {
         return l;
       }
     }
@@ -549,7 +590,7 @@
       onGround: true,
       climbing: false,
       jumping: false,
-      facing: 1, // 1=right, -1=left
+      facing: 1,
       speed: 1.8,
     };
     barrels = [];
@@ -588,8 +629,9 @@
     if (levelData.oilDrum) {
       fires.push({
         x: levelData.oilDrum.x,
-        y: levelData.oilDrum.y - 8,
+        y: levelData.oilDrum.y - SS,
         vx: 0.5,
+        vy: 0,
         onGround: true,
         climbing: false,
         moveTimer: 0,
@@ -602,8 +644,8 @@
     if (!levelData.barrelSpawn) return;
     const dk = levelData.dk;
     barrels.push({
-      x: dk.x + 16,
-      y: dk.y + 24,
+      x: dk.x + SS,
+      y: dk.y + SS + 8,
       vx: 1.5 + level * 0.2,
       vy: 0,
       onGround: false,
@@ -617,7 +659,7 @@
   function addExplosion(x, y) {
     for (let i = 0; i < 6; i++) {
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(3) - 2,
         life: 8 + flr(rnd(8)),
         color: flr(rnd(3)) + 1
@@ -666,7 +708,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() { drawGameOver(); }
   });
@@ -741,20 +783,20 @@
 
       // Start climbing (press up near ladder bottom or on ladder)
       if (btn("up")) {
-        const ladder = isOnLadder(p.x + 4, p.y + 4);
+        const ladder = isOnLadder(p.x + 8, p.y + 8);
         if (ladder && p.onGround) {
           p.climbing = true;
-          p.x = ladder.x - 4;
+          p.x = ladder.x - 8;
           p.vx = 0;
           p.vy = 0;
         }
       }
       // Climb down
       if (btn("down") && p.onGround) {
-        const ladderBelow = isNearLadderTop(p.x + 4, p.y + 8);
+        const ladderBelow = isNearLadderTop(p.x + 8, p.y + SS);
         if (ladderBelow) {
           p.climbing = true;
-          p.x = ladderBelow.x - 4;
+          p.x = ladderBelow.x - 8;
           p.y += 4;
           p.vx = 0;
           p.vy = 0;
@@ -765,7 +807,7 @@
 
     if (p.climbing) {
       p.vx = 0;
-      const ladder = isOnLadder(p.x + 4, p.y + 4);
+      const ladder = isOnLadder(p.x + 8, p.y + 8);
 
       if (btn("up")) {
         p.vy = -1.5;
@@ -783,10 +825,9 @@
       if (!ladder) {
         p.climbing = false;
         p.vy = 0;
-        // Snap to girder
-        const gy = isOnGirder(p.x + 4, p.y + 8, 12);
+        const gy = isOnGirder(p.x + 8, p.y + SS, 12);
         if (gy !== false) {
-          p.y = gy - 8;
+          p.y = gy - SS;
           p.onGround = true;
         }
       }
@@ -813,13 +854,13 @@
 
     // Clamp to screen
     if (p.x < 0) p.x = 0;
-    if (p.x > W - 8) p.x = W - 8;
+    if (p.x > W - SS) p.x = W - SS;
 
     // Ground collision (girders)
     if (!p.climbing && p.vy >= 0) {
-      const gy = isOnGirder(p.x + 4, p.y + 8, 5);
+      const gy = isOnGirder(p.x + 8, p.y + SS, 5);
       if (gy !== false) {
-        p.y = gy - 8;
+        p.y = gy - SS;
         p.onGround = true;
         p.jumping = false;
         p.vy = 0;
@@ -829,17 +870,17 @@
     }
 
     // Fall off bottom
-    if (p.y > H + 16) {
+    if (p.y > H + SS) {
       killPlayer();
       return;
     }
 
     // Hammer pickup
     for (const h of hammerPickups) {
-      if (h.active && _abs(p.x - h.x) < 10 && _abs(p.y - h.y) < 10) {
+      if (h.active && _abs(p.x - h.x) < 14 && _abs(p.y - h.y) < 14) {
         h.active = false;
         hammerActive = true;
-        hammerTimer = 300; // 10 seconds at 30fps
+        hammerTimer = 300;
         hammerSwing = 0;
         hammerSound();
       }
@@ -856,7 +897,7 @@
 
     // Item collection
     for (const it of itemsCollected) {
-      if (!it.collected && _abs(p.x - it.x) < 10 && _abs(p.y - it.y) < 10) {
+      if (!it.collected && _abs(p.x - it.x) < 14 && _abs(p.y - it.y) < 14) {
         it.collected = true;
         score += 300;
         collectSound();
@@ -867,7 +908,7 @@
     // Check if player reached Pauline
     const paulX = levelData.pauline.x;
     const paulY = levelData.pauline.y;
-    if (_abs(p.x - paulX) < 16 && _abs(p.y - paulY) < 16) {
+    if (_abs(p.x - paulX) < 20 && _abs(p.y - paulY) < 20) {
       levelComplete = true;
       levelCompleteTimer = 0;
       score += bonusScore;
@@ -883,10 +924,10 @@
 
       // Check if barrel is near a ladder going down
       if (b.onGround && !b.goingDown) {
-        const ladderBelow = isNearLadderTop(b.x + 4, b.y + 4);
+        const ladderBelow = isNearLadderTop(b.x + 8, b.y + 8);
         if (ladderBelow && rnd(1) < 0.3) {
           b.goingDown = true;
-          b.x = ladderBelow.x - 4;
+          b.x = ladderBelow.x - 8;
           b.vx = 0;
           b.vy = 2;
         }
@@ -894,36 +935,31 @@
 
       if (b.goingDown) {
         b.y += b.vy;
-        // Check if reached bottom of ladder / girder below
-        const gy = isOnGirder(b.x + 4, b.y + 12, 4);
-        if (gy !== false && b.y + 8 >= gy) {
-          b.y = gy - 8;
+        const gy = isOnGirder(b.x + 8, b.y + SS + 4, 4);
+        if (gy !== false && b.y + SS >= gy) {
+          b.y = gy - SS;
           b.goingDown = false;
           b.onGround = true;
-          // Determine direction based on girder slope
-          const gy1 = isOnGirder(b.x + 20, b.y + 8, 8);
-          const gy2 = isOnGirder(b.x - 12, b.y + 8, 8);
+          const gy1 = isOnGirder(b.x + 24, b.y + SS, 8);
+          const gy2 = isOnGirder(b.x - 8, b.y + SS, 8);
           if (gy1 !== false && gy1 > gy) b.vx = 1.5 + level * 0.2;
           else if (gy2 !== false && gy2 > gy) b.vx = -(1.5 + level * 0.2);
           else b.vx = (rnd(1) > 0.5 ? 1 : -1) * (1.5 + level * 0.2);
         }
       } else {
-        // Roll along girder
         b.x += b.vx;
         b.vy += 0.2;
         if (b.vy > 4) b.vy = 4;
         b.y += b.vy;
 
-        // Girder collision
-        const gy = isOnGirder(b.x + 4, b.y + 8, 5);
+        const gy = isOnGirder(b.x + 8, b.y + SS, 5);
         if (gy !== false) {
-          b.y = gy - 8;
+          b.y = gy - SS;
           b.onGround = true;
           b.vy = 0;
-          // Follow slope
-          const gyAhead = isOnGirder(b.x + 4 + (b.vx > 0 ? 8 : -8), b.y + 12, 8);
+          const gyAhead = isOnGirder(b.x + 8 + (b.vx > 0 ? SS : -SS), b.y + SS + 4, 8);
           if (gyAhead !== false) {
-            b.y = gyAhead - 12;
+            b.y = gyAhead - SS - 4;
           }
         } else {
           b.onGround = false;
@@ -931,16 +967,20 @@
       }
 
       // Remove if off screen
-      if (b.x < -16 || b.x > W + 16 || b.y > H + 16) {
+      if (b.x < -SS || b.x > W + SS || b.y > H + SS) {
         barrels.splice(i, 1);
         continue;
       }
 
-      // Barrel-player collision
+      // Barrel-player collision using circle vs rect
       if (invincibleTimer <= 0) {
-        if (_abs(p.x - b.x) < 7 && _abs(p.y - b.y) < 7) {
+        const bc = barrelCenter(b);
+        const px = p.x, py = p.y;
+        const pw = 12, ph = 14; // player hitbox slightly smaller than sprite
+        const pox = px + 2, poy = py + 1; // offset for centered hitbox
+
+        if (circRectCollides(bc.cx, bc.cy, bc.r, pox, poy, pw, ph)) {
           if (hammerActive) {
-            // Smash barrel
             barrels.splice(i, 1);
             score += 300;
             addExplosion(b.x, b.y);
@@ -955,14 +995,13 @@
 
       // Score for jumping over barrel
       if (p.jumping && !p.climbing && p.vy < 0 &&
-          _abs(p.x - b.x) < 16 && p.y < b.y && p.y > b.y - 20 &&
+          _abs(p.x - b.x) < 20 && p.y < b.y && p.y > b.y - 24 &&
           !b._scored) {
         b._scored = true;
         score += 100;
         barrelJumpSound();
-        // Show score popup
         particles.push({
-          x: p.x, y: p.y - 8,
+          x: p.x, y: p.y - 10,
           vx: 0, vy: -0.5,
           life: 30,
           color: 3,
@@ -980,23 +1019,19 @@
       if (!f.climbing) {
         f.x += f.vx;
 
-        // Gravity
         f.vy = (f.vy || 0) + 0.2;
         if (f.vy > 3) f.vy = 3;
         f.y += f.vy;
 
-        // Girder collision
-        const gy = isOnGirder(f.x + 4, f.y + 8, 5);
+        const gy = isOnGirder(f.x + 8, f.y + SS, 5);
         if (gy !== false) {
-          f.y = gy - 8;
+          f.y = gy - SS;
           f.onGround = true;
           f.vy = 0;
         }
 
-        // Reverse at edges
-        if (f.x < 10 || f.x > W - 18) f.vx = -f.vx;
+        if (f.x < 10 || f.x > W - SS - 2) f.vx = -f.vx;
 
-        // Random direction change
         if (f.moveTimer > 60 + flr(rnd(60))) {
           f.moveTimer = 0;
           if (rnd(1) < 0.3) f.vx = -f.vx;
@@ -1004,32 +1039,37 @@
 
         // Try to climb a ladder (toward player)
         if (f.onGround && rnd(1) < 0.02) {
-          const ladder = isOnLadder(f.x + 4, f.y + 4);
+          const ladder = isOnLadder(f.x + 8, f.y + 8);
           if (ladder) {
             const goUp = p.y < f.y;
             if (goUp && f.y > ladder.y1 + 8) {
               f.climbing = true;
-              f.x = ladder.x - 4;
+              f.x = ladder.x - 8;
               f.climbDir = -1;
             } else if (!goUp && f.y < ladder.y2 - 8) {
               f.climbing = true;
-              f.x = ladder.x - 4;
+              f.x = ladder.x - 8;
               f.climbDir = 1;
             }
           }
         }
       } else {
         f.y += f.climbDir * 1;
-        const ladder = isOnLadder(f.x + 4, f.y + 4);
+        const ladder = isOnLadder(f.x + 8, f.y + 8);
         if (!ladder) {
           f.climbing = false;
           f.vx = (p.x > f.x) ? 0.5 : -0.5;
         }
       }
 
-      // Fire-player collision
+      // Fire-player collision using circle vs rect
       if (invincibleTimer <= 0) {
-        if (_abs(p.x - f.x) < 7 && _abs(p.y - f.y) < 7) {
+        const fc = fireCenter(f);
+        const px = p.x, py = p.y;
+        const pw = 12, ph = 14;
+        const pox = px + 2, poy = py + 1;
+
+        if (circRectCollides(fc.cx, fc.cy, fc.r, pox, poy, pw, ph)) {
           if (hammerActive) {
             fires.splice(i, 1);
             score += 500;
@@ -1047,7 +1087,7 @@
     if (levelData.oilDrum && fires.length < 3 + level && rnd(1) < 0.003) {
       fires.push({
         x: levelData.oilDrum.x,
-        y: levelData.oilDrum.y - 10,
+        y: levelData.oilDrum.y - SS - 2,
         vx: (rnd(1) > 0.5 ? 1 : -1) * 0.5,
         vy: 0,
         onGround: false,
@@ -1094,41 +1134,40 @@
   function drawTitle() {
     cls(0);
     {
-      // Title screen
       const ty = 20 + sin(Mono.frame * 0.04) * 3;
 
-      // DK sprite at top
-      const dkx = W / 2 - 8;
+      // DK sprite at top (2x2 tile grid, each tile is 16x16)
+      const dkx = W / 2 - SS;
       spr(10, dkx, flr(ty));
-      spr(11, dkx + 8, flr(ty));
-      spr(12, dkx, flr(ty) + 8);
-      spr(13, dkx + 8, flr(ty) + 8);
+      spr(11, dkx + SS, flr(ty));
+      spr(12, dkx, flr(ty) + SS);
+      spr(13, dkx + SS, flr(ty) + SS);
 
-      text("DONKEY KONG", 132, flr(ty) + 22, 3);
-      rectf(125, flr(ty) + 31, 70, 1, 2);
+      text("DONKEY KONG", 120, flr(ty) + SS * 2 + 6, 3);
+      rectf(113, flr(ty) + SS * 2 + 15, 94, 1, 2);
 
       // Characters display
-      const cx = W / 2 - 30;
-      spr(1, cx, flr(ty) + 40);
-      text("MARIO", cx + 12, flr(ty) + 43, 2);
-      spr(25, cx, flr(ty) + 55);
-      text("PAULINE", cx + 12, flr(ty) + 58, 2);
+      const cx = W / 2 - 40;
+      spr(1, cx, flr(ty) + 56);
+      text("MARIO", cx + SS + 4, flr(ty) + 60, 2);
+      spr(25, cx, flr(ty) + 76);
+      text("PAULINE", cx + SS + 4, flr(ty) + 80, 2);
 
       // Barrel
-      spr(20, cx, flr(ty) + 72 + sin(Mono.frame * 0.1) * 2);
-      text("BARREL  100 PTS", cx + 12, flr(ty) + 75, 2);
+      spr(20, cx, flr(ty) + 98 + sin(Mono.frame * 0.1) * 2);
+      text("BARREL  100 PTS", cx + SS + 4, flr(ty) + 102, 2);
 
-      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 120, 160, 3);
+      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 120, 170, 3);
 
       // Controls
-      text("ARROWS: MOVE/CLIMB", 115, 182, 2);
-      text("A: JUMP", 143, 194, 2);
+      text("ARROWS: MOVE/CLIMB", 96, 190, 2);
+      text("A: JUMP", 140, 202, 2);
 
       if (highScore > 0) {
-        text("HIGH SCORE: " + highScore, 115, 212, 2);
+        text("HIGH SCORE: " + highScore, 100, 218, 2);
       }
 
-      text("MONO DEMO V0.1", 118, 228, 1);
+      text("MONO DEMO V0.1", 112, 232, 1);
     }
   }
 
@@ -1139,11 +1178,11 @@
       else pix(flr(pt.x), flr(pt.y), pt.color);
     }
 
-    text("GAME OVER", 138, 83, 3);
-    text("SCORE: " + score, 135, 105, 2);
-    text("LEVEL: " + levelData.name, 135, 116, 2);
-    if (score >= highScore && score > 0) text("NEW HIGH SCORE!", 123, 131, 3);
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 113, 158, 3);
+    text("GAME OVER", 128, 83, 3);
+    text("SCORE: " + score, 125, 105, 2);
+    text("LEVEL: " + levelData.name, 125, 116, 2);
+    if (score >= highScore && score > 0) text("NEW HIGH SCORE!", 108, 131, 3);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 120, 158, 3);
   }
 
   function drawPlayState() {
@@ -1158,9 +1197,7 @@
         const x = g.x1 + i * 8;
         if (x > g.x2) break;
         const y = flr(getGirderY(g, x));
-        // Draw girder tiles
         rectf(x, y, 8, 4, 2);
-        // Rivet pattern
         if (i % 2 === 0) {
           pix(x + 1, y + 1, 1);
           pix(x + 5, y + 2, 1);
@@ -1173,12 +1210,10 @@
 
     // Draw ladders
     for (const l of levelData.ladders) {
-      const lh = l.y2 - l.y1;
       for (let y = l.y1; y < l.y2; y += 2) {
         pix(l.x, y, 2);
         pix(l.x + 5, y, 2);
       }
-      // Rungs
       for (let y = l.y1; y < l.y2; y += 7) {
         for (let x = l.x; x <= l.x + 5; x++) pix(x, y, 2);
       }
@@ -1202,30 +1237,30 @@
       spr(36, levelData.oilDrum.x, levelData.oilDrum.y);
       // Flames on top
       if (Mono.frame % 8 < 4) {
-        pix(levelData.oilDrum.x + 3, levelData.oilDrum.y - 2, 3);
-        pix(levelData.oilDrum.x + 4, levelData.oilDrum.y - 3, 2);
-        pix(levelData.oilDrum.x + 5, levelData.oilDrum.y - 1, 3);
+        pix(levelData.oilDrum.x + 6, levelData.oilDrum.y - 2, 3);
+        pix(levelData.oilDrum.x + 8, levelData.oilDrum.y - 3, 2);
+        pix(levelData.oilDrum.x + 10, levelData.oilDrum.y - 1, 3);
       } else {
-        pix(levelData.oilDrum.x + 2, levelData.oilDrum.y - 1, 3);
-        pix(levelData.oilDrum.x + 4, levelData.oilDrum.y - 2, 2);
-        pix(levelData.oilDrum.x + 5, levelData.oilDrum.y - 3, 3);
+        pix(levelData.oilDrum.x + 4, levelData.oilDrum.y - 1, 3);
+        pix(levelData.oilDrum.x + 8, levelData.oilDrum.y - 2, 2);
+        pix(levelData.oilDrum.x + 10, levelData.oilDrum.y - 3, 3);
       }
     }
 
-    // Draw DK
+    // Draw DK (2x2 grid of 16x16 tiles)
     const dk = levelData.dk;
     if (dkFrame === 1) {
       spr(14, dk.x, dk.y);
     } else {
       spr(10, dk.x, dk.y);
     }
-    spr(11, dk.x + 8, dk.y);
-    spr(12, dk.x, dk.y + 8);
-    spr(13, dk.x + 8, dk.y + 8);
+    spr(11, dk.x + SS, dk.y);
+    spr(12, dk.x, dk.y + SS);
+    spr(13, dk.x + SS, dk.y + SS);
 
     // Barrel near DK when throwing
     if (dkFrame === 1 && dkThrowT < 8) {
-      spr(20, dk.x - 8, dk.y + 8);
+      spr(20, dk.x - SS, dk.y + SS);
     }
 
     // Draw Pauline
@@ -1233,17 +1268,15 @@
     const pauY = levelData.pauline.y;
     if (paulineFrame === 0) spr(25, pauX, pauY);
     else spr(26, pauX, pauY);
-    // "HELP!" text
     if (paulineFrame === 1 && !levelComplete) {
-      text("HELP!", pauX - 8, pauY - 8, 3);
+      text("HELP!", pauX - 8, pauY - 10, 3);
     }
 
     // Draw hammer pickups
     for (const h of hammerPickups) {
       if (h.active) {
         spr(35, h.x, h.y);
-        // Sparkle
-        if (Mono.frame % 10 < 5) pix(h.x + flr(rnd(8)), h.y - 1, 3);
+        if (Mono.frame % 10 < 5) pix(h.x + flr(rnd(SS)), h.y - 1, 3);
       }
     }
 
@@ -1254,26 +1287,32 @@
       }
     }
 
-    // Draw barrels
+    // Draw barrels with debug hitbox
     for (const b of barrels) {
       const sprId = b.frame === 0 ? 20 : 21;
       spr(sprId, flr(b.x), flr(b.y));
+      // Debug: circle hitbox for barrel
+      const bc = barrelCenter(b);
+      Mono.dbgC(bc.cx, bc.cy, bc.r);
     }
 
-    // Draw fire enemies
+    // Draw fire enemies with debug hitbox
     for (const f of fires) {
       spr(37, flr(f.x), flr(f.y));
-      // Flicker effect
       if (Mono.frame % 4 < 2) {
-        pix(flr(f.x) + 3, flr(f.y) - 1, 3);
-        pix(flr(f.x) + 5, flr(f.y) - 2, 2);
+        pix(flr(f.x) + 6, flr(f.y) - 1, 3);
+        pix(flr(f.x) + 10, flr(f.y) - 2, 2);
       }
+      // Debug: circle hitbox for fire
+      const fc = fireCenter(f);
+      Mono.dbgC(fc.cx, fc.cy, fc.r);
     }
 
     // Draw player
     const p = player;
     if (invincibleTimer > 0 && Mono.frame % 4 < 2) {
-      // Blink when invincible
+      // Blink when invincible - still register debug hitbox
+      Mono.dbg(p.x + 2, p.y + 1, 12, 14);
     } else {
       let sprId = 1;
       const flipX = p.facing < 0;
@@ -1288,14 +1327,15 @@
 
       if (hammerActive) {
         sprId = 6;
-        // Draw hammer swing
-        const hx = p.facing > 0 ? p.x + 6 : p.x - 8;
-        const hy = (flr(hammerSwing / 4) % 2 === 0) ? p.y - 6 : p.y;
-        rectf(hx, hy, 6, 3, 3);
-        rectf(hx + 2, hy + 3, 2, 4, 2);
+        const hx = p.facing > 0 ? p.x + 10 : p.x - 10;
+        const hy = (flr(hammerSwing / 4) % 2 === 0) ? p.y - 8 : p.y;
+        rectf(hx, hy, 8, 4, 3);
+        rectf(hx + 3, hy + 4, 2, 6, 2);
       }
 
       spr(sprId, flr(p.x), flr(p.y), flipX);
+      // Debug: rect hitbox for player
+      Mono.dbg(p.x + 2, p.y + 1, 12, 14);
     }
 
     // Particles
@@ -1310,31 +1350,33 @@
     // Level complete overlay
     if (levelComplete) {
       const centerY = 105;
-      rectf(93, centerY - 15, 134, 38, 0);
-      rect(93, centerY - 15, 134, 38, 3);
-      text("LEVEL CLEAR!", 130, centerY - 8, 3);
-      text("BONUS: " + bonusScore, 133, centerY + 4, 2);
+      rectf(80, centerY - 15, 160, 38, 0);
+      rect(80, centerY - 15, 160, 38, 3);
+      text("LEVEL CLEAR!", 116, centerY - 8, 3);
+      text("BONUS: " + bonusScore, 120, centerY + 4, 2);
     }
 
-    // HUD
+    // HUD - constrained to 320x240
     rectf(0, 0, W, 14, 0);
     line(0, 14, W, 14, 1);
-    text("SCORE:" + score, 4, 4, 3);
-    text(levelData.name, W / 2 - 12, 4, 2);
+    text("SCORE:" + score, 2, 4, 3);
+    text(levelData.name, 148, 4, 2);
 
-    // Lives
-    for (let i = 0; i < lives; i++) spr(40, W - 40 + i * 10, 3);
+    // Lives - spaced properly so they don't overflow (max 3 lives, 18px each)
+    const livesStartX = W - 8 - lives * 18;
+    for (let i = 0; i < lives; i++) spr(40, livesStartX + i * 18, -1);
 
     // Bonus timer
-    text("B:" + bonusScore, W - 120, 4, 2);
+    text("B:" + bonusScore, 192, 4, 2);
 
-    // Hammer indicator
+    // Hammer indicator - fits within right side of HUD
     if (hammerActive) {
+      const barX = 252;
       const barW = flr((hammerTimer / 300) * 30);
-      rectf(W / 2 + 30, 6, 30, 4, 1);
-      rectf(W / 2 + 30, 6, barW, 4, 3);
+      rectf(barX, 6, 30, 4, 1);
+      rectf(barX, 6, barW, 4, 3);
       if (hammerTimer < 60 && Mono.frame % 6 < 3) {
-        text("HAMMER!", W / 2 + 20, 4, 3);
+        text("HAMMER!", barX - 12, 4, 3);
       }
     }
   }

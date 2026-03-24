@@ -22,10 +22,13 @@
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
           min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites ---
+  // --- Helper: upscale 8x8 sprite data to 16x16 ---
+  function up(d){let o="";for(let r=0;r<8;r++){let row="";for(let c=0;c<8;c++){const ch=d[r*8+c];row+=ch+ch;}o+=row+row;}return o;}
+
+  // --- Sprites (all 16x16 via upscale) ---
 
   // 1: Chef (facing right) - white hat, apron
-  defSprite(1,
+  defSprite(1, up(
     "00333000" +
     "03333300" +
     "00322000" +
@@ -34,10 +37,10 @@
     "00311300" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 2: Chef walking frame 2
-  defSprite(2,
+  defSprite(2, up(
     "00333000" +
     "03333300" +
     "00322000" +
@@ -46,10 +49,10 @@
     "00311300" +
     "03000030" +
     "30000003"
-  );
+  ));
 
   // 3: Chef climbing
-  defSprite(3,
+  defSprite(3, up(
     "00333000" +
     "03333300" +
     "00322000" +
@@ -58,10 +61,10 @@
     "00311300" +
     "00300300" +
     "03000030"
-  );
+  ));
 
   // 10: Top bun left
-  defSprite(10,
+  defSprite(10, up(
     "00000000" +
     "00000000" +
     "00233200" +
@@ -70,9 +73,9 @@
     "33333333" +
     "33333333" +
     "22222222"
-  );
+  ));
   // 11: Top bun right
-  defSprite(11,
+  defSprite(11, up(
     "00000000" +
     "00000000" +
     "02332000" +
@@ -81,10 +84,10 @@
     "33333333" +
     "33333333" +
     "22222222"
-  );
+  ));
 
   // 12: Patty left
-  defSprite(12,
+  defSprite(12, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -93,9 +96,9 @@
     "22122122" +
     "21221221" +
     "02222220"
-  );
+  ));
   // 13: Patty right
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -104,10 +107,10 @@
     "22122212" +
     "12212221" +
     "02222220"
-  );
+  ));
 
   // 14: Lettuce left
-  defSprite(14,
+  defSprite(14, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -116,9 +119,9 @@
     "21212121" +
     "12121210" +
     "01010100"
-  );
+  ));
   // 15: Lettuce right
-  defSprite(15,
+  defSprite(15, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -127,10 +130,10 @@
     "12121212" +
     "01212121" +
     "00101010"
-  );
+  ));
 
   // 16: Bottom bun left
-  defSprite(16,
+  defSprite(16, up(
     "00000000" +
     "22222222" +
     "33333333" +
@@ -139,9 +142,9 @@
     "23333332" +
     "02333320" +
     "00222200"
-  );
+  ));
   // 17: Bottom bun right
-  defSprite(17,
+  defSprite(17, up(
     "00000000" +
     "22222222" +
     "33333333" +
@@ -150,10 +153,10 @@
     "23333332" +
     "02333320" +
     "00222200"
-  );
+  ));
 
   // 18: Tomato left
-  defSprite(18,
+  defSprite(18, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -162,9 +165,9 @@
     "22122212" +
     "21222122" +
     "02222200"
-  );
+  ));
   // 19: Tomato right
-  defSprite(19,
+  defSprite(19, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -173,10 +176,10 @@
     "22122212" +
     "22122212" +
     "00222220"
-  );
+  ));
 
   // 20: Hot Dog enemy
-  defSprite(20,
+  defSprite(20, up(
     "00222200" +
     "02111120" +
     "02131120" +
@@ -185,10 +188,10 @@
     "00211200" +
     "00200200" +
     "00300300"
-  );
+  ));
 
   // 21: Pickle enemy
-  defSprite(21,
+  defSprite(21, up(
     "00122100" +
     "01211210" +
     "01222210" +
@@ -197,10 +200,10 @@
     "00122100" +
     "00100100" +
     "00300300"
-  );
+  ));
 
   // 22: Egg enemy
-  defSprite(22,
+  defSprite(22, up(
     "00333300" +
     "03333330" +
     "33322333" +
@@ -209,10 +212,10 @@
     "00333300" +
     "00100100" +
     "00300300"
-  );
+  ));
 
   // 23: Pepper cloud
-  defSprite(23,
+  defSprite(23, up(
     "00000000" +
     "00230000" +
     "02332300" +
@@ -221,10 +224,10 @@
     "02332320" +
     "00232300" +
     "00002000"
-  );
+  ));
 
   // 24: Platform tile
-  defSprite(24,
+  defSprite(24, up(
     "22222222" +
     "11111111" +
     "00000000" +
@@ -233,10 +236,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 25: Ladder tile
-  defSprite(25,
+  defSprite(25, up(
     "20000002" +
     "21111112" +
     "20000002" +
@@ -245,10 +248,10 @@
     "20000002" +
     "20000002" +
     "21111112"
-  );
+  ));
 
   // 26: Life icon (small chef hat)
-  defSprite(26,
+  defSprite(26, up(
     "00000000" +
     "00333000" +
     "03333300" +
@@ -257,10 +260,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 27: Pepper icon (HUD)
-  defSprite(27,
+  defSprite(27, up(
     "00000000" +
     "00030000" +
     "00232000" +
@@ -269,10 +272,10 @@
     "00232000" +
     "00020000" +
     "00000000"
-  );
+  ));
 
   // 28: Stunned enemy overlay (stars)
-  defSprite(28,
+  defSprite(28, up(
     "30000030" +
     "03000300" +
     "00303000" +
@@ -281,73 +284,55 @@
     "00303000" +
     "03000300" +
     "30000030"
-  );
+  ));
+
+  // --- Sprite size constant (now 16x16) ---
+  const SS = 16;
 
   // --- Level Layout ---
-  // The level is defined by platforms and ladders
-  // Platforms have slots for burger ingredients
-  // Each platform is at a Y position, with X start/end
-
-  const PLAT_H = 2; // platform height in pixels (drawn as line)
+  const PLAT_H = 2;
   const HUD_H = 16;
   const PLAY_TOP = HUD_H;
   const PLAY_BOT = H - 8;
 
-  // Level definitions - 5 platform rows with ladders connecting them
-  // Each level can have different layouts
+  // Level definitions
   function makeLevelLayout(level) {
-    const layouts = [];
-
-    // Platform Y positions (6 levels of platforms)
     const platYs = [39, 75, 111, 147, 183, 218];
-
-    // Ingredient columns - where burger stacks go
-    // Each column is a set of ingredients stacked across platforms
-    const numCols = 3 + min(flr(level / 2), 2); // 3-5 burger columns
+    const numCols = 3 + min(flr(level / 2), 2);
 
     const colXs = [];
     const spacing = 267 / (numCols + 1);
     for (let i = 0; i < numCols; i++) {
-      colXs.push(flr(27 + spacing * (i + 1)) - 8);
+      colXs.push(flr(27 + spacing * (i + 1)) - SS);
     }
 
-    // Platforms - horizontal walkways
     const platforms = [];
     for (let row = 0; row < platYs.length; row++) {
       const y = platYs[row];
-      // Full-width platform with some gaps for variety
       if (row === platYs.length - 1) {
-        // Bottom platform is always full (catch plates)
         platforms.push({ x1: 13, x2: 307, y: y });
       } else if (row === 0) {
-        // Top has segments connecting ingredient columns
         for (let c = 0; c < numCols; c++) {
           const cx = colXs[c];
-          platforms.push({ x1: cx - 16, x2: cx + 27, y: y });
+          platforms.push({ x1: cx - SS, x2: cx + SS + 16, y: y });
         }
       } else {
-        // Middle rows - wider platforms but with some variation
         if (level % 2 === 0 || row % 2 === 0) {
-          // Full width
           platforms.push({ x1: 13, x2: 307, y: y });
         } else {
-          // Split platforms
           platforms.push({ x1: 13, x2: 147, y: y });
           platforms.push({ x1: 173, x2: 307, y: y });
         }
       }
     }
 
-    // Ladders - vertical connections between platforms
     const ladders = [];
-    // Always have ladders at ingredient columns
     for (let c = 0; c < numCols; c++) {
       const lx = colXs[c] + 4;
       for (let row = 0; row < platYs.length - 1; row++) {
         ladders.push({ x: lx, y1: platYs[row], y2: platYs[row + 1] });
       }
     }
-    // Extra ladders for navigation
     const extraLadderXs = [20, 87, 233, 293];
     for (const lx of extraLadderXs) {
       for (let row = 0; row < platYs.length - 1; row++) {
@@ -357,9 +342,6 @@
       }
     }
 
-    // Burger ingredients
-    // Each burger column has: top bun, lettuce, patty, tomato, bottom bun
-    // Spread across platforms 0-4, collected at platform 5
     const ingredients = [];
     const ingTypes = [
       { name: "topbun", sprL: 10, sprR: 11 },
@@ -374,15 +356,15 @@
           col: c,
           type: ingTypes[ing],
           x: colXs[c],
-          platRow: ing, // which platform row it starts on
+          platRow: ing,
           y: platYs[ing],
-          targetY: platYs[ing + 1], // where it drops to
-          walked: [false, false], // left half, right half walked over
+          targetY: platYs[ing + 1],
+          walked: [false, false],
           dropping: false,
           dropSpeed: 0,
-          dropped: false, // has reached final position
-          stackCount: 0, // how many times it's been dropped
-          finalY: 0, // computed final resting Y
+          dropped: false,
+          stackCount: 0,
+          finalY: 0,
           settled: false,
         });
       }
@@ -414,8 +396,8 @@
   function startLevel() {
     layout = makeLevelLayout(level);
     chef = {
-      x: 153, y: layout.platYs[2] - 10,
-      dir: 1, // 1=right, -1=left
+      x: 153, y: layout.platYs[2] - SS + 2,
+      dir: 1,
       onLadder: false,
       climbing: false,
       walkFrame: 0,
@@ -427,16 +409,14 @@
     levelComplete = false;
     levelCompleteTimer = 0;
     deathTimer = 0;
-    invincibleTimer = 60; // brief invincibility at level start
+    invincibleTimer = 60;
     burgersCompleted = 0;
     totalBurgers = layout.numCols;
     enemySpawnTimer = 90;
 
-    // Compute final Y positions for ingredients (stacking from bottom)
     for (let c = 0; c < layout.numCols; c++) {
-      const bottomY = layout.platYs[5]; // bottom platform
+      const bottomY = layout.platYs[5];
       const colIngs = layout.ingredients.filter(ing => ing.col === c);
-      // They stack from bottom up
       for (let i = colIngs.length - 1; i >= 0; i--) {
         colIngs[i].finalY = bottomY - (colIngs.length - 1 - i) * 5 - 5;
         colIngs[i].settled = false;
@@ -453,16 +433,14 @@
 
   function spawnEnemy() {
     if (enemies.length >= 3 + level) return;
-    const types = [20, 21, 22]; // hotdog, pickle, egg
+    const types = [20, 21, 22];
     const type = types[flr(rnd(types.length))];
-    // Spawn at edge of a random platform
-    const row = flr(rnd(3)); // spawn on top 3 rows
     const side = rnd(1) < 0.5 ? 0 : 1;
     const plat = layout.platforms[flr(rnd(layout.platforms.length))];
     if (!plat) return;
     enemies.push({
-      x: side === 0 ? plat.x1 : plat.x2 - 8,
-      y: plat.y - 10,
+      x: side === 0 ? plat.x1 : plat.x2 - SS,
+      y: plat.y - SS + 2,
       type: type,
       dir: side === 0 ? 1 : -1,
       onLadder: false,
@@ -475,8 +453,15 @@
     });
   }
 
+  // Collision helpers — character hitbox is inset from sprite
+  // Characters: hitbox 10x12 centered in 16x16 sprite
+  const CHR_HBX = 3;   // hitbox x inset
+  const CHR_HBY = 2;   // hitbox y inset
+  const CHR_HBW = 10;  // hitbox width
+  const CHR_HBH = 12;  // hitbox height
+
   function isOnPlatform(x, y, w) {
-    const footY = y + 10;
+    const footY = y + SS - 2;
     for (const p of layout.platforms) {
       if (footY >= p.y - 2 && footY <= p.y + 4 && x + w > p.x1 && x < p.x2) {
         return p;
@@ -486,9 +471,9 @@
   }
 
   function findLadderAt(x, y, h) {
-    const cx = x + 4; // center of character
+    const cx = x + 8; // center of 16px character
     for (const l of layout.ladders) {
-      if (_abs(cx - l.x - 4) < 6 && y + h > l.y1 - 2 && y < l.y2 + 2) {
+      if (_abs(cx - l.x - 4) < 8 && y + h > l.y1 - 2 && y < l.y2 + 2) {
         return l;
       }
     }
@@ -496,9 +481,9 @@
   }
 
   function findLadderBelow(x, y) {
-    const cx = x + 4;
+    const cx = x + 8;
     for (const l of layout.ladders) {
-      if (_abs(cx - l.x - 4) < 6 && y + 10 >= l.y1 - 4 && y + 10 <= l.y1 + 8) {
+      if (_abs(cx - l.x - 4) < 8 && y + SS - 2 >= l.y1 - 4 && y + SS - 2 <= l.y1 + 8) {
         return l;
       }
     }
@@ -506,13 +491,30 @@
   }
 
   function findLadderAbove(x, y) {
-    const cx = x + 4;
+    const cx = x + 8;
     for (const l of layout.ladders) {
-      if (_abs(cx - l.x - 4) < 6 && y + 10 >= l.y2 - 8 && y + 10 <= l.y2 + 4) {
+      if (_abs(cx - l.x - 4) < 8 && y + SS - 2 >= l.y2 - 8 && y + SS - 2 <= l.y2 + 4) {
         return l;
       }
     }
     return null;
+  }
+
+  // Circle vs rect collision (for pepper cloud vs enemies)
+  function circRectHit(cx, cy, cr, rx, ry, rw, rh) {
+    const nx = _max(rx, min(cx, rx + rw));
+    const ny = _max(ry, min(cy, ry + rh));
+    const dx = cx - nx;
+    const dy = cy - ny;
+    return dx * dx + dy * dy < cr * cr;
+  }
+
+  // Circle vs circle collision
+  function circCircHit(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2;
+    const dy = y1 - y2;
+    const dist = r1 + r2;
+    return dx * dx + dy * dy < dist * dist;
   }
 
   // Sound effects
@@ -552,50 +554,43 @@
 
     e.walkFrame += 0.15;
     const speed = e.speed;
-
-    // Simple AI: move toward chef
     const dx = chef.x - e.x;
     const dy = chef.y - e.y;
 
     if (e.climbing) {
-      // On ladder, move vertically
-      const ladder = findLadderAt(e.x, e.y, 10);
+      const ladder = findLadderAt(e.x, e.y, SS);
       if (ladder) {
         if (dy < -8) {
           e.y -= speed;
-          if (e.y + 10 <= ladder.y1) {
+          if (e.y + SS - 2 <= ladder.y1) {
             e.climbing = false;
-            e.y = ladder.y1 - 10;
+            e.y = ladder.y1 - SS + 2;
           }
         } else if (dy > 8) {
           e.y += speed;
-          if (e.y + 10 >= ladder.y2) {
+          if (e.y + SS - 2 >= ladder.y2) {
             e.climbing = false;
-            e.y = ladder.y2 - 10;
+            e.y = ladder.y2 - SS + 2;
           }
         } else {
-          // Same height, get off ladder
           e.climbing = false;
         }
       } else {
         e.climbing = false;
       }
     } else {
-      // On platform, move horizontally
-      const plat = isOnPlatform(e.x, e.y, 8);
+      const plat = isOnPlatform(e.x, e.y, SS);
       if (plat) {
-        // Check if we should use a ladder
         const shouldClimb = _abs(dy) > 20 && rnd(1) < 0.03;
         if (shouldClimb) {
           const ladder = (dy < 0) ? findLadderAbove(e.x, e.y) : findLadderBelow(e.x, e.y);
           if (ladder) {
             e.climbing = true;
-            e.x = ladder.x;
+            e.x = ladder.x - 4;
             return;
           }
         }
 
-        // Move horizontally toward chef
         if (dx > 4) {
           e.x += speed;
           e.dir = 1;
@@ -604,13 +599,9 @@
           e.dir = -1;
         }
 
-        // Stay on platform
-        e.x = _max(plat.x1, min(plat.x2 - 8, e.x));
-
-        // Snap to platform
-        e.y = plat.y - 10;
+        e.x = _max(plat.x1, min(plat.x2 - SS, e.x));
+        e.y = plat.y - SS + 2;
       } else {
-        // Falling - find nearest platform below
         e.y += 2;
         if (e.y > H + 20) e.alive = false;
       }
@@ -638,13 +629,11 @@
   Mono.scene(PLAY, {
     init() { resetGame(); },
     update() {
-    // --- Play state ---
     if (invincibleTimer > 0) invincibleTimer--;
 
     // Death animation
     if (deathTimer > 0) {
       deathTimer--;
-      // Update particles during death
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
@@ -653,9 +642,8 @@
         if (lives <= 0) {
           Mono.go(GAMEOVER); return;
         } else {
-          // Respawn chef
           chef.x = 153;
-          chef.y = layout.platYs[2] - 10;
+          chef.y = layout.platYs[2] - SS + 2;
           chef.climbing = false;
           chef.onLadder = false;
           invincibleTimer = 90;
@@ -679,20 +667,17 @@
     }
 
     // --- Chef movement ---
-    const chefPlat = isOnPlatform(chef.x, chef.y, 8);
-    const chefLadder = findLadderAt(chef.x, chef.y, 10);
+    const chefPlat = isOnPlatform(chef.x, chef.y, SS);
+    const chefLadder = findLadderAt(chef.x, chef.y, SS);
 
     if (chef.climbing) {
-      // On ladder
       if (btn("up")) {
         chef.y -= chef.speed;
         walkSound();
         chef.walkFrame += 0.2;
-        // Check if reached top of ladder
-        const ladder = findLadderAt(chef.x, chef.y, 10);
-        if (!ladder || chef.y + 10 <= ladder.y1 + 2) {
-          // Snap to platform at top
-          if (ladder) chef.y = ladder.y1 - 10;
+        const ladder = findLadderAt(chef.x, chef.y, SS);
+        if (!ladder || chef.y + SS - 2 <= ladder.y1 + 2) {
+          if (ladder) chef.y = ladder.y1 - SS + 2;
           chef.climbing = false;
         }
       }
@@ -700,19 +685,17 @@
         chef.y += chef.speed;
         walkSound();
         chef.walkFrame += 0.2;
-        const ladder = findLadderAt(chef.x, chef.y, 10);
-        if (!ladder || chef.y + 10 >= ladder.y2 - 2) {
-          if (ladder) chef.y = ladder.y2 - 10;
+        const ladder = findLadderAt(chef.x, chef.y, SS);
+        if (!ladder || chef.y + SS - 2 >= ladder.y2 - 2) {
+          if (ladder) chef.y = ladder.y2 - SS + 2;
           chef.climbing = false;
         }
       }
-      // Allow left/right to exit ladder
       if (btn("left") || btn("right")) {
-        const p = isOnPlatform(chef.x, chef.y, 8);
+        const p = isOnPlatform(chef.x, chef.y, SS);
         if (p) chef.climbing = false;
       }
     } else {
-      // On platform
       let moved = false;
       if (btn("left")) {
         chef.x -= chef.speed;
@@ -729,63 +712,68 @@
         walkSound();
       }
 
-      // Climbing
       if (btn("up")) {
-        const ladder = findLadderBelow(chef.x, chef.y) || findLadderAt(chef.x, chef.y, 10);
-        if (ladder && chef.y + 10 > ladder.y1 - 4) {
+        const ladder = findLadderBelow(chef.x, chef.y) || findLadderAt(chef.x, chef.y, SS);
+        if (ladder && chef.y + SS - 2 > ladder.y1 - 4) {
           chef.climbing = true;
-          chef.x = ladder.x;
+          chef.x = ladder.x - 4;
         }
       }
       if (btn("down")) {
         const ladder = findLadderBelow(chef.x, chef.y);
         if (ladder) {
           chef.climbing = true;
-          chef.x = ladder.x;
+          chef.x = ladder.x - 4;
         }
       }
 
-      // Stay on platform
       if (chefPlat) {
-        chef.y = chefPlat.y - 10;
-        chef.x = _max(chefPlat.x1 - 2, min(chefPlat.x2 - 6, chef.x));
+        chef.y = chefPlat.y - SS + 2;
+        chef.x = _max(chefPlat.x1 - 2, min(chefPlat.x2 - SS + 2, chef.x));
       } else if (!chef.climbing) {
-        // Falling?? Find closest platform
         chef.y += 2;
-        const p2 = isOnPlatform(chef.x, chef.y, 8);
-        if (p2) chef.y = p2.y - 10;
+        const p2 = isOnPlatform(chef.x, chef.y, SS);
+        if (p2) chef.y = p2.y - SS + 2;
       }
     }
 
     // Keep in bounds
-    chef.x = _max(4, min(W - 12, chef.x));
-    chef.y = _max(PLAY_TOP, min(PLAY_BOT - 10, chef.y));
+    chef.x = _max(2, min(W - SS - 2, chef.x));
+    chef.y = _max(PLAY_TOP, min(PLAY_BOT - SS, chef.y));
 
     // --- Pepper throw ---
     if (btnp("a") && pepperCount > 0 && peppers.length === 0) {
       pepperCount--;
       peppers.push({
-        x: chef.x + (chef.dir > 0 ? 8 : -10),
-        y: chef.y - 2,
+        x: chef.x + (chef.dir > 0 ? SS : -SS),
+        y: chef.y,
         dir: chef.dir,
         timer: 20,
       });
       pepperSound();
     }
 
-    // Update peppers
+    // Update peppers — pepper is a circle (center + radius)
     for (let i = peppers.length - 1; i >= 0; i--) {
       const p = peppers[i];
       p.timer--;
       if (p.timer <= 0) { peppers.splice(i, 1); continue; }
 
-      // Check pepper-enemy collision
+      const pcx = p.x + 8;
+      const pcy = p.y + 8;
+      const pr = 8;
+
+      // Pepper-enemy collision: circle (pepper) vs rect (enemy hitbox)
       for (const e of enemies) {
-        if (e.stunTimer <= 0 && _abs(e.x - p.x) < 12 && _abs(e.y - p.y) < 12) {
-          e.stunTimer = 120 + level * 10;
-          score += 100;
-          bonusSound();
-          addParticles(e.x + 4, e.y + 4, 5, 3);
+        if (e.stunTimer <= 0) {
+          const ex = e.x + CHR_HBX;
+          const ey = e.y + CHR_HBY;
+          if (circRectHit(pcx, pcy, pr, ex, ey, CHR_HBW, CHR_HBH)) {
+            e.stunTimer = 120 + level * 10;
+            score += 100;
+            bonusSound();
+            addParticles(e.x + 8, e.y + 8, 5, 3);
+          }
         }
       }
     }
@@ -794,36 +782,32 @@
     for (const ing of layout.ingredients) {
       if (ing.settled || ing.dropping) continue;
 
-      // Check if chef is on the same platform and walking over ingredient
       const ingY = ing.y;
-      if (_abs(chef.y + 10 - ingY) < 6) {
+      if (_abs(chef.y + SS - 2 - ingY) < 6) {
         // Check left half
-        if (!ing.walked[0] && chef.x + 6 > ing.x && chef.x < ing.x + 8) {
+        if (!ing.walked[0] && chef.x + SS - 4 > ing.x && chef.x < ing.x + SS) {
           ing.walked[0] = true;
           note(1, "E4", 0.03);
         }
         // Check right half
-        if (!ing.walked[1] && chef.x + 6 > ing.x + 8 && chef.x < ing.x + 16) {
+        if (!ing.walked[1] && chef.x + SS - 4 > ing.x + SS && chef.x < ing.x + SS * 2) {
           ing.walked[1] = true;
           note(1, "E4", 0.03);
         }
 
-        // Both halves walked = drop it!
         if (ing.walked[0] && ing.walked[1] && !ing.dropping) {
           ing.dropping = true;
           ing.dropSpeed = 0;
           dropSound();
           score += 50;
 
-          // Check if any enemies are on this ingredient
           for (let ei = enemies.length - 1; ei >= 0; ei--) {
             const e = enemies[ei];
-            if (_abs(e.y + 10 - ingY) < 8 && e.x + 8 > ing.x && e.x < ing.x + 16) {
-              // Enemy gets carried down with ingredient
+            if (_abs(e.y + SS - 2 - ingY) < 8 && e.x + SS > ing.x && e.x < ing.x + SS * 2) {
               e.crushed = true;
               score += 500;
               crushSound();
-              addParticles(e.x + 4, e.y + 4, 8, 3);
+              addParticles(e.x + 8, e.y + 8, 8, 3);
               enemies.splice(ei, 1);
             }
           }
@@ -838,38 +822,31 @@
       ing.dropSpeed = min(ing.dropSpeed + 0.3, 4);
       ing.y += ing.dropSpeed;
 
-      // Check if it lands on another ingredient or reaches final position
-      // Find the next ingredient below in the same column that has settled
       let landY = ing.finalY;
 
-      // Check for ingredients below that are settled
       const colIngs = layout.ingredients.filter(
         oi => oi.col === ing.col && oi !== ing && oi.settled && oi.y < landY + 10
       );
       if (colIngs.length > 0) {
-        // Land on top of the highest settled ingredient
         const topSettled = colIngs.reduce((a, b) => a.y < b.y ? a : b);
         landY = topSettled.y - 5;
       }
 
-      // Check if ingredient hits an unsettled, non-dropping ingredient below
       for (const other of layout.ingredients) {
         if (other === ing || other.col !== ing.col || other.settled || other.dropping) continue;
-        if (other.y > ing.y && other.y < ing.y + 16) {
-          // Push it down too!
+        if (other.y > ing.y && other.y < ing.y + SS) {
           other.dropping = true;
           other.dropSpeed = ing.dropSpeed;
           other.walked = [true, true];
           score += 50;
 
-          // Check for enemies on the pushed ingredient
           for (let ei = enemies.length - 1; ei >= 0; ei--) {
             const e = enemies[ei];
-            if (_abs(e.y + 10 - other.y) < 8 && e.x + 8 > other.x && e.x < other.x + 16) {
+            if (_abs(e.y + SS - 2 - other.y) < 8 && e.x + SS > other.x && e.x < other.x + SS * 2) {
               e.crushed = true;
               score += 500;
               crushSound();
-              addParticles(e.x + 4, e.y + 4, 8, 3);
+              addParticles(e.x + 8, e.y + 8, 8, 3);
               enemies.splice(ei, 1);
             }
           }
@@ -881,17 +858,16 @@
         ing.dropping = false;
         ing.settled = true;
         ing.dropSpeed = 0;
-        addParticles(ing.x + 8, ing.y + 4, 4, 2);
+        addParticles(ing.x + SS, ing.y + 4, 4, 2);
         note(1, "C3", 0.05);
 
-        // Check if a full burger is complete in this column
         const colIngs2 = layout.ingredients.filter(oi => oi.col === ing.col);
         const allSettled = colIngs2.every(oi => oi.settled);
         if (allSettled) {
           burgersCompleted++;
           score += 1000;
           bonusSound();
-          addParticles(ing.x + 8, ing.y, 12, 3);
+          addParticles(ing.x + SS, ing.y, 12, 3);
           if (burgersCompleted >= totalBurgers) {
             levelComplete = true;
             levelCompleteTimer = 90;
@@ -903,11 +879,11 @@
       // Crush enemies below falling ingredient
       for (let ei = enemies.length - 1; ei >= 0; ei--) {
         const e = enemies[ei];
-        if (!e.crushed && e.x + 8 > ing.x && e.x < ing.x + 16 &&
-            e.y + 8 > ing.y - 2 && e.y < ing.y + 8) {
+        if (!e.crushed && e.x + SS > ing.x && e.x < ing.x + SS * 2 &&
+            e.y + SS > ing.y - 2 && e.y < ing.y + SS) {
           score += 500;
           crushSound();
-          addParticles(e.x + 4, e.y + 4, 8, 3);
+          addParticles(e.x + 8, e.y + 8, 8, 3);
           enemies.splice(ei, 1);
         }
       }
@@ -926,14 +902,16 @@
       if (!e.alive) { enemies.splice(i, 1); continue; }
       updateEnemy(e);
 
-      // Enemy-chef collision
+      // Enemy-chef collision: rect vs rect using inner hitboxes
       if (invincibleTimer <= 0 && deathTimer <= 0 && e.stunTimer <= 0) {
-        if (_abs(e.x - chef.x) < 7 && _abs(e.y - chef.y) < 9) {
-          // Chef dies
+        const cx1 = chef.x + CHR_HBX, cy1 = chef.y + CHR_HBY;
+        const ex1 = e.x + CHR_HBX, ey1 = e.y + CHR_HBY;
+        if (cx1 < ex1 + CHR_HBW && cx1 + CHR_HBW > ex1 &&
+            cy1 < ey1 + CHR_HBH && cy1 + CHR_HBH > ey1) {
           lives--;
           deathTimer = 60;
           deathSound();
-          addParticles(chef.x + 4, chef.y + 4, 15, 3);
+          addParticles(chef.x + 8, chef.y + 8, 15, 3);
         }
       }
     }
@@ -947,12 +925,10 @@
     },
     draw() {
       cls(0);
-      // --- Play state rendering ---
 
     // Draw platforms
     for (const p of layout.platforms) {
       rectf(p.x1, p.y, p.x2 - p.x1, 2, 1);
-      // Add dashes for texture
       for (let dx = p.x1; dx < p.x2; dx += 6) {
         pix(dx, p.y, 2);
       }
@@ -961,12 +937,10 @@
     // Draw ladders
     for (const l of layout.ladders) {
       const lh = l.y2 - l.y1;
-      // Rails
       for (let dy = 0; dy < lh; dy++) {
         pix(l.x, l.y1 + dy, 1);
         pix(l.x + 7, l.y1 + dy, 1);
       }
-      // Rungs
       for (let dy = 0; dy < lh; dy += 6) {
         for (let dx = 1; dx < 7; dx++) {
           pix(l.x + dx, l.y1 + dy, 1);
@@ -974,57 +948,53 @@
       }
     }
 
-    // Draw plate areas at bottom (where burgers stack)
+    // Draw plate areas at bottom
     for (let c = 0; c < layout.numCols; c++) {
       const px = layout.colXs[c] - 2;
       const py = layout.platYs[5] + 2;
-      rectf(px, py, 20, 2, 2);
+      rectf(px, py, SS * 2 + 4, 2, 2);
     }
 
-    // Draw ingredients
+    // Draw ingredients (each is two 16x16 sprites side by side)
     for (const ing of layout.ingredients) {
       const y = flr(ing.y) - 5;
       spr(ing.type.sprL, flr(ing.x), y);
-      spr(ing.type.sprR, flr(ing.x) + 8, y);
+      spr(ing.type.sprR, flr(ing.x) + SS, y);
 
-      // Show walk progress - dim out walked portions
       if (!ing.settled && !ing.dropping) {
         if (ing.walked[0]) {
-          // Left half walked - show it slightly dropped
-          rectf(flr(ing.x), y + 6, 8, 1, 2);
+          rectf(flr(ing.x), y + 12, SS, 1, 2);
         }
         if (ing.walked[1]) {
-          // Right half walked
-          rectf(flr(ing.x) + 8, y + 6, 8, 1, 2);
+          rectf(flr(ing.x) + SS, y + 12, SS, 1, 2);
         }
       }
     }
 
-    // Draw pepper clouds
+    // Draw pepper clouds — debug circle collision
     for (const p of peppers) {
       spr(23, flr(p.x), flr(p.y));
-      // Extra particles
+      Mono.dbgC(p.x + 8, p.y + 8, 8);
       if (p.timer > 10) {
-        pix(flr(p.x + rnd(10)), flr(p.y + rnd(10)), 3);
-        pix(flr(p.x + rnd(10)), flr(p.y + rnd(10)), 2);
+        pix(flr(p.x + rnd(SS)), flr(p.y + rnd(SS)), 3);
+        pix(flr(p.x + rnd(SS)), flr(p.y + rnd(SS)), 2);
       }
     }
 
-    // Draw enemies
+    // Draw enemies — debug rect hitbox
     for (const e of enemies) {
       if (e.stunTimer > 0) {
-        // Flash when stunned
         if (flr(Mono.frame / 4) % 2 === 0) {
           spr(e.type, flr(e.x), flr(e.y), e.dir < 0);
         }
-        // Draw stun stars
-        spr(28, flr(e.x), flr(e.y - 8));
+        spr(28, flr(e.x), flr(e.y - SS));
       } else {
         spr(e.type, flr(e.x), flr(e.y), e.dir < 0);
       }
+      Mono.dbg(e.x + CHR_HBX, e.y + CHR_HBY, CHR_HBW, CHR_HBH);
     }
 
-    // Draw chef
+    // Draw chef — debug rect hitbox
     if (deathTimer <= 0 || flr(Mono.frame / 3) % 2 === 0) {
       if (invincibleTimer > 0 && flr(Mono.frame / 3) % 2 === 0) {
         // Blinking during invincibility - skip draw
@@ -1038,34 +1008,41 @@
         spr(sprId, flr(chef.x), flr(chef.y), chef.dir < 0);
       }
     }
+    Mono.dbg(chef.x + CHR_HBX, chef.y + CHR_HBY, CHR_HBW, CHR_HBH);
 
     // Particles
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
-    // HUD
+    // HUD — all clamped within 320x240
     rectf(0, 0, W, HUD_H, 0);
     text("SCORE:" + score, 4, 3, 3);
-    text("LV:" + level, W / 2 - 15, 3, 2);
-    text("PEPPER:" + pepperCount, W / 2 + 20, 3, 2);
+    text("LV:" + level, 120, 3, 2);
 
-    // Lives
-    for (let i = 0; i < lives; i++) spr(26, W - 40 + i * 10, 2);
+    // Pepper count — position so it doesn't overflow
+    const pepTxt = "PEP:" + pepperCount;
+    text(pepTxt, 168, 3, 2);
 
-    // Burgers remaining
-    text("BURGERS:" + (totalBurgers - burgersCompleted) + "/" + totalBurgers, 4, 10, 1);
+    // Lives icons — clamp to at most 5 icons, right-aligned safely
+    const maxLivesShown = min(lives, 5);
+    const livesStartX = W - 8 - maxLivesShown * 18;
+    for (let i = 0; i < maxLivesShown; i++) spr(26, livesStartX + i * 18, 0);
+
+    // Burgers remaining — second line
+    const burgTxt = "LEFT:" + (totalBurgers - burgersCompleted) + "/" + totalBurgers;
+    text(burgTxt, 4, 10, 1);
 
     // Level complete message
     if (levelComplete) {
-      rectf(W / 2 - 47, 105, 94, 23, 0);
-      rect(W / 2 - 47, 105, 94, 23, 3);
-      text("LEVEL CLEAR!", 130, 109, 3);
-      text("BONUS: " + (level * 500), 133, 119, 2);
-      score += flr(level * 500 / 90); // Gradually add bonus
+      rectf(W / 2 - 50, 105, 100, 23, 0);
+      rect(W / 2 - 50, 105, 100, 23, 3);
+      text("LEVEL CLEAR!", W / 2 - 30, 109, 3);
+      text("BONUS: " + (level * 500), W / 2 - 28, 119, 2);
+      score += flr(level * 500 / 90);
     }
 
     // Death message
     if (deathTimer > 30) {
-      text("OUCH!", 148, 120, 3);
+      text("OUCH!", W / 2 - 13, 120, 3);
     }
     }
   });
@@ -1078,52 +1055,50 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) Mono.go(TITLE);
+      if (btnp("start") || btnp("a")) Mono.go(TITLE);
     },
     draw() {
       cls(0);
-        for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
-      text("GAME OVER", 138, 83, 3);
-      text("SCORE: " + score, 138, 101, 2);
-      text("LEVEL: " + level, 148, 113, 2);
-      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 133, 150, 3);
-
+      for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
+      text("GAME OVER", W / 2 - 23, 83, 3);
+      text("SCORE: " + score, W / 2 - 23, 101, 2);
+      text("LEVEL: " + level, W / 2 - 15, 113, 2);
+      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 28, 150, 3);
     }
   });
 
   function drawTitleScreen() {
-  
+    const ty = 38 + sin(Mono.frame * 0.05) * 3;
 
-      // Title screen
-      const ty = 38 + sin(Mono.frame * 0.05) * 3;
+    text("BURGER TIME", W / 2 - 28, flr(ty), 3);
+    rectf(W / 2 - 38, flr(ty) + 10, 76, 1, 2);
 
-      text("BURGER TIME", 133, flr(ty), 3);
-      rectf(123, flr(ty) + 10, 93, 1, 2);
+    // Draw a cute burger (two 16x16 tiles per row)
+    const bx = W / 2 - SS;
+    const by = flr(ty) + 20;
+    spr(10, bx, by); spr(11, bx + SS, by);
+    spr(14, bx, by + SS); spr(15, bx + SS, by + SS);
+    spr(12, bx, by + SS + 8); spr(13, bx + SS, by + SS + 8);
+    spr(18, bx, by + SS * 2 + 4); spr(19, bx + SS, by + SS * 2 + 4);
+    spr(16, bx, by + SS * 2 + 12); spr(17, bx + SS, by + SS * 2 + 12);
 
-      // Draw a cute burger
-      const bx = W / 2 - 8;
-      const by = flr(ty) + 25;
-      spr(10, bx, by); spr(11, bx + 8, by);
-      spr(14, bx, by + 8); spr(15, bx + 8, by + 8);
-      spr(12, bx, by + 14); spr(13, bx + 8, by + 14);
-      spr(18, bx, by + 20); spr(19, bx + 8, by + 20);
-      spr(16, bx, by + 26); spr(17, bx + 8, by + 26);
+    // Chef and enemies
+    const ey = by + SS * 3 + 16;
+    if (ey + SS < H - 30) {
+      spr(1, bx - 24, flr(ey + sin(Mono.frame * 0.08) * 2));
+      spr(20, bx + SS + 8, flr(ey + sin(Mono.frame * 0.08 + 1) * 2));
+      spr(21, bx + SS + 26, flr(ey + sin(Mono.frame * 0.08 + 2) * 2));
+      spr(22, bx + SS + 44, flr(ey + sin(Mono.frame * 0.08 + 3) * 2));
+    }
 
-      // Chef and enemies
-      const ey = flr(ty) + 53;
-      spr(1, bx - 20, ey + sin(Mono.frame * 0.08) * 2);
-      spr(20, bx + 20, ey + sin(Mono.frame * 0.08 + 1) * 2);
-      spr(21, bx + 33, ey + sin(Mono.frame * 0.08 + 2) * 2);
-      spr(22, bx + 46, ey + sin(Mono.frame * 0.08 + 3) * 2);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", W / 2 - 28, 155, 3);
 
-      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 133, 150, 3);
+    text("-HOW TO PLAY-", W / 2 - 33, 173, 2);
+    text("WALK OVER BURGERS", W / 2 - 45, 185, 2);
+    text("TO DROP THEM DOWN!", W / 2 - 45, 195, 2);
+    text("A = PEPPER STUN", W / 2 - 38, 210, 2);
 
-      text("-HOW TO PLAY-", 128, 173, 2);
-      text("WALK OVER BURGERS TO", 110, 183, 2);
-      text("DROP THEM DOWN!", 123, 193, 2);
-      text("A = PEPPER TO STUN ENEMIES", 93, 208, 2);
-
-      text("MONO DEMO V0.1", 118, 229, 1);
+    text("MONO DEMO V0.1", W / 2 - 35, 229, 1);
   }
 
   Mono.go(TITLE);

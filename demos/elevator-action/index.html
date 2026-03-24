@@ -20,11 +20,25 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 → 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (all upscaled from 8x8 to 16x16) ---
   // 1: Player spy - standing right
-  defSprite(1,
+  defSprite(1, up(
     "00333000" +
     "03222300" +
     "00333000" +
@@ -33,9 +47,9 @@
     "00333000" +
     "00100100" +
     "00100100"
-  );
+  ));
   // 2: Player spy - walking frame right
-  defSprite(2,
+  defSprite(2, up(
     "00333000" +
     "03222300" +
     "00333000" +
@@ -44,9 +58,9 @@
     "00333000" +
     "01001000" +
     "10000100"
-  );
+  ));
   // 3: Player spy - shooting right
-  defSprite(3,
+  defSprite(3, up(
     "00333000" +
     "03222300" +
     "00333000" +
@@ -55,9 +69,9 @@
     "00333000" +
     "00100100" +
     "00100100"
-  );
+  ));
   // 4: Player spy - ducking
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "00000000" +
     "00333000" +
@@ -66,9 +80,9 @@
     "03333300" +
     "13331300" +
     "01100110"
-  );
+  ));
   // 5: Player spy - jumping
-  defSprite(5,
+  defSprite(5, up(
     "00333000" +
     "03222300" +
     "00333000" +
@@ -77,10 +91,10 @@
     "00333000" +
     "01000100" +
     "10000010"
-  );
+  ));
 
   // 10: Enemy agent - standing right
-  defSprite(10,
+  defSprite(10, up(
     "00111000" +
     "01000100" +
     "00111000" +
@@ -89,9 +103,9 @@
     "00111000" +
     "00100100" +
     "00100100"
-  );
+  ));
   // 11: Enemy agent - walking right
-  defSprite(11,
+  defSprite(11, up(
     "00111000" +
     "01000100" +
     "00111000" +
@@ -100,9 +114,9 @@
     "00111000" +
     "01001000" +
     "10000100"
-  );
+  ));
   // 12: Enemy agent - shooting right
-  defSprite(12,
+  defSprite(12, up(
     "00111000" +
     "01000100" +
     "00111000" +
@@ -111,10 +125,10 @@
     "00111000" +
     "00100100" +
     "00100100"
-  );
+  ));
 
   // 20: Red door (document door) - closed
-  defSprite(20,
+  defSprite(20, up(
     "33333333" +
     "32222223" +
     "32111123" +
@@ -123,9 +137,9 @@
     "32111123" +
     "32222223" +
     "33333333"
-  );
+  ));
   // 21: Red door - open
-  defSprite(21,
+  defSprite(21, up(
     "33333333" +
     "30000003" +
     "30000003" +
@@ -134,9 +148,9 @@
     "30000003" +
     "30000003" +
     "33333333"
-  );
+  ));
   // 22: Normal door - closed
-  defSprite(22,
+  defSprite(22, up(
     "22222222" +
     "21111112" +
     "21000012" +
@@ -145,9 +159,9 @@
     "21000012" +
     "21111112" +
     "22222222"
-  );
+  ));
   // 23: Normal door - open
-  defSprite(23,
+  defSprite(23, up(
     "22222222" +
     "20000002" +
     "20000002" +
@@ -156,10 +170,10 @@
     "20000002" +
     "20000002" +
     "22222222"
-  );
+  ));
 
   // 30: Elevator car
-  defSprite(30,
+  defSprite(30, up(
     "33333333" +
     "30000003" +
     "30000003" +
@@ -168,10 +182,10 @@
     "30000003" +
     "30000003" +
     "33333333"
-  );
+  ));
 
   // 31: Elevator shaft wall
-  defSprite(31,
+  defSprite(31, up(
     "10000001" +
     "10000001" +
     "10000001" +
@@ -180,10 +194,10 @@
     "10000001" +
     "10000001" +
     "10000001"
-  );
+  ));
 
   // 32: Floor/ceiling tile
-  defSprite(32,
+  defSprite(32, up(
     "22222222" +
     "33333333" +
     "00000000" +
@@ -192,10 +206,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 33: Wall tile
-  defSprite(33,
+  defSprite(33, up(
     "12121212" +
     "21212121" +
     "12121212" +
@@ -204,10 +218,10 @@
     "21212121" +
     "12121212" +
     "21212121"
-  );
+  ));
 
   // 34: Lamp (lit)
-  defSprite(34,
+  defSprite(34, up(
     "00333300" +
     "03333330" +
     "03333330" +
@@ -216,10 +230,10 @@
     "00011000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 35: Lamp (shot out / dark)
-  defSprite(35,
+  defSprite(35, up(
     "00111100" +
     "01111110" +
     "01111110" +
@@ -228,10 +242,10 @@
     "00011000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 36: Bullet
-  defSprite(36,
+  defSprite(36, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -240,10 +254,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 37: Escalator tile
-  defSprite(37,
+  defSprite(37, up(
     "22222222" +
     "33333333" +
     "00000030" +
@@ -252,10 +266,10 @@
     "00030000" +
     "00300000" +
     "03000000"
-  );
+  ));
 
   // 38: Document pickup icon
-  defSprite(38,
+  defSprite(38, up(
     "00000000" +
     "03333300" +
     "03222300" +
@@ -264,10 +278,10 @@
     "03222300" +
     "03333300" +
     "00000000"
-  );
+  ));
 
   // 39: Car (escape vehicle) at bottom
-  defSprite(39,
+  defSprite(39, up(
     "00000000" +
     "00222200" +
     "02333320" +
@@ -276,10 +290,10 @@
     "33333333" +
     "03300330" +
     "00000000"
-  );
+  ));
 
   // 40: Explosion frame 1
-  defSprite(40,
+  defSprite(40, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -288,9 +302,9 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
   // 41: Explosion frame 2
-  defSprite(41,
+  defSprite(41, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -299,10 +313,10 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
 
   // 42: Life icon
-  defSprite(42,
+  defSprite(42, up(
     "00000000" +
     "00333000" +
     "03222300" +
@@ -311,10 +325,10 @@
     "00333000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 43: Window
-  defSprite(43,
+  defSprite(43, up(
     "22222222" +
     "23333332" +
     "23112332" +
@@ -323,30 +337,25 @@
     "23322332" +
     "23322332" +
     "22222222"
-  );
+  ));
 
   // --- Building / Level Layout ---
-  // The building has 30 floors. Each floor is 24px tall (3 tile rows).
-  // The viewport scrolls vertically to follow the player.
-  // Building width: 40 tiles (320px). Each floor has walls, floor, doors, elevator shafts.
+  // Sprites are now 16x16. Each tile = 16px.
+  // Building width: 20 tiles (320px). Floor height in pixels.
 
-  const FLOOR_H = 24; // pixels per floor
+  const TILE = 16;
+  const FLOOR_H = 48; // pixels per floor (3 tile rows of 16px)
   const NUM_FLOORS = 30;
-  const BUILDING_H = NUM_FLOORS * FLOOR_H; // total pixel height
+  const BUILDING_H = NUM_FLOORS * FLOOR_H;
   const BUILDING_W = W; // 320px
+  const TILES_X = W / TILE; // 20 tiles across
 
-  // Elevator shafts: defined by x-tile positions (each shaft is 1 tile = 8px wide)
-  // We'll have 4 elevator shafts at various x positions
-  const SHAFT_POSITIONS = [5, 15, 25, 35]; // tile-x positions for elevator shafts
-  const SHAFT_W = 8; // pixels
+  // Elevator shafts: tile-x positions (each shaft is 1 tile = 16px wide)
+  const SHAFT_POSITIONS = [3, 8, 13, 17];
+  const SHAFT_W = TILE;
 
-  // Escalator positions (pairs: from floor to floor-1)
-  const ESCALATOR_POSITIONS = [10, 20, 30]; // tile-x
-
-  // Floor layout
-  // Each floor has: left wall, floor platform, doors, right wall
-  // Doors: red doors have documents, normal doors are decorative
-  // Lamps on each floor
+  // Escalator positions (tile-x)
+  const ESCALATOR_POSITIONS = [5, 10, 15];
 
   const { TITLE, PLAY, GAMEOVER, WIN } = Mono.SCENE;
   let player, bullets, eBullets, enemies, explosions, particles;
@@ -365,30 +374,28 @@
 
     // Create elevators for each shaft
     for (let si = 0; si < SHAFT_POSITIONS.length; si++) {
-      const sx = SHAFT_POSITIONS[si] * 8;
-      // Each shaft has 1-2 elevator cars
+      const sx = SHAFT_POSITIONS[si] * TILE;
       const numCars = si < 2 ? 2 : 1;
       for (let c = 0; c < numCars; c++) {
         const startFloor = flr(rnd(NUM_FLOORS - 4)) + 2;
         elevators.push({
           x: sx,
-          y: startFloor * FLOOR_H - 8,
+          y: startFloor * FLOOR_H - TILE,
           shaftIdx: si,
           speed: 0,
-          targetY: startFloor * FLOOR_H - 8,
+          targetY: startFloor * FLOOR_H - TILE,
           moving: false,
           hasPlayer: false,
-          dir: 0, // -1 up, 1 down, 0 stopped
-          minY: 1 * FLOOR_H - 8,
-          maxY: (NUM_FLOORS - 1) * FLOOR_H - 8
+          dir: 0,
+          minY: 1 * FLOOR_H - TILE,
+          maxY: (NUM_FLOORS - 1) * FLOOR_H - TILE
         });
       }
     }
 
     // Create escalators
     for (let ei = 0; ei < ESCALATOR_POSITIONS.length; ei++) {
-      const ex = ESCALATOR_POSITIONS[ei] * 8;
-      // Place escalators on some floors
+      const ex = ESCALATOR_POSITIONS[ei] * TILE;
       for (let f = 2; f < NUM_FLOORS - 1; f += 4 + flr(rnd(3))) {
         escalators.push({
           x: ex,
@@ -402,7 +409,6 @@
     // Create doors on each floor
     for (let f = 1; f < NUM_FLOORS - 1; f++) {
       const floorY = f * FLOOR_H;
-      // Place 2-4 doors per floor
       const numDoors = 2 + flr(rnd(3));
       const usedX = new Set();
 
@@ -410,23 +416,22 @@
         let dx;
         let attempts = 0;
         do {
-          dx = (2 + flr(rnd(36))) * 8;
+          dx = (1 + flr(rnd(TILES_X - 2))) * TILE;
           attempts++;
         } while (attempts < 20 && (
           usedX.has(dx) ||
-          SHAFT_POSITIONS.some(sp => _abs(dx - sp * 8) < 16) ||
-          ESCALATOR_POSITIONS.some(ep => _abs(dx - ep * 8) < 16)
+          SHAFT_POSITIONS.some(sp => _abs(dx - sp * TILE) < TILE * 2) ||
+          ESCALATOR_POSITIONS.some(ep => _abs(dx - ep * TILE) < TILE * 2)
         ));
         if (attempts >= 20) continue;
         usedX.add(dx);
 
-        // ~30% chance of being a red (document) door
         const isRed = rnd(1) < 0.3;
         if (isRed) docsTotal++;
 
         doors.push({
           x: dx,
-          y: floorY - 8, // door sits on the floor
+          y: floorY - TILE,
           floor: f,
           isRed: isRed,
           open: false,
@@ -436,12 +441,12 @@
       }
 
       // Place lamps on each floor
-      const numLamps = 3 + flr(rnd(3));
+      const numLamps = 2 + flr(rnd(2));
       for (let l = 0; l < numLamps; l++) {
-        const lx = (3 + flr(rnd(34))) * 8;
+        const lx = (1 + flr(rnd(TILES_X - 2))) * TILE;
         lamps.push({
           x: lx,
-          y: floorY - 18, // lamps hang from ceiling
+          y: floorY - TILE * 2 - 4,
           floor: f,
           lit: true
         });
@@ -461,11 +466,11 @@
 
   function resetGame() {
     player = {
-      x: W / 2 - 4,
-      y: 1 * FLOOR_H - 8, // Start near top (floor 1)
+      x: W / 2 - 8,
+      y: 1 * FLOOR_H - TILE,
       vx: 0,
       vy: 0,
-      dir: 1, // 1=right, -1=left
+      dir: 1,
       onGround: true,
       onElevator: null,
       ducking: false,
@@ -497,18 +502,16 @@
   }
 
   function spawnEnemies() {
-    // Spawn enemies on various floors
     enemies = [];
     for (let f = 2; f < NUM_FLOORS - 1; f++) {
-      // 40% chance per floor to have an enemy
       if (rnd(1) < 0.4) {
-        const ex = (3 + flr(rnd(34))) * 8;
+        const ex = (1 + flr(rnd(TILES_X - 2))) * TILE;
         enemies.push({
           x: ex,
-          y: f * FLOOR_H - 8,
+          y: f * FLOOR_H - TILE,
           floor: f,
           dir: rnd(1) < 0.5 ? 1 : -1,
-          state: "patrol", // patrol, chase, shooting, riding, dead
+          state: "patrol",
           hp: 1,
           walkFrame: 0,
           shootTimer: 60 + flr(rnd(90)),
@@ -523,7 +526,6 @@
   }
 
   function respawnEnemy() {
-    // Respawn an enemy at a random floor far from player
     const pFloor = flr(player.y / FLOOR_H);
     let f;
     let attempts = 0;
@@ -532,10 +534,10 @@
       attempts++;
     } while (_abs(f - pFloor) < 5 && attempts < 20);
 
-    const ex = (3 + flr(rnd(34))) * 8;
+    const ex = (1 + flr(rnd(TILES_X - 2))) * TILE;
     enemies.push({
       x: ex,
-      y: f * FLOOR_H - 8,
+      y: f * FLOOR_H - TILE,
       floor: f,
       dir: rnd(1) < 0.5 ? 1 : -1,
       state: "patrol",
@@ -551,8 +553,7 @@
   }
 
   function updateCamera() {
-    // Camera follows player vertically, centered
-    const targetY = player.y - H / 2 + 16;
+    const targetY = player.y - H / 2 + TILE;
     camY += (targetY - camY) * 0.12;
     camY = _max(0, min(BUILDING_H - H, camY));
   }
@@ -562,32 +563,29 @@
   }
 
   function isOnFloor(x, y) {
-    // Check if position is on a solid floor
-    const floor = flr((y + 8) / FLOOR_H);
+    const floor = flr((y + TILE) / FLOOR_H);
     if (floor < 0 || floor >= NUM_FLOORS) return false;
     const floorPixelY = floor * FLOOR_H;
-    // Check if not in an elevator shaft
     for (const sp of SHAFT_POSITIONS) {
-      const sx = sp * 8;
-      if (x + 4 > sx && x + 4 < sx + 8) {
-        // In a shaft - only "on floor" if there's an elevator here
+      const sx = sp * TILE;
+      if (x + 8 > sx && x + 8 < sx + TILE) {
         return false;
       }
     }
-    return _abs(y + 8 - floorPixelY) < 3;
+    return _abs(y + TILE - floorPixelY) < 4;
   }
 
   function isInShaft(x) {
     for (let i = 0; i < SHAFT_POSITIONS.length; i++) {
-      const sx = SHAFT_POSITIONS[i] * 8;
-      if (x + 4 > sx - 2 && x + 4 < sx + 10) return i;
+      const sx = SHAFT_POSITIONS[i] * TILE;
+      if (x + 8 > sx - 2 && x + 8 < sx + TILE + 2) return i;
     }
     return -1;
   }
 
   function findElevatorAt(x, y) {
     for (const e of elevators) {
-      if (_abs(e.x - x) < 10 && _abs(e.y - y) < 6) return e;
+      if (_abs(e.x - x) < TILE + 4 && _abs(e.y - y) < 10) return e;
     }
     return null;
   }
@@ -596,11 +594,23 @@
     explosions.push({ x: x, y: y, timer: 12 });
     for (let i = 0; i < 6; i++)
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(4) - 2,
         life: 6 + flr(rnd(10)),
         color: flr(rnd(3)) + 1
       });
+  }
+
+  // --- Bullet collision radii ---
+  const BULLET_R = 3;
+  const EBULLET_R = 3;
+
+  // --- Circle collision for bullets ---
+  function circHit(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = dx * dx + dy * dy;
+    const rSum = ar + br;
+    return dist < rSum * rSum;
   }
 
   // --- Sounds ---
@@ -652,7 +662,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
@@ -664,7 +674,7 @@
   Mono.scene(WIN, {
     init() {},
     update() {
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
@@ -676,7 +686,6 @@
   Mono.scene(PLAY, {
     init() {},
     update() {
-    // --- Play state ---
     if (player.dead) {
       player.deathTimer--;
       if (player.deathTimer <= 0) {
@@ -685,10 +694,9 @@
           Mono.go(GAMEOVER);
           return;
         }
-        // Respawn at current floor
         const f = flr(player.y / FLOOR_H);
-        player.x = W / 2 - 4;
-        player.y = f * FLOOR_H - 8;
+        player.x = W / 2 - 8;
+        player.y = f * FLOOR_H - TILE;
         player.dead = false;
         player.onElevator = null;
         player.ducking = false;
@@ -698,7 +706,6 @@
         player.onGround = true;
         invincible = 60;
       }
-      // Update particles during death
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
@@ -713,7 +720,6 @@
     const wasOnElevator = player.onElevator;
 
     if (player.onElevator) {
-      // Riding an elevator
       const elev = player.onElevator;
 
       if (btn("up")) {
@@ -735,16 +741,15 @@
         player.y = elev.y;
       }
 
-      // Check if at a floor - can step off
-      const nearFloor = flr((elev.y + 8) / FLOOR_H);
+      const nearFloor = flr((elev.y + TILE) / FLOOR_H);
       const floorPixY = nearFloor * FLOOR_H;
-      const snapDist = _abs(elev.y + 8 - floorPixY);
+      const snapDist = _abs(elev.y + TILE - floorPixY);
 
-      if (snapDist < 4) {
+      if (snapDist < 6) {
         if (btn("left")) {
           player.onElevator = null;
-          player.x -= 10;
-          player.y = floorPixY - 8;
+          player.x -= TILE + 4;
+          player.y = floorPixY - TILE;
           player.dir = -1;
           player.onGround = true;
           elev.moving = false;
@@ -752,8 +757,8 @@
           elev.hasPlayer = false;
         } else if (btn("right")) {
           player.onElevator = null;
-          player.x += 10;
-          player.y = floorPixY - 8;
+          player.x += TILE + 4;
+          player.y = floorPixY - TILE;
           player.dir = 1;
           player.onGround = true;
           elev.moving = false;
@@ -765,7 +770,7 @@
       // Can shoot while on elevator
       if (shootCooldown > 0) shootCooldown--;
       if (btnp("a") && shootCooldown <= 0) {
-        bullets.push({ x: player.x + (player.dir > 0 ? 8 : -4), y: player.y + 0, dir: player.dir });
+        bullets.push({ x: player.x + (player.dir > 0 ? TILE : -8), y: player.y + 4, dir: player.dir });
         shootCooldown = 10;
         shootSound();
         player.shooting = true;
@@ -811,20 +816,17 @@
         player.vy += 0.25;
         player.y += player.vy;
 
-        // Check floor collision
-        const currentFloor = flr((player.y + 8) / FLOOR_H);
+        const currentFloor = flr((player.y + TILE) / FLOOR_H);
         const floorPixY = currentFloor * FLOOR_H;
 
-        if (player.vy > 0 && player.y + 8 >= floorPixY && currentFloor > 0) {
-          // Check if we're in a shaft
+        if (player.vy > 0 && player.y + TILE >= floorPixY && currentFloor > 0) {
           const shaftIdx = isInShaft(player.x);
           if (shaftIdx < 0) {
-            player.y = floorPixY - 8;
+            player.y = floorPixY - TILE;
             player.vy = 0;
             player.onGround = true;
             player.jumping = false;
           } else {
-            // In shaft - check for elevator below
             const elev = findElevatorAt(player.x, player.y);
             if (elev) {
               player.y = elev.y;
@@ -838,7 +840,7 @@
         }
       }
 
-      // Check elevator entry (up/down near shaft)
+      // Check elevator entry
       if (player.onGround && !player.jumping) {
         const shaftIdx = isInShaft(player.x);
         if (shaftIdx >= 0 && (btnp("up") || btnp("down"))) {
@@ -855,14 +857,12 @@
 
       // Snap to floor if on ground
       if (player.onGround && !player.jumping) {
-        const currentFloor = flr((player.y + 8) / FLOOR_H);
+        const currentFloor = flr((player.y + TILE) / FLOOR_H);
         const floorPixY = currentFloor * FLOOR_H;
-        player.y = floorPixY - 8;
+        player.y = floorPixY - TILE;
 
-        // Check if walked into a shaft (fall!)
         const shaftIdx = isInShaft(player.x);
         if (shaftIdx >= 0) {
-          // Check for elevator at current position
           const elev = findElevatorAt(player.x, player.y);
           if (!elev) {
             player.onGround = false;
@@ -874,11 +874,10 @@
       // Escalator usage
       if (player.onGround) {
         for (const esc of escalators) {
-          if (_abs(player.x - esc.x) < 6) {
-            const playerFloor = flr((player.y + 8) / FLOOR_H);
+          if (_abs(player.x - esc.x) < 12) {
+            const playerFloor = flr((player.y + TILE) / FLOOR_H);
             if (playerFloor === esc.floor && btn("up")) {
-              // Ride escalator up
-              player.y = (esc.floor - 1) * FLOOR_H - 8;
+              player.y = (esc.floor - 1) * FLOOR_H - TILE;
               player.x = esc.x;
               note(0, "D4", 0.04);
             }
@@ -889,19 +888,19 @@
       // Shoot
       if (shootCooldown > 0) shootCooldown--;
       if (btnp("a") && shootCooldown <= 0 && !player.ducking) {
-        bullets.push({ x: player.x + (player.dir > 0 ? 8 : -4), y: player.y + 0, dir: player.dir });
+        bullets.push({ x: player.x + (player.dir > 0 ? TILE : -8), y: player.y + 4, dir: player.dir });
         shootCooldown = 10;
         shootSound();
         player.shooting = true;
         player.shootTimer = 8;
       }
 
-      // Door interaction (up near a door)
+      // Door interaction
       if (player.onGround && btn("up")) {
         for (const door of doors) {
-          if (!door.open && _abs(player.x - door.x) < 8 && _abs(player.y - door.y) < 4) {
+          if (!door.open && _abs(player.x - door.x) < TILE && _abs(player.y - door.y) < 8) {
             door.open = true;
-            door.openTimer = 90; // stays open for 3 seconds
+            door.openTimer = 90;
             doorSound();
             if (door.isRed && !door.collected) {
               door.collected = true;
@@ -915,7 +914,7 @@
     }
 
     // Clamp player position
-    player.x = _max(4, min(W - 12, player.x));
+    player.x = _max(TILE, min(W - TILE * 2, player.x));
 
     // Shoot timer
     if (player.shootTimer > 0) {
@@ -923,35 +922,50 @@
       if (player.shootTimer <= 0) player.shooting = false;
     }
 
-    // --- Update bullets ---
+    // --- Update bullets (circle collision) ---
     for (let i = bullets.length - 1; i >= 0; i--) {
       const b = bullets[i];
       b.x += b.dir * 5;
-      if (b.x < -8 || b.x > W + 8) { bullets.splice(i, 1); continue; }
+      if (b.x < -TILE || b.x > W + TILE) { bullets.splice(i, 1); continue; }
 
-      // Hit lamp
+      // Bullet center
+      const bcx = b.x + 8;
+      const bcy = b.y + 8;
+
+      // Hit lamp (circle vs circle)
       for (const lamp of lamps) {
-        if (lamp.lit && _abs(b.x - lamp.x) < 6 && _abs(b.y - lamp.y) < 6) {
-          lamp.lit = false;
-          bullets.splice(i, 1);
-          lampSound();
-          score += 50;
-          break;
+        if (lamp.lit) {
+          const lcx = lamp.x + 8;
+          const lcy = lamp.y + 8;
+          if (circHit(bcx, bcy, BULLET_R, lcx, lcy, 6)) {
+            lamp.lit = false;
+            bullets.splice(i, 1);
+            lampSound();
+            score += 50;
+            break;
+          }
         }
       }
     }
 
-    // --- Update enemy bullets ---
+    // --- Update enemy bullets (circle collision) ---
     for (let i = eBullets.length - 1; i >= 0; i--) {
       const b = eBullets[i];
       b.x += b.dir * 3.5;
-      if (b.x < -8 || b.x > W + 8) { eBullets.splice(i, 1); continue; }
+      if (b.x < -TILE || b.x > W + TILE) { eBullets.splice(i, 1); continue; }
 
-      // Hit player
+      // Hit player (circle bullet vs rect player)
       if (invincible <= 0 && !player.dead) {
-        const ph = player.ducking ? 4 : 8;
-        const py = player.ducking ? player.y + 4 : player.y;
-        if (b.x + 8 > player.x - 2 && b.x < player.x + 8 && b.y + 8 > py && b.y < py + ph) {
+        const bcx = b.x + 8;
+        const bcy = b.y + 8;
+        const ph = player.ducking ? 8 : TILE;
+        const py = player.ducking ? player.y + 8 : player.y;
+        // Circle vs rect: find closest point on rect to circle center
+        const closestX = _max(player.x, min(player.x + TILE, bcx));
+        const closestY = _max(py, min(py + ph, bcy));
+        const dx = bcx - closestX;
+        const dy = bcy - closestY;
+        if (dx * dx + dy * dy < EBULLET_R * EBULLET_R) {
           eBullets.splice(i, 1);
           killPlayer();
           continue;
@@ -972,19 +986,16 @@
       const e = enemies[i];
       if (e.state === "dead") {
         enemies.splice(i, 1);
-        // Respawn after a delay
         setTimeout(respawnEnemy, 3000);
         continue;
       }
 
-      const playerFloor = flr((player.y + 8) / FLOOR_H);
-      const enemyFloor = flr((e.y + 8) / FLOOR_H);
+      const playerFloor = flr((player.y + TILE) / FLOOR_H);
+      const enemyFloor = flr((e.y + TILE) / FLOOR_H);
       const distToPlayer = _abs(e.x - player.x);
       const sameFloor = enemyFloor === playerFloor;
 
-      // AI states
       if (e.onElevator) {
-        // Riding elevator
         const elev = e.onElevator;
         e.stateTimer--;
         elev.y += (e.stateTimer > 30 ? -1 : 1) * 1;
@@ -995,25 +1006,21 @@
         if (e.stateTimer <= 0) {
           e.onElevator = null;
           e.state = "patrol";
-          const nearFloor = flr((e.y + 8) / FLOOR_H);
-          e.y = nearFloor * FLOOR_H - 8;
+          const nearFloor = flr((e.y + TILE) / FLOOR_H);
+          e.y = nearFloor * FLOOR_H - TILE;
           e.floor = nearFloor;
           elev.hasPlayer = false;
         }
       } else if (e.state === "patrol") {
-        // Walk back and forth
         e.x += e.dir * e.speed;
         e.walkFrame += 0.15;
 
-        // Reverse at edges or walls
-        if (e.x < 11 || e.x > W - 16) {
+        if (e.x < TILE + 4 || e.x > W - TILE * 2 - 4) {
           e.dir = -e.dir;
         }
 
-        // Check for shaft - avoid falling
-        const shaftIdx = isInShaft(e.x + e.dir * 8);
+        const shaftIdx = isInShaft(e.x + e.dir * TILE);
         if (shaftIdx >= 0) {
-          // Sometimes take elevator
           if (rnd(1) < 0.01) {
             const elev = findElevatorAt(e.x, e.y);
             if (elev && !elev.hasPlayer) {
@@ -1028,14 +1035,12 @@
           }
         }
 
-        // Detect player on same floor
-        if (sameFloor && distToPlayer < 107) {
+        if (sameFloor && distToPlayer < 120) {
           e.state = "chase";
           e.alertTimer = 120;
           e.dir = player.x > e.x ? 1 : -1;
         }
 
-        // Random direction change
         if (rnd(1) < 0.005) e.dir = -e.dir;
 
       } else if (e.state === "chase") {
@@ -1043,31 +1048,35 @@
         e.x += e.dir * (e.speed + 0.3);
         e.walkFrame += 0.2;
 
-        // Shoot at player
         e.shootCooldown--;
-        if (e.shootCooldown <= 0 && sameFloor && distToPlayer < 133 && distToPlayer > 20) {
-          eBullets.push({ x: e.x + (e.dir > 0 ? 8 : -4), y: e.y + 0, dir: e.dir });
+        if (e.shootCooldown <= 0 && sameFloor && distToPlayer < 150 && distToPlayer > 24) {
+          eBullets.push({ x: e.x + (e.dir > 0 ? TILE : -8), y: e.y + 4, dir: e.dir });
           e.shootCooldown = 30 + flr(rnd(30));
           note(1, "E5", 0.03);
         }
 
-        // Check for shaft
-        const shaftIdx = isInShaft(e.x + e.dir * 8);
+        const shaftIdx = isInShaft(e.x + e.dir * TILE);
         if (shaftIdx >= 0) e.dir = -e.dir;
 
         e.alertTimer--;
-        if (e.alertTimer <= 0 || !sameFloor || distToPlayer > 133) {
+        if (e.alertTimer <= 0 || !sameFloor || distToPlayer > 150) {
           e.state = "patrol";
         }
 
-        // Clamp
-        e.x = _max(5, min(W - 11, e.x));
+        e.x = _max(TILE, min(W - TILE * 2, e.x));
       }
 
-      // Bullet-enemy collision
+      // Bullet-enemy collision (circle bullet vs rect enemy)
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.x + 8 > e.x - 2 && b.x < e.x + 8 && _abs(b.y - (e.y + 4)) < 6) {
+        const bcx = b.x + 8;
+        const bcy = b.y + 8;
+        // enemy rect: e.x, e.y, TILE, TILE
+        const closestX = _max(e.x, min(e.x + TILE, bcx));
+        const closestY = _max(e.y, min(e.y + TILE, bcy));
+        const dx = bcx - closestX;
+        const dy = bcy - closestY;
+        if (dx * dx + dy * dy < BULLET_R * BULLET_R) {
           bullets.splice(j, 1);
           e.hp--;
           if (e.hp <= 0) {
@@ -1080,10 +1089,10 @@
         }
       }
 
-      // Elevator crush detection
+      // Elevator crush detection (rect)
       for (const elev of elevators) {
         if (elev.moving && elev.hasPlayer && e.state !== "dead") {
-          if (_abs(e.x - elev.x) < 8 && _abs(e.y - elev.y) < 10) {
+          if (_abs(e.x - elev.x) < TILE && _abs(e.y - elev.y) < TILE + 2) {
             addExplosion(e.x, e.y);
             score += 500;
             crushSound();
@@ -1092,9 +1101,9 @@
         }
       }
 
-      // Player-enemy collision (body)
+      // Player-enemy body collision (rect vs rect)
       if (e.state !== "dead" && invincible <= 0 && !player.dead) {
-        if (_abs(player.x - e.x) < 7 && _abs(player.y - e.y) < 7) {
+        if (_abs(player.x - e.x) < 12 && _abs(player.y - e.y) < 12) {
           killPlayer();
         }
       }
@@ -1120,12 +1129,12 @@
       if (p.life <= 0) particles.splice(i, 1);
     }
 
-    // --- Win condition: reach bottom floor with all docs ---
-    const playerFloor = flr((player.y + 8) / FLOOR_H);
+    // --- Win condition ---
+    const playerFloor = flr((player.y + TILE) / FLOOR_H);
     if (playerFloor >= NUM_FLOORS - 1 && docsCollected >= docsTotal) {
       winSound();
-      Mono.go(WIN); return;
       score += 2000;
+      Mono.go(WIN); return;
     }
 
     updateCamera();
@@ -1133,7 +1142,6 @@
     draw() {
     cls(0);
 
-    // --- Play state rendering ---
     const cy = flr(camY);
 
     // Draw building
@@ -1143,11 +1151,10 @@
     for (const esc of escalators) {
       const sy = esc.bottomY - cy;
       const sx = esc.x;
-      if (sy > -30 && sy < H + 8) {
-        // Draw escalator steps
-        for (let step = 0; step < 4; step++) {
-          const stepY = sy - step * 8;
-          const stepX = sx - step * 2;
+      if (sy > -TILE * 4 && sy < H + TILE) {
+        for (let step = 0; step < 3; step++) {
+          const stepY = sy - step * TILE;
+          const stepX = sx - step * 4;
           spr(37, stepX, stepY);
         }
       }
@@ -1155,11 +1162,10 @@
 
     // Draw elevator shafts and cars
     for (let si = 0; si < SHAFT_POSITIONS.length; si++) {
-      const sx = SHAFT_POSITIONS[si] * 8;
-      // Draw shaft rails
+      const sx = SHAFT_POSITIONS[si] * TILE;
       for (let fy = -1; fy < NUM_FLOORS + 1; fy++) {
         const shaftY = fy * FLOOR_H - cy;
-        if (shaftY > -8 && shaftY < H + 8) {
+        if (shaftY > -TILE && shaftY < H + TILE) {
           spr(31, sx, shaftY);
         }
       }
@@ -1168,45 +1174,44 @@
     // Draw elevator cars
     for (const elev of elevators) {
       const ey = flr(elev.y) - cy;
-      if (ey > -16 && ey < H + 8) {
+      if (ey > -TILE * 2 && ey < H + TILE) {
         spr(30, elev.x, ey);
+        dbg(elev.x, ey, TILE, TILE);
       }
     }
 
     // Draw doors
     for (const door of doors) {
       const dy = door.y - cy;
-      if (dy > -16 && dy < H + 8) {
+      if (dy > -TILE * 2 && dy < H + TILE) {
         if (door.isRed) {
           spr(door.open ? 21 : 20, door.x, dy);
-          // Show document icon if not collected and door open
           if (door.open && !door.collected) {
-            spr(38, door.x, dy - 10);
+            spr(38, door.x, dy - TILE);
           }
         } else {
           spr(door.open ? 23 : 22, door.x, dy);
         }
+        dbg(door.x, dy, TILE, TILE);
       }
     }
 
     // Draw lamps
     for (const lamp of lamps) {
       const ly = lamp.y - cy;
-      if (ly > -16 && ly < H + 8) {
+      if (ly > -TILE * 2 && ly < H + TILE) {
         spr(lamp.lit ? 34 : 35, lamp.x, ly);
+        dbgC(lamp.x + 8, ly + 8, 6);
 
-        // Light pool effect when lit
         if (lamp.lit) {
           const floorBelow = lamp.floor;
           const lightY = getFloorY(floorBelow) - cy - 2;
-          // Subtle light glow on floor
-          for (let lx = -12; lx <= 12; lx++) {
-            const intensity = 2 - flr(_abs(lx) / 5);
+          for (let lx = -16; lx <= 16; lx++) {
+            const intensity = 2 - flr(_abs(lx) / 7);
             if (intensity > 0) {
-              const px = lamp.x + 4 + lx;
+              const px = lamp.x + 8 + lx;
               const py = lightY;
               if (px >= 0 && px < W && py >= 0 && py < H) {
-                // Brighten pixel slightly
                 pix(px, py, min(3, intensity + 1));
               }
             }
@@ -1215,14 +1220,12 @@
       }
     }
 
-    // Darken areas with shot-out lamps
-    // (Simple approach: draw semi-dark overlay for floors with no lit lamps nearby)
-
     // Draw enemy bullets
     for (const b of eBullets) {
       const by = b.y - cy;
-      if (by > -8 && by < H + 8) {
+      if (by > -TILE && by < H + TILE) {
         spr(36, flr(b.x), flr(by), b.dir < 0);
+        dbgC(flr(b.x) + 8, flr(by) + 8, EBULLET_R);
       }
     }
 
@@ -1230,19 +1233,19 @@
     for (const e of enemies) {
       if (e.state === "dead") continue;
       const ey = flr(e.y) - cy;
-      if (ey > -16 && ey < H + 8) {
+      if (ey > -TILE * 2 && ey < H + TILE) {
         const flipX = e.dir < 0;
         let sprId = 10;
         if (e.shootCooldown > 20 && e.state === "chase") {
-          sprId = 12; // shooting pose
+          sprId = 12;
         } else if (flr(e.walkFrame) % 2 === 1) {
-          sprId = 11; // walking
+          sprId = 11;
         }
         spr(sprId, flr(e.x), ey, flipX);
+        dbg(flr(e.x), ey, TILE, TILE);
 
-        // Alert indicator
         if (e.state === "chase" && flr(Mono.frame / 6) % 2 === 0) {
-          text("!", flr(e.x) + 3, ey - 8, 3);
+          text("!", flr(e.x) + 6, ey - 10, 3);
         }
       }
     }
@@ -1250,8 +1253,9 @@
     // Draw player bullets
     for (const b of bullets) {
       const by = b.y - cy;
-      if (by > -8 && by < H + 8) {
+      if (by > -TILE && by < H + TILE) {
         spr(36, flr(b.x), flr(by), b.dir < 0);
+        dbgC(flr(b.x) + 8, flr(by) + 8, BULLET_R);
       }
     }
 
@@ -1273,24 +1277,27 @@
           sprId = 2;
         }
         spr(sprId, flr(player.x), py, flipX);
+        // Debug hitbox for player
+        const ph = player.ducking ? 8 : TILE;
+        const pdy = player.ducking ? py + 8 : py;
+        dbg(flr(player.x), pdy, TILE, ph);
       }
     }
 
     // Draw car at bottom floor
-    const carY = (NUM_FLOORS - 1) * FLOOR_H - 8 - cy;
-    if (carY > -16 && carY < H + 8) {
-      spr(39, W / 2 - 4, carY);
-      spr(39, W / 2 + 4, carY, true);
-      // Arrow if all docs collected
+    const carY = (NUM_FLOORS - 1) * FLOOR_H - TILE - cy;
+    if (carY > -TILE * 2 && carY < H + TILE) {
+      spr(39, W / 2 - 8, carY);
+      spr(39, W / 2 + 8, carY, true);
       if (docsCollected >= docsTotal && flr(Mono.frame / 10) % 2 === 0) {
-        text("V", flr(W / 2), carY - 9, 3);
+        text("V", flr(W / 2), carY - 12, 3);
       }
     }
 
     // Draw explosions
     for (const e of explosions) {
       const ey = flr(e.y) - cy;
-      if (ey > -16 && ey < H + 8) {
+      if (ey > -TILE * 2 && ey < H + TILE) {
         const sprId = e.timer > 6 ? 40 : 41;
         spr(sprId, flr(e.x), ey);
       }
@@ -1302,37 +1309,41 @@
       pix(flr(p.x), flr(py), p.color);
     }
 
-    // --- HUD ---
-    rectf(0, 0, W, 12, 0);
-    text("SCORE:" + score, 3, 2, 3);
-    text("DOCS:" + docsCollected + "/" + docsTotal, 113, 2, docsCollected >= docsTotal ? 3 : 2);
+    // --- HUD (within 320x240) ---
+    rectf(0, 0, W, 14, 0);
+    text("SCORE:" + score, 2, 3, 3);
+    // DOCS label right-aligned from center
+    const docsStr = "DOCS:" + docsCollected + "/" + docsTotal;
+    text(docsStr, 100, 3, docsCollected >= docsTotal ? 3 : 2);
 
     // Floor indicator
-    const pFloor = NUM_FLOORS - flr((player.y + 8) / FLOOR_H);
-    text("F" + pFloor, 213, 2, 2);
+    const pFloor = NUM_FLOORS - flr((player.y + TILE) / FLOOR_H);
+    text("F" + pFloor, 190, 3, 2);
 
-    // Lives
-    for (let i = 0; i < lives; i++) spr(42, W - 27 + i * 10, 2);
+    // Lives icons: 16px wide each, 2px gap, right-aligned with margin
+    const livesStartX = W - 4 - lives * 18;
+    for (let i = 0; i < lives; i++) spr(42, livesStartX + i * 18, 0);
 
     // Mini elevator indicator on right side
-    const miniH = 150;
+    const miniH = 140;
     const miniX = W - 8;
-    const miniY = 45;
-    rectf(miniX, miniY, 4, miniH, 0);
-    rect(miniX, miniY, 4, miniH, 1);
-    // Player position on mini map
-    const playerRatio = player.y / BUILDING_H;
-    const miniPlayerY = miniY + playerRatio * miniH;
-    rectf(miniX, flr(miniPlayerY), 4, 3, 3);
-    // Car position
-    const carRatio = ((NUM_FLOORS - 1) * FLOOR_H) / BUILDING_H;
-    const miniCarY = miniY + carRatio * miniH;
-    rectf(miniX, flr(miniCarY), 4, 2, 2);
+    const miniY = 50;
+    // Clamp mini-map within screen
+    if (miniX + 4 <= W && miniY + miniH <= H) {
+      rectf(miniX, miniY, 4, miniH, 0);
+      rect(miniX, miniY, 4, miniH, 1);
+      const playerRatio = player.y / BUILDING_H;
+      const miniPlayerY = miniY + playerRatio * miniH;
+      rectf(miniX, flr(miniPlayerY), 4, 3, 3);
+      const carRatio = ((NUM_FLOORS - 1) * FLOOR_H) / BUILDING_H;
+      const miniCarY = miniY + carRatio * miniH;
+      rectf(miniX, flr(miniCarY), 4, 2, 2);
+    }
 
     // Message when all docs collected
     if (docsCollected >= docsTotal) {
       if (flr(Mono.frame / 20) % 2 === 0) {
-        text("GET TO THE CAR!", 120, 16, 3);
+        text("GET TO THE CAR!", 100, 18, 3);
       }
     }
     }
@@ -1350,18 +1361,14 @@
     }
   }
 
-  // (Play scene draw is defined above inside the scene)
-
   function drawBuilding(cy) {
-    // Draw floor platforms, walls, and windows
     for (let f = 0; f < NUM_FLOORS; f++) {
       const floorY = f * FLOOR_H - cy;
-      if (floorY > H + 8 || floorY < -30) continue;
+      if (floorY > H + TILE || floorY < -FLOOR_H) continue;
 
-      // Floor platform (2 tiles thick)
-      for (let tx = 0; tx < 40; tx++) {
-        const tileX = tx * 8;
-        // Skip shaft positions for the floor
+      // Floor platform tiles
+      for (let tx = 0; tx < TILES_X; tx++) {
+        const tileX = tx * TILE;
         let inShaft = false;
         for (const sp of SHAFT_POSITIONS) {
           if (tx === sp) { inShaft = true; break; }
@@ -1373,23 +1380,20 @@
 
       // Walls on left and right edges
       for (let wy = 0; wy < 3; wy++) {
-        spr(33, 0, floorY - 18 + wy * 8);
-        spr(33, 8, floorY - 18 + wy * 8);
-        spr(33, W - 16, floorY - 18 + wy * 8);
-        spr(33, W - 8, floorY - 18 + wy * 8);
+        spr(33, 0, floorY - FLOOR_H + wy * TILE);
+        spr(33, W - TILE, floorY - FLOOR_H + wy * TILE);
       }
 
       // Windows between floors
       if (f > 0 && f < NUM_FLOORS) {
-        for (let wx = 3; wx < 38; wx += 5) {
-          const winX = wx * 8;
-          // Skip near shafts and escalators
+        for (let wx = 2; wx < TILES_X - 1; wx += 3) {
+          const winX = wx * TILE;
           let skip = false;
           for (const sp of SHAFT_POSITIONS) {
             if (_abs(wx - sp) < 2) { skip = true; break; }
           }
           if (!skip) {
-            spr(43, winX, floorY - 12);
+            spr(43, winX, floorY - TILE - 8);
           }
         }
       }
@@ -1397,38 +1401,34 @@
 
     // Ground floor - street level
     const groundY = (NUM_FLOORS - 1) * FLOOR_H - cy;
-    if (groundY > -16 && groundY < H + 30) {
-      // Street
-      for (let tx = 0; tx < 40; tx++) {
-        rectf(tx * 8, groundY + 8, 8, 12, 1);
+    if (groundY > -TILE * 2 && groundY < H + 30) {
+      for (let tx = 0; tx < TILES_X; tx++) {
+        rectf(tx * TILE, groundY + TILE, TILE, 16, 1);
       }
-      // Dotted line on street
-      for (let tx = 0; tx < 40; tx += 4) {
-        rectf(tx * 8 + 2, groundY + 11, 8, 2, 2);
+      for (let tx = 0; tx < TILES_X; tx += 3) {
+        rectf(tx * TILE + 4, groundY + TILE + 4, TILE, 3, 2);
       }
     }
 
     // Roof
     const roofY = 0 - cy;
-    if (roofY > -16 && roofY < H + 8) {
-      for (let tx = 0; tx < 40; tx++) {
-        spr(32, tx * 8, roofY);
+    if (roofY > -TILE * 2 && roofY < H + TILE) {
+      for (let tx = 0; tx < TILES_X; tx++) {
+        spr(32, tx * TILE, roofY);
       }
-      // Antenna
-      line(W / 2, roofY - 15, W / 2, roofY, 2);
-      line(W / 2 - 5, roofY - 9, W / 2 + 5, roofY - 9, 2);
+      line(W / 2, roofY - 20, W / 2, roofY, 2);
+      line(W / 2 - 8, roofY - 12, W / 2 + 8, roofY - 12, 2);
     }
   }
 
   function drawTitle() {
     // Building silhouette background
-    for (let bx = 0; bx < 12; bx++) {
+    for (let bx = 0; bx < 10; bx++) {
       const bh = 60 + flr(rnd(90));
-      const bw = 20 + flr(rnd(14));
-      const x = bx * 28 - 7;
+      const bw = 24 + flr(rnd(14));
+      const x = bx * 34 - 7;
       rectf(x, H - bh, bw, bh, 0);
       rect(x, H - bh, bw, bh, 1);
-      // Windows
       for (let wy = H - bh + 6; wy < H - 6; wy += 12) {
         for (let wx = x + 3; wx < x + bw - 4; wx += 7) {
           if (rnd(1) < 0.6) {
@@ -1438,31 +1438,28 @@
       }
     }
 
-    const ty = 28 + sin(Mono.frame * 0.04) * 3;
+    const ty = 20 + sin(Mono.frame * 0.04) * 3;
 
-    // Title text
     text("ELEVATOR", 115, flr(ty), 3);
     text("ACTION", 125, flr(ty) + 12, 3);
     rectf(100, flr(ty) + 24, 120, 1, 2);
 
     // Player sprite showcase
-    const px = W / 2 - 24;
+    const px = W / 2 - 32;
     spr(1, px, flr(ty) + 32 + sin(Mono.frame * 0.08) * 2);
-    spr(10, px + 20, flr(ty) + 34 + sin(Mono.frame * 0.08 + 1.5) * 2, true);
-    spr(20, px + 40, flr(ty) + 32);
+    spr(10, px + 24, flr(ty) + 34 + sin(Mono.frame * 0.08 + 1.5) * 2, true);
+    spr(20, px + 48, flr(ty) + 32);
 
-    // Subtitle
-    text("SPY VS SPY IN A 30 FLOOR BUILDING", 72, 110, 2);
+    text("SPY VS SPY IN A 30 FLOOR BUILDING", 55, 105, 2);
 
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 130, 130, 3);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 120, 125, 3);
 
-    // Instructions
-    text("ARROWS  MOVE/ELEVATOR", 93, 152, 2);
-    text("A  SHOOT", 133, 164, 2);
-    text("B  JUMP/DUCK", 123, 176, 2);
-    text("UP AT DOOR  A", 109, 188, 2);
-    text("COLLECT ALL DOCUMENTS", 93, 203, 1);
-    text("ESCAPE IN THE CAR!", 101, 215, 1);
+    text("ARROWS  MOVE/ELEVATOR", 85, 145, 2);
+    text("A  SHOOT", 130, 157, 2);
+    text("B  JUMP/DUCK", 115, 169, 2);
+    text("UP AT DOOR  ENTER", 100, 181, 2);
+    text("COLLECT ALL DOCUMENTS", 85, 198, 1);
+    text("ESCAPE IN THE CAR!", 95, 210, 1);
 
     text("MONO DEMO V0.1", 112, 228, 1);
   }
@@ -1470,44 +1467,40 @@
   function drawGameOver() {
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
-    text("GAME OVER", 130, 75, 3);
-    text("SCORE: " + score, 127, 98, 2);
-    text("DOCS: " + docsCollected + "/" + docsTotal, 123, 111, 2);
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 127, 150, 3);
+    text("GAME OVER", 120, 75, 3);
+    text("SCORE: " + score, 117, 98, 2);
+    text("DOCS: " + docsCollected + "/" + docsTotal, 113, 111, 2);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 117, 150, 3);
   }
 
   function drawWin() {
-    // Victory screen
     const ty = 30 + sin(Mono.frame * 0.05) * 3;
 
-    // Building silhouette
-    for (let bx = 0; bx < 12; bx++) {
+    for (let bx = 0; bx < 10; bx++) {
       const bh = 45 + flr(rnd(75));
-      const bw = 20 + flr(rnd(14));
-      rectf(bx * 28 - 7, H - bh, bw, bh, 0);
-      rect(bx * 28 - 7, H - bh, bw, bh, 1);
+      const bw = 24 + flr(rnd(14));
+      rectf(bx * 34 - 7, H - bh, bw, bh, 0);
+      rect(bx * 34 - 7, H - bh, bw, bh, 1);
     }
 
-    text("MISSION COMPLETE!", 99, flr(ty), 3);
-    text("ALL DOCUMENTS RECOVERED", 80, flr(ty) + 20, 2);
+    text("MISSION COMPLETE!", 90, flr(ty), 3);
+    text("ALL DOCUMENTS RECOVERED", 72, flr(ty) + 20, 2);
 
-    // Car driving away animation
     const carX = (Mono.frame * 2) % (W + 40) - 20;
     spr(39, flr(carX), flr(ty) + 40);
-    spr(39, flr(carX) + 8, flr(ty) + 40, true);
-    spr(1, flr(carX) + 3, flr(ty) + 34); // player in car
+    spr(39, flr(carX) + TILE, flr(ty) + 40, true);
+    spr(1, flr(carX) + 4, flr(ty) + 30);
 
-    text("SCORE: " + score, 127, flr(ty) + 60, 3);
-    text("RATING:", 133, flr(ty) + 76, 2);
+    text("SCORE: " + score, 117, flr(ty) + 64, 3);
+    text("RATING:", 125, flr(ty) + 80, 2);
 
-    // Rating based on score
     let rating = "C";
     if (score > 8000) rating = "S";
     else if (score > 5000) rating = "A";
     else if (score > 3000) rating = "B";
-    text(rating, 147, flr(ty) + 90, 3);
+    text(rating, 143, flr(ty) + 94, 3);
 
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 127, 185, 3);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 117, 185, 3);
   }
 
   Mono.go(TITLE);

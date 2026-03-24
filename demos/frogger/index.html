@@ -20,11 +20,25 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8→16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (8x8 data upscaled to 16x16) ---
   // 1: Frog facing up
-  defSprite(1,
+  defSprite(1, up(
     "02000020" +
     "23200232" +
     "02333320" +
@@ -33,9 +47,9 @@
     "23322332" +
     "20022002" +
     "00000000"
-  );
+  ));
   // 2: Frog facing left
-  defSprite(2,
+  defSprite(2, up(
     "00200000" +
     "22320000" +
     "00233300" +
@@ -44,9 +58,9 @@
     "00233300" +
     "22320000" +
     "00200000"
-  );
+  ));
   // 3: Frog facing right
-  defSprite(3,
+  defSprite(3, up(
     "00000200" +
     "00002322" +
     "00333200" +
@@ -55,9 +69,9 @@
     "00333200" +
     "00002322" +
     "00000200"
-  );
+  ));
   // 4: Frog facing down
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "20022002" +
     "23322332" +
@@ -66,10 +80,10 @@
     "02333320" +
     "23200232" +
     "02000020"
-  );
+  ));
 
-  // 10: Car body (facing right, 16px wide = 2 sprites)
-  defSprite(10,
+  // 10: Car body (right half)
+  defSprite(10, up(
     "00000000" +
     "00011110" +
     "01122221" +
@@ -78,8 +92,9 @@
     "01222221" +
     "00211200" +
     "00000000"
-  );
-  defSprite(11,
+  ));
+  // 11: Car body (left half)
+  defSprite(11, up(
     "00000000" +
     "11100000" +
     "22221100" +
@@ -88,10 +103,10 @@
     "22221100" +
     "01120000" +
     "00000000"
-  );
+  ));
 
   // 12: Truck cab (left side)
-  defSprite(12,
+  defSprite(12, up(
     "00000000" +
     "00001111" +
     "00013333" +
@@ -100,9 +115,9 @@
     "00013333" +
     "00012112" +
     "00000000"
-  );
+  ));
   // 13: Truck body
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "11111111" +
     "31111113" +
@@ -111,9 +126,9 @@
     "31111113" +
     "21121112" +
     "00000000"
-  );
+  ));
   // 14: Truck tail
-  defSprite(14,
+  defSprite(14, up(
     "00000000" +
     "11110000" +
     "33310000" +
@@ -122,10 +137,10 @@
     "33310000" +
     "11210000" +
     "00000000"
-  );
+  ));
 
   // 15: Race car (fast, small)
-  defSprite(15,
+  defSprite(15, up(
     "00000000" +
     "00003300" +
     "00333330" +
@@ -134,10 +149,10 @@
     "03333333" +
     "00122100" +
     "00000000"
-  );
+  ));
 
   // 20: Log left end
-  defSprite(20,
+  defSprite(20, up(
     "00000001" +
     "00001122" +
     "00012222" +
@@ -146,9 +161,9 @@
     "00012222" +
     "00001122" +
     "00000001"
-  );
+  ));
   // 21: Log middle
-  defSprite(21,
+  defSprite(21, up(
     "11111111" +
     "22222222" +
     "22212222" +
@@ -157,9 +172,9 @@
     "22222221" +
     "22222222" +
     "11111111"
-  );
+  ));
   // 22: Log right end
-  defSprite(22,
+  defSprite(22, up(
     "10000000" +
     "22110000" +
     "22221000" +
@@ -168,10 +183,10 @@
     "22221000" +
     "22110000" +
     "10000000"
-  );
+  ));
 
   // 25: Turtle (swimming)
-  defSprite(25,
+  defSprite(25, up(
     "00000000" +
     "00122100" +
     "01222210" +
@@ -180,9 +195,9 @@
     "01222210" +
     "00122100" +
     "00000000"
-  );
+  ));
   // 26: Turtle diving (submerging)
-  defSprite(26,
+  defSprite(26, up(
     "00000000" +
     "00000000" +
     "00111100" +
@@ -191,10 +206,10 @@
     "00111100" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 30: Home slot empty marker
-  defSprite(30,
+  defSprite(30, up(
     "00333300" +
     "03000030" +
     "30000003" +
@@ -203,9 +218,9 @@
     "30000003" +
     "03000030" +
     "00333300"
-  );
+  ));
   // 31: Frog in home
-  defSprite(31,
+  defSprite(31, up(
     "00333300" +
     "03323030" +
     "30233303" +
@@ -214,10 +229,10 @@
     "33300333" +
     "03000030" +
     "00333300"
-  );
+  ));
 
   // 35: Bonus fly
-  defSprite(35,
+  defSprite(35, up(
     "00000000" +
     "03000300" +
     "00303000" +
@@ -226,10 +241,10 @@
     "00333000" +
     "03000300" +
     "00000000"
-  );
+  ));
 
   // 40: Water splash 1
-  defSprite(40,
+  defSprite(40, up(
     "00000000" +
     "00200200" +
     "02000020" +
@@ -238,9 +253,9 @@
     "02000020" +
     "00200200" +
     "00000000"
-  );
+  ));
   // 41: Water splash 2
-  defSprite(41,
+  defSprite(41, up(
     "20000002" +
     "01000010" +
     "00200200" +
@@ -249,9 +264,9 @@
     "00200200" +
     "01000010" +
     "20000002"
-  );
+  ));
   // 42: Squished
-  defSprite(42,
+  defSprite(42, up(
     "00000000" +
     "00000000" +
     "32200223" +
@@ -260,10 +275,10 @@
     "32200223" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 50: Life icon frog
-  defSprite(50,
+  defSprite(50, up(
     "00000000" +
     "02000020" +
     "02322320" +
@@ -272,7 +287,7 @@
     "20000002" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // --- Layout constants ---
   // Using 16px rows. 240 / 16 = 15 rows.
@@ -310,39 +325,39 @@
     const s = 0.5 + lvl * 0.12;
     return {
       road: [
-        { row: ROAD_TOP,     spd: s * 0.7,  dir:-1, kind:"car",   n:4, gap:80 },
+        { row: ROAD_TOP,     spd: s * 0.7,  dir:-1, kind:"car",   n:3, gap:107 },
         { row: ROAD_TOP + 1, spd: s * 1.2,  dir: 1, kind:"race",  n:3, gap:107 },
-        { row: ROAD_TOP + 2, spd: s * 0.5,  dir:-1, kind:"truck", n:3, gap:107 },
-        { row: ROAD_TOP + 3, spd: s * 1.0,  dir: 1, kind:"car",   n:4, gap:80 },
-        { row: ROAD_TOP + 4, spd: s * 0.9,  dir:-1, kind:"race",  n:3, gap:93 },
+        { row: ROAD_TOP + 2, spd: s * 0.5,  dir:-1, kind:"truck", n:2, gap:160 },
+        { row: ROAD_TOP + 3, spd: s * 1.0,  dir: 1, kind:"car",   n:3, gap:107 },
+        { row: ROAD_TOP + 4, spd: s * 0.9,  dir:-1, kind:"race",  n:3, gap:107 },
       ],
       river: [
-        { row: RIVER_TOP,     spd: s * 0.6, dir: 1, kind:"log3",   n:3, gap:107 },
-        { row: RIVER_TOP + 1, spd: s * 0.9, dir:-1, kind:"turtle", n:4, gap:67 },
-        { row: RIVER_TOP + 2, spd: s * 0.4, dir: 1, kind:"log5",   n:2, gap:160 },
-        { row: RIVER_TOP + 3, spd: s * 0.8, dir:-1, kind:"turtle", n:3, gap:87 },
-        { row: RIVER_TOP + 4, spd: s * 0.7, dir: 1, kind:"log4",   n:3, gap:107 },
+        { row: RIVER_TOP,     spd: s * 0.6, dir: 1, kind:"log3",   n:3, gap:120 },
+        { row: RIVER_TOP + 1, spd: s * 0.9, dir:-1, kind:"turtle", n:3, gap:100 },
+        { row: RIVER_TOP + 2, spd: s * 0.4, dir: 1, kind:"log5",   n:2, gap:180 },
+        { row: RIVER_TOP + 3, spd: s * 0.8, dir:-1, kind:"turtle", n:3, gap:100 },
+        { row: RIVER_TOP + 4, spd: s * 0.7, dir: 1, kind:"log4",   n:3, gap:120 },
       ]
     };
   }
 
-  // Object pixel widths
+  // Object pixel widths (now 16px-based)
   function objWidth(kind) {
     switch(kind) {
-      case "car": return 16;
-      case "race": return 12;
-      case "truck": return 24;
-      case "log3": return 24;
-      case "log4": return 32;
-      case "log5": return 40;
-      case "turtle": return 24;
+      case "car": return 32;
+      case "race": return 16;
+      case "truck": return 48;
+      case "log3": return 48;
+      case "log4": return 64;
+      case "log5": return 80;
+      case "turtle": return 48;
       default: return 16;
     }
   }
 
   // --- State ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
-  let frogX, frogY;       // pixel position of frog (top-left of 8x8 sprite area within cell)
+  let frogX, frogY;       // pixel position of frog (top-left of 16x16 cell)
   let frogDir;             // 0=up,1=left,2=right,3=down
   let frogRow;             // current grid row
   let score, lives, level;
@@ -416,9 +431,18 @@
     resetFrog();
   }
 
-  // --- Collision ---
+  // --- Collision helpers ---
+  // Rect overlap
   function overlap(ax, aw, bx, bw) {
     return ax < bx + bw && ax + aw > bx;
+  }
+
+  // Circle-circle collision
+  function circCollide(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = dx * dx + dy * dy;
+    const rSum = ar + br;
+    return dist < rSum * rSum;
   }
 
   function killFrog(type) {
@@ -493,7 +517,7 @@
       const logs = riverObjs.filter(o => o.kind.startsWith("log"));
       if (logs.length > 0) {
         const lo = logs[flr(rnd(logs.length))];
-        bonusFly = { ref: lo, offX: flr(rnd(lo.w - 8)), timer: 250 };
+        bonusFly = { ref: lo, offX: flr(rnd(lo.w - 16)), timer: 250 };
       }
     }
     if (bonusFly) {
@@ -528,25 +552,33 @@
     if (frogX < 0) frogX = 0;
     if (frogX > W - CELL) frogX = W - CELL;
 
-    // Frog hitbox: 10px wide centered in CELL (frogX+3 to frogX+13)
-    const fhx = frogX + 3;
-    const fhw = 10;
+    // Frog circle hitbox: center of 16x16 cell, radius 5
+    const fCx = frogX + 8;
+    const fCy = frogY + 8;
+    const fR = 5;
 
-    // --- Road collision ---
+    // --- Road collision (circle vs rect) ---
     if (frogRow >= ROAD_TOP && frogRow <= ROAD_BOT) {
       for (const o of roadObjs) {
         if (o.row !== frogRow) continue;
-        if (overlap(fhx, fhw, o.x, o.w)) {
+        // Vehicle circle: center of object, radius = half width - 2
+        const oCx = o.x + o.w * 0.5;
+        const oCy = o.y + 8;
+        const oR = o.w * 0.5 - 2;
+        if (circCollide(fCx, fCy, fR, oCx, oCy, oR)) {
           killFrog("car");
           return;
         }
       }
     }
 
-    // --- River logic ---
+    // --- River logic (rect overlap for platforms) ---
     if (frogRow >= RIVER_TOP && frogRow <= RIVER_BOT) {
       let onPlatform = false;
       let rideSpd = 0;
+      // Use rect hitbox for platform riding (generous for gameplay)
+      const fhx = frogX + 3;
+      const fhw = 10;
       for (const o of riverObjs) {
         if (o.row !== frogRow) continue;
         if (o.kind === "turtle" && o.diving) continue;
@@ -568,11 +600,12 @@
       }
     }
 
-    // --- Bonus fly pickup ---
+    // --- Bonus fly pickup (circle collision) ---
     if (bonusFly) {
       const fo = bonusFly.ref;
-      const flyPx = fo.x + bonusFly.offX;
-      if (frogRow === fo.row && _abs(frogX - flyPx) < 12) {
+      const flyPx = fo.x + bonusFly.offX + 8;
+      const flyPy = fo.y + 8;
+      if (circCollide(fCx, fCy, fR, flyPx, flyPy, 6)) {
         score += 200;
         note(0, "E5", 0.08);
         note(1, "G5", 0.08);
@@ -683,50 +716,57 @@
     for (let i = 0; i < HOME_COUNT; i++) {
       const sx = HOME_XS[i] - 8;
       if (homeFilled[i]) {
-        sprT(31, sx, y + 4);
+        sprT(31, sx, y);
       } else {
         rectf(sx + 1, y + 2, 14, 12, 0);
         rect(sx + 1, y + 2, 14, 12, 1);
       }
+      // Debug rect for home slot hitbox
+      dbg(HOME_XS[i] - 14, y, 28, CELL);
     }
   }
 
   function drawRiverObjs() {
     for (const o of riverObjs) {
-      const py = o.y + 4;
       if (o.kind === "turtle") {
         const sid = o.diving ? 26 : 25;
-        for (let i = 0; i < 3; i++) sprT(sid, o.x + i * 8, py);
+        for (let i = 0; i < 3; i++) sprT(sid, o.x + i * 16, o.y);
       } else {
-        // Log
-        const segs = Math.round(o.w / 8);
-        sprT(20, o.x, py);
-        for (let i = 1; i < segs - 1; i++) sprT(21, o.x + i * 8, py);
-        sprT(22, o.x + (segs - 1) * 8, py);
+        // Log segments: 16px each
+        const segs = Math.round(o.w / 16);
+        sprT(20, o.x, o.y);
+        for (let i = 1; i < segs - 1; i++) sprT(21, o.x + i * 16, o.y);
+        sprT(22, o.x + (segs - 1) * 16, o.y);
       }
+      // Debug rect for platform hitbox
+      dbg(o.x, o.y, o.w, CELL);
     }
   }
 
   function drawRoadObjs() {
     for (const o of roadObjs) {
-      const py = o.y + 4;
       const flip = o.dir < 0;
       if (o.kind === "car") {
-        if (flip) { sprT(11, o.x, py, true); sprT(10, o.x + 8, py, true); }
-        else { sprT(10, o.x, py); sprT(11, o.x + 8, py); }
+        if (flip) { sprT(11, o.x, o.y, true); sprT(10, o.x + 16, o.y, true); }
+        else { sprT(10, o.x, o.y); sprT(11, o.x + 16, o.y); }
       } else if (o.kind === "race") {
-        sprT(15, o.x + 2, py, flip);
+        sprT(15, o.x, o.y, flip);
       } else if (o.kind === "truck") {
-        if (flip) { sprT(14, o.x, py, true); sprT(13, o.x + 8, py, true); sprT(12, o.x + 16, py, true); }
-        else { sprT(12, o.x, py); sprT(13, o.x + 8, py); sprT(14, o.x + 16, py); }
+        if (flip) { sprT(14, o.x, o.y, true); sprT(13, o.x + 16, o.y, true); sprT(12, o.x + 32, o.y, true); }
+        else { sprT(12, o.x, o.y); sprT(13, o.x + 16, o.y); sprT(14, o.x + 32, o.y); }
       }
+      // Debug circle for vehicle collision
+      const oCx = o.x + o.w * 0.5;
+      const oCy = o.y + 8;
+      const oR = o.w * 0.5 - 2;
+      dbgC(oCx, oCy, oR);
     }
   }
 
   function drawFrog() {
     if (deathTimer > 0) {
-      const dx = flr(frogX) + 4;
-      const dy = flr(frogY) + 4;
+      const dx = flr(frogX);
+      const dy = flr(frogY);
       if (deathType === "water") {
         sprT(deathTimer > 25 ? 40 : 41, dx, dy);
       } else {
@@ -736,39 +776,47 @@
     }
     if (levelComplete > 0) return;
 
-    const dx = flr(frogX) + 4;
-    let dy = flr(frogY) + 4;
+    const dx = flr(frogX);
+    let dy = flr(frogY);
     // Little hop animation
     if (hopAnim > 0) dy -= hopAnim;
     sprT([1, 2, 3, 4][frogDir], dx, dy);
+    // Debug circle for frog hitbox
+    dbgC(dx + 8, dy + 8, 5);
   }
 
   function drawBonusFly() {
     if (!bonusFly) return;
     if (bonusFly.timer < 60 && Mono.frame % 8 < 4) return; // blink when about to vanish
     const fo = bonusFly.ref;
-    sprT(35, fo.x + bonusFly.offX, fo.y + 4);
+    const fx = fo.x + bonusFly.offX;
+    const fy = fo.y;
+    sprT(35, fx, fy);
+    // Debug circle for fly pickup
+    dbgC(fx + 8, fy + 8, 6);
   }
 
   function drawHUD() {
     rectf(0, 0, W, CELL, 0);
-    text("SCORE", 4, 2, 2);
-    text(String(score).padStart(6, "0"), 34, 2, 3);
-    text("HI", 113, 2, 2);
-    text(String(hiScore).padStart(6, "0"), 128, 2, 3);
-    text("LV " + level, 200, 2, 3);
-    // Lives
+    text("SCORE", 2, 4, 2);
+    text(String(score).padStart(6, "0"), 32, 4, 3);
+    text("HI", 100, 4, 2);
+    text(String(hiScore).padStart(6, "0"), 112, 4, 3);
+    text("LV " + level, 180, 4, 3);
+    // Lives — fit within 320px: start at 254, each icon 16px with 2px gap
+    const livesStart = W - 4 - _max(lives, 1) * 18;
     for (let i = 0; i < lives; i++) {
-      sprT(50, 267 + i * 12, 1);
+      const lx = livesStart + i * 18;
+      if (lx + 16 <= W) sprT(50, lx, 0);
     }
   }
 
   function drawTimerBar() {
     const y = TIMER_ROW * CELL;
     rectf(0, y, W, CELL, 0);
-    text("TIME", 4, y + 5, 2);
-    const bx = 32;
-    const bw = W - 42;
+    text("TIME", 2, y + 5, 2);
+    const bx = 28;
+    const bw = W - 32;
     rect(bx, y + 3, bw, 8, 1);
     const fill = flr((timer / TIMER_MAX) * (bw - 2));
     const col = timer < TIMER_MAX * 0.2 ? (Mono.frame % 8 < 4 ? 3 : 2) : 3;
@@ -808,27 +856,27 @@
     rectf(0, ry, W, 24, 0);
     for (let y = ry; y < ry + 24; y += 2)
       for (let x = (y + flr(Mono.frame * 0.5)) % 8; x < W; x += 8) pix(x, y, 1);
-    // Animated log
-    const logX = ((Mono.frame * 1.2) % (W + 40)) - 40;
-    sprT(20, logX, ry + 8); sprT(21, logX + 8, ry + 8); sprT(22, logX + 16, ry + 8);
+    // Animated log (3 segments of 16px = 48px)
+    const logX = ((Mono.frame * 1.2) % (W + 64)) - 64;
+    sprT(20, logX, ry + 4); sprT(21, logX + 16, ry + 4); sprT(22, logX + 32, ry + 4);
     // Frog on log
-    sprT(1, logX + 8, ry + 4);
+    sprT(1, logX + 16, ry + 4);
 
     // Animated road band
     const roadY = 90;
     rectf(0, roadY, W, 24, 1);
     for (let x = 0; x < W; x += 16) line(x, roadY + 12, x + 8, roadY + 12, 2);
-    // Car
-    const carX = W - ((Mono.frame * 2) % (W + 32));
-    sprT(10, carX, roadY + 8); sprT(11, carX + 8, roadY + 8);
+    // Car (2 segments of 16px = 32px)
+    const carX = W - ((Mono.frame * 2) % (W + 48));
+    sprT(10, carX, roadY + 4); sprT(11, carX + 16, roadY + 4);
 
     // Title
     text("F R O G G E R", W / 2 - 32, 23, 3);
 
     // Decorative frogs
     const bob = flr(sin(Mono.frame * 0.1) * 2);
-    sprT(1, W / 2 - 4, 38 + bob);
-    sprT(2, W / 2 - 20, 42);
+    sprT(1, W / 2 - 8, 38 + bob);
+    sprT(2, W / 2 - 28, 42);
     sprT(3, W / 2 + 15, 42);
 
     text("HELP THE FROG CROSS", W / 2 - 47, 120, 2);

@@ -20,12 +20,26 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, sprT, text, btn, btnp, note, stop, rnd, flr,
-          abs: _abs, min, max: _max, sin, cos } = Mono;
+          abs: _abs, min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 -> 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (8x8 data upscaled to 16x16) ---
 
   // 1: Bird - wings up
-  defSprite(1,
+  defSprite(1, up(
     "00033000" +
     "00322300" +
     "03233130" +
@@ -34,9 +48,9 @@
     "00333200" +
     "00033000" +
     "00000000"
-  );
+  ));
   // 2: Bird - wings mid
-  defSprite(2,
+  defSprite(2, up(
     "00033000" +
     "00322300" +
     "03233130" +
@@ -45,9 +59,9 @@
     "00333200" +
     "00033000" +
     "00000000"
-  );
+  ));
   // 3: Bird - wings down
-  defSprite(3,
+  defSprite(3, up(
     "00033000" +
     "00322300" +
     "03233130" +
@@ -56,9 +70,9 @@
     "33333200" +
     "00033000" +
     "00000000"
-  );
+  ));
   // 4: Pipe top cap (top of lower pipe / bottom of upper pipe opening)
-  defSprite(4,
+  defSprite(4, up(
     "01111110" +
     "12222231" +
     "12222231" +
@@ -67,9 +81,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 5: Pipe body segment
-  defSprite(5,
+  defSprite(5, up(
     "01222310" +
     "01222310" +
     "01222310" +
@@ -78,9 +92,9 @@
     "01222310" +
     "01222310" +
     "01222310"
-  );
+  ));
   // 6: Ground tile
-  defSprite(6,
+  defSprite(6, up(
     "33333333" +
     "21212121" +
     "12121212" +
@@ -89,9 +103,9 @@
     "10101010" +
     "01010101" +
     "00000000"
-  );
+  ));
   // 7: Bush / decoration for background
-  defSprite(7,
+  defSprite(7, up(
     "00000000" +
     "00000000" +
     "00010000" +
@@ -100,9 +114,9 @@
     "11111110" +
     "11111111" +
     "00000000"
-  );
+  ));
   // 8: Cloud
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00110000" +
     "01331000" +
@@ -111,9 +125,9 @@
     "13333331" +
     "01111110" +
     "00000000"
-  );
+  ));
   // 9: Small star / dot for background
-  defSprite(9,
+  defSprite(9, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -122,9 +136,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 10: Bird dead (X eyes)
-  defSprite(10,
+  defSprite(10, up(
     "00033000" +
     "00322300" +
     "03203030" +
@@ -133,9 +147,9 @@
     "00333200" +
     "00033000" +
     "00000000"
-  );
+  ));
   // 11: Medal/trophy icon
-  defSprite(11,
+  defSprite(11, up(
     "00333300" +
     "03222230" +
     "32322320" +
@@ -144,19 +158,19 @@
     "00333300" +
     "00033000" +
     "00033000"
-  );
+  ));
 
   // --- Constants ---
-  const GROUND_Y = H - 18; // ground top y
+  const SPRITE_SIZE = 16;         // engine sprite size
+  const GROUND_Y = H - 32;       // ground top y (was H-18, now fits 16px ground tiles + fill)
   const GRAVITY = 0.35;
   const FLAP_VEL = -4.8;
-  const PIPE_W = 24;       // pipe width in pixels (3 sprite columns)
-  const PIPE_GAP = 54;     // vertical gap between pipes
+  const PIPE_W = 32;              // pipe width in pixels (2 sprite columns of 16)
+  const PIPE_GAP = 54;            // vertical gap between pipes
   const PIPE_SPEED = 2.2;
-  const PIPE_SPACING = 107; // horizontal spacing between pipes
-  const BIRD_X = 53;        // bird x position (fixed)
-  const BIRD_SIZE = 8;      // sprite size
-  const BIRD_HITBOX = 6;    // slightly smaller than sprite for fairness
+  const PIPE_SPACING = 107;       // horizontal spacing between pipes
+  const BIRD_X = 53;              // bird x position (fixed)
+  const BIRD_R = 6;               // bird circle-hitbox radius
 
   // --- Game State ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -319,35 +333,37 @@
     textHuge(str, flr((W - w) / 2), y, c);
   }
 
-  // --- Collision ---
-  function birdRect() {
-    const margin = (BIRD_SIZE - BIRD_HITBOX) / 2;
+  // --- Collision (circle for bird, rect for pipes) ---
+  function birdCenter() {
     return {
-      x: BIRD_X + margin,
-      y: bird.y + margin,
-      w: BIRD_HITBOX,
-      h: BIRD_HITBOX
+      cx: BIRD_X + SPRITE_SIZE / 2,
+      cy: bird.y + SPRITE_SIZE / 2
     };
   }
 
-  function rectsOverlap(a, b) {
-    return a.x < b.x + b.w && a.x + a.w > b.x &&
-           a.y < b.y + b.h && a.y + a.h > b.y;
+  function circRectOverlap(cx, cy, r, rx, ry, rw, rh) {
+    // Closest point on rect to circle center
+    const closestX = Math.max(rx, Math.min(cx, rx + rw));
+    const closestY = Math.max(ry, Math.min(cy, ry + rh));
+    const dx = cx - closestX;
+    const dy = cy - closestY;
+    return (dx * dx + dy * dy) <= (r * r);
   }
 
   function checkCollision() {
-    const br = birdRect();
+    const bc = birdCenter();
     // Ground
-    if (br.y + br.h >= GROUND_Y) return true;
+    if (bc.cy + BIRD_R >= GROUND_Y) return true;
     // Ceiling
-    if (br.y <= 0) return true;
+    if (bc.cy - BIRD_R <= 0) return true;
     // Pipes
     for (const p of pipes) {
-      // Upper pipe
-      const upper = { x: p.x, y: 0, w: PIPE_W, h: p.gapY };
-      // Lower pipe
-      const lower = { x: p.x, y: p.gapY + PIPE_GAP, w: PIPE_W, h: GROUND_Y - (p.gapY + PIPE_GAP) };
-      if (rectsOverlap(br, upper) || rectsOverlap(br, lower)) return true;
+      // Upper pipe rect
+      const ux = p.x, uy = 0, uw = PIPE_W, uh = p.gapY;
+      // Lower pipe rect
+      const lx = p.x, ly = p.gapY + PIPE_GAP, lw = PIPE_W, lh = GROUND_Y - ly;
+      if (circRectOverlap(bc.cx, bc.cy, BIRD_R, ux, uy, uw, uh) ||
+          circRectOverlap(bc.cx, bc.cy, BIRD_R, lx, ly, lw, lh)) return true;
     }
     return false;
   }
@@ -356,7 +372,7 @@
   function spawnDeathParticles() {
     for (let i = 0; i < 12; i++) {
       particles.push({
-        x: BIRD_X + 3, y: bird.y + 3,
+        x: BIRD_X + 7, y: bird.y + 7,
         vx: rnd(4) - 2, vy: rnd(3) - 2,
         life: 15 + flr(rnd(15)),
         color: 1 + flr(rnd(3))
@@ -366,42 +382,45 @@
 
   // --- Draw helpers ---
   function drawPipe(p) {
-    const spd = getSpeed();
     const x = flr(p.x);
 
     // Upper pipe body
-    for (let ty = 0; ty < p.gapY - 4; ty += 8) {
-      for (let tx = 0; tx < PIPE_W; tx += 8) {
+    for (let ty = 0; ty < p.gapY - 8; ty += 16) {
+      for (let tx = 0; tx < PIPE_W; tx += 16) {
         sprT(5, x + tx, ty);
       }
     }
     // Upper pipe cap (bottom of upper pipe, flipped)
-    for (let tx = 0; tx < PIPE_W; tx += 8) {
-      sprT(4, x + tx, p.gapY - 4, false, true);
+    for (let tx = 0; tx < PIPE_W; tx += 16) {
+      sprT(4, x + tx, p.gapY - 8, false, true);
     }
 
     // Lower pipe cap (top of lower pipe)
     const lowerY = p.gapY + PIPE_GAP;
-    for (let tx = 0; tx < PIPE_W; tx += 8) {
+    for (let tx = 0; tx < PIPE_W; tx += 16) {
       sprT(4, x + tx, lowerY);
     }
     // Lower pipe body
-    for (let ty = lowerY + 4; ty < GROUND_Y; ty += 8) {
-      for (let tx = 0; tx < PIPE_W; tx += 8) {
+    for (let ty = lowerY + 8; ty < GROUND_Y; ty += 16) {
+      for (let tx = 0; tx < PIPE_W; tx += 16) {
         sprT(5, x + tx, ty);
       }
     }
+
+    // Debug hitboxes for pipes
+    dbg(x, 0, PIPE_W, p.gapY);
+    dbg(x, lowerY, PIPE_W, GROUND_Y - lowerY);
   }
 
   function drawGround() {
-    const gx = flr(groundScroll) % 8;
+    const gx = flr(groundScroll) % 16;
     // Ground stripe
     rectf(0, GROUND_Y, W, 2, 2);
-    for (let x = -gx; x < W; x += 8) {
+    for (let x = -gx; x < W; x += 16) {
       sprT(6, x, GROUND_Y + 2);
     }
     // Fill below ground tiles
-    rectf(0, GROUND_Y + 10, W, H - GROUND_Y - 10, 0);
+    rectf(0, GROUND_Y + 18, W, H - GROUND_Y - 18, 0);
   }
 
   function drawClouds() {
@@ -412,7 +431,7 @@
         sprT(8, cx, cy);
       } else {
         sprT(8, cx, cy);
-        sprT(8, cx + 7, cy - 2);
+        sprT(8, cx + 14, cy - 4);
       }
     }
   }
@@ -427,8 +446,6 @@
       sprId = wingCycle + 1; // sprites 1,2,3
     }
 
-    // Calculate tilt based on velocity
-    // We'll simulate tilt by shifting pixels - draw bird at slight angles
     const bx = flr(BIRD_X);
     const by = flr(bird.y);
 
@@ -436,17 +453,21 @@
     const s = sprites[sprId]; if (!s) return;
     const tilt = bird.alive ? Math.max(-2, Math.min(2, flr(bird.vy / 2.5))) : 2;
 
-    for (let py = 0; py < 8; py++) {
+    for (let py = 0; py < 16; py++) {
       // Row offset based on tilt: top rows shift one way, bottom rows the other
-      const rowOff = flr((py - 3.5) * tilt / 4);
-      for (let px = 0; px < 8; px++) {
-        const c = s[py * 8 + px];
+      const rowOff = flr((py - 7.5) * tilt / 8);
+      for (let px = 0; px < 16; px++) {
+        const c = s[py * 16 + px];
         if (c === 0) continue;
         const dx = bx + px + rowOff, dy = by + py;
         if (dx >= 0 && dx < W && dy >= 0 && dy < H)
           buf32[dy * W + dx] = COLOR_U32[c];
       }
     }
+
+    // Debug circle hitbox for bird
+    const bc = birdCenter();
+    dbgC(bc.cx, bc.cy, BIRD_R);
   }
 
   function drawScorePopup() {
@@ -471,7 +492,7 @@
 
       for (const c of clouds) {
         c.x -= c.speed;
-        if (c.x < -13) { c.x = W + 7; c.y = 15 + flr(rnd(75)); }
+        if (c.x < -26) { c.x = W + 14; c.y = 15 + flr(rnd(75)); }
       }
 
       if (btnp("start") || btnp("a")) {
@@ -586,7 +607,7 @@
 
       for (const c of clouds) {
         c.x -= c.speed;
-        if (c.x < -13) { c.x = W + 7; c.y = 15 + flr(rnd(75)); }
+        if (c.x < -26) { c.x = W + 14; c.y = 15 + flr(rnd(75)); }
       }
 
       if (btnp("a") || btnp("up")) {
@@ -619,7 +640,7 @@
           passedPipeIds.add(pipes[i].id);
           score++;
           scoreSound();
-          scorePopups.push({ x: BIRD_X + 8, y: bird.y - 4, life: 25 });
+          scorePopups.push({ x: BIRD_X + 16, y: bird.y - 4, life: 25 });
         }
         if (pipes[i].x < -PIPE_W - 10) {
           pipes.splice(i, 1);
@@ -631,7 +652,7 @@
 
       for (const c of clouds) {
         c.x -= c.speed + spd * 0.1;
-        if (c.x < -13) { c.x = W + 7; c.y = 15 + flr(rnd(75)); }
+        if (c.x < -26) { c.x = W + 14; c.y = 15 + flr(rnd(75)); }
       }
 
       if (checkCollision()) {
@@ -654,11 +675,11 @@
       deathTimer++;
       if (flashTimer > 0) flashTimer--;
 
-      if (bird.y < GROUND_Y - 8) {
+      if (bird.y < GROUND_Y - 16) {
         bird.vy += GRAVITY * 0.8;
         bird.y += bird.vy;
       } else {
-        bird.y = GROUND_Y - 8;
+        bird.y = GROUND_Y - 16;
         bird.vy = 0;
       }
 

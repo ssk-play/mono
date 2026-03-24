@@ -20,12 +20,26 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8→16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (all 16x16 via upscale) ---
 
   // 1: Player ship facing right - sleek fighter
-  defSprite(1,
+  defSprite(1, up(
     "00000300" +
     "00003330" +
     "33333333" +
@@ -34,10 +48,10 @@
     "00003330" +
     "00000300" +
     "00000000"
-  );
+  ));
 
   // 2: Lander alien (abducts humans)
-  defSprite(2,
+  defSprite(2, up(
     "00333000" +
     "03222300" +
     "33333330" +
@@ -46,10 +60,10 @@
     "03030300" +
     "30000030" +
     "00000000"
-  );
+  ));
 
   // 3: Mutant alien (lander that got a human)
-  defSprite(3,
+  defSprite(3, up(
     "30300303" +
     "03333300" +
     "33232330" +
@@ -58,10 +72,10 @@
     "03333300" +
     "30300303" +
     "03000030"
-  );
+  ));
 
   // 4: Baiter (fast chaser)
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "00333000" +
     "03333300" +
@@ -70,10 +84,10 @@
     "00333000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 5: Bomber alien
-  defSprite(5,
+  defSprite(5, up(
     "00030000" +
     "00333000" +
     "03232300" +
@@ -82,10 +96,10 @@
     "00333000" +
     "00030000" +
     "00000000"
-  );
+  ));
 
   // 6: Human (standing)
-  defSprite(6,
+  defSprite(6, up(
     "00030000" +
     "00333000" +
     "00030000" +
@@ -94,10 +108,10 @@
     "00030000" +
     "00303000" +
     "00000000"
-  );
+  ));
 
   // 7: Human falling (arms up)
-  defSprite(7,
+  defSprite(7, up(
     "00030000" +
     "00333000" +
     "03030300" +
@@ -106,10 +120,10 @@
     "00030000" +
     "00303000" +
     "00000000"
-  );
+  ));
 
   // 8: Laser bolt
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -118,10 +132,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 9: Explosion frame 1
-  defSprite(9,
+  defSprite(9, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -130,10 +144,10 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
 
   // 10: Explosion frame 2
-  defSprite(10,
+  defSprite(10, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -142,10 +156,10 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
 
   // 11: Life icon (small ship)
-  defSprite(11,
+  defSprite(11, up(
     "00000000" +
     "00000300" +
     "33333330" +
@@ -154,10 +168,10 @@
     "00000300" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 12: Smart bomb icon
-  defSprite(12,
+  defSprite(12, up(
     "00333000" +
     "03000300" +
     "30030030" +
@@ -166,10 +180,10 @@
     "03000300" +
     "00333000" +
     "00000000"
-  );
+  ));
 
   // 13: Mountain terrain 1
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -178,10 +192,10 @@
     "01111100" +
     "11111110" +
     "11111111"
-  );
+  ));
 
   // 14: Mountain terrain 2
-  defSprite(14,
+  defSprite(14, up(
     "00000000" +
     "00000000" +
     "00100000" +
@@ -190,10 +204,10 @@
     "11111100" +
     "11111110" +
     "11111111"
-  );
+  ));
 
   // 15: Flat terrain
-  defSprite(15,
+  defSprite(15, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -202,10 +216,10 @@
     "00000000" +
     "11111111" +
     "11111111"
-  );
+  ));
 
   // 16: Enemy bullet
-  defSprite(16,
+  defSprite(16, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -214,7 +228,7 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // --- Constants ---
   const WORLD_W = 4800; // world width in pixels (10 screens wide)
@@ -282,7 +296,7 @@
       humans = [];
       for (let i = 0; i < numHumans; i++) {
         const hx = flr(rnd(WORLD_W));
-        humans.push({ x: hx, y: getGroundY(hx) - 8, state: "ground", vy: 0, carrier: -1 });
+        humans.push({ x: hx, y: getGroundY(hx) - 16, state: "ground", vy: 0, carrier: -1 });
       }
     }
     // Landers
@@ -342,11 +356,38 @@
     return d;
   }
 
+  // --- Collision helpers ---
+  // Circle collision: center+radius approach for round objects
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist < r1 + r2;
+  }
+
+  // Circle-vs-circle using world-wrapped X distance (for bullets/explosions)
+  function circCollideWorld(wx1, y1, r1, wx2, y2, r2) {
+    const dx = distWorld(wx1, wx2);
+    const dy = _abs(y1 - y2);
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist < r1 + r2;
+  }
+
+  // AABB rect collision (for player/alien body collisions)
+  function rectCollide(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
+  }
+
+  // AABB using world-wrapped X
+  function rectCollideWorld(wx1, y1, w1, h1, wx2, y2, w2, h2) {
+    return distWorld(wx1 + w1 / 2, wx2 + w2 / 2) < (w1 + w2) / 2 &&
+           _abs((y1 + h1 / 2) - (y2 + h2 / 2)) < (h1 + h2) / 2;
+  }
+
   function addExplosion(x, y) {
     explosions.push({ x: x, y: y, timer: 12 });
     for (let i = 0; i < 8; i++)
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(4) - 2,
         life: 8 + flr(rnd(10)),
         color: flr(rnd(3)) + 1
@@ -398,7 +439,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() { drawGameOver(); }
   });
@@ -409,34 +450,32 @@
       const sx = worldToScreen(s.x);
       if (sx >= 0 && sx < W) pix(sx, s.y, s.bright);
     }
-    const ty = 45 + sin(Mono.frame * 0.05) * 5;
-    text("DEFENDER", 127, flr(ty), 3);
-    text("DEFENDER", 128, flr(ty) + 1, 1);
-    rectf(113, flr(ty) + 12, 93, 1, 2);
-    spr(1, W / 2 - 4, flr(ty) + 23 + sin(Mono.frame * 0.08) * 3);
-    const bx = W / 2 - 40;
-    spr(2, bx, flr(ty) + 38 + sin(Mono.frame * 0.07) * 2);
-    spr(3, bx + 20, flr(ty) + 39 + sin(Mono.frame * 0.07 + 1) * 2);
-    spr(5, bx + 40, flr(ty) + 38 + sin(Mono.frame * 0.07 + 2) * 2);
-    spr(4, bx + 60, flr(ty) + 39 + sin(Mono.frame * 0.07 + 3) * 2);
-    spr(2, bx + 80, flr(ty) + 38 + sin(Mono.frame * 0.07 + 4) * 2);
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 118, 143, 3);
-    text("-SCORE TABLE-", 126, 165, 2);
-    spr(2, 127, 176); text("  LANDER  150 PTS", 133, 177, 2);
-    spr(3, 127, 186); text("  MUTANT  400 PTS", 133, 188, 2);
-    spr(5, 127, 197); text("  BOMBER  250 PTS", 133, 198, 2);
-    spr(4, 127, 207); text("  BAITER  500 PTS", 133, 209, 2);
-    text("RESCUE HUMANS  500 PTS", 106, 221, 2);
-    text("MONO DEMO V0.1", 116, 233, 1);
+    const ty = 30 + sin(Mono.frame * 0.05) * 5;
+    text("DEFENDER", 120, flr(ty), 3);
+    text("DEFENDER", 121, flr(ty) + 1, 1);
+    rectf(106, flr(ty) + 12, 108, 1, 2);
+    spr(1, W / 2 - 8, flr(ty) + 20 + sin(Mono.frame * 0.08) * 3);
+    const bx = W / 2 - 52;
+    spr(2, bx, flr(ty) + 42 + sin(Mono.frame * 0.07) * 2);
+    spr(3, bx + 26, flr(ty) + 43 + sin(Mono.frame * 0.07 + 1) * 2);
+    spr(5, bx + 52, flr(ty) + 42 + sin(Mono.frame * 0.07 + 2) * 2);
+    spr(4, bx + 78, flr(ty) + 43 + sin(Mono.frame * 0.07 + 3) * 2);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 118, 130, 3);
+    text("-SCORE TABLE-", 116, 148, 2);
+    spr(2, 110, 160); text("  LANDER  150 PTS", 126, 164, 2);
+    spr(3, 110, 178); text("  MUTANT  400 PTS", 126, 182, 2);
+    spr(5, 110, 196); text("  BOMBER  250 PTS", 126, 200, 2);
+    spr(4, 110, 214); text("  BAITER  500 PTS", 126, 218, 2);
+    text("MONO DEMO V0.1", 116, 234, 1);
   }
 
   function drawGameOver() {
     cls(0);
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
-    text("GAME OVER", 138, 90, 3);
-    text("SCORE: " + score, 127, 109, 2);
-    text("WAVE: " + wave, 137, 120, 2);
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 111, 158, 3);
+    text("GAME OVER", 128, 90, 3);
+    text("SCORE: " + score, 120, 109, 2);
+    text("WAVE: " + wave, 132, 120, 2);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 118, 158, 3);
   }
 
   Mono.scene(PLAY, {
@@ -483,14 +522,14 @@
     // Shoot
     if (shootCooldown > 0) shootCooldown--;
     if (btn("a") && shootCooldown <= 0) {
-      const lx = player.dir === 1 ? player.x + 8 : player.x - 8;
-      lasers.push({ x: lx, y: player.y + 2, dir: player.dir, life: 30 });
+      const lx = player.dir === 1 ? player.x + 16 : player.x - 16;
+      lasers.push({ x: lx, y: player.y + 4, dir: player.dir, life: 30 });
       shootCooldown = 5;
       shootSound();
     }
 
     // Smart bomb
-    if (btnp("a") && bombs > 0 && state === "play") {
+    if (btnp("a") && bombs > 0) {
       bombs--;
       bombFlash = 15;
       shakeTimer = 10;
@@ -523,10 +562,12 @@
       l.life--;
       if (l.life <= 0) { lasers.splice(i, 1); continue; }
 
-      // Laser-alien collision
+      // Laser-alien collision: circle for laser (r=4), rect for alien body (16x16 with 2px inset)
       for (let j = aliens.length - 1; j >= 0; j--) {
         const a = aliens[j];
-        if (distWorld(l.x, a.x) < 8 && _abs(l.y - a.y) < 8) {
+        // Laser center: (l.x+8, l.y+8), radius 5
+        // Alien hitbox: center (a.x+8, a.y+8), radius 7
+        if (circCollideWorld(l.x + 8, l.y + 8, 5, a.x + 8, a.y + 8, 7)) {
           a.hp--;
           if (a.hp <= 0) {
             score += a.pts;
@@ -582,9 +623,9 @@
             if (_abs(dx) > WORLD_W / 2) moveDir *= -1;
             a.x = wrapX(a.x + moveDir * 1.2);
             a.y += 0.8; // descend
-            a.y = min(a.y, getGroundY(a.x) - 10);
+            a.y = min(a.y, getGroundY(a.x) - 18);
             // Pick up human when close
-            if (distWorld(a.x, h.x) < 10 && _abs(a.y - h.y) < 14) {
+            if (distWorld(a.x, h.x) < 14 && _abs(a.y - h.y) < 20) {
               a.state = "abduct";
               a.carriedHuman = a.targetHuman;
               h.state = "carried";
@@ -596,7 +637,7 @@
           a.y -= 0.8;
           a.x = wrapX(a.x + a.vx * 0.3);
           const h = humans[a.carriedHuman];
-          if (h) { h.x = a.x; h.y = a.y + 8; }
+          if (h) { h.x = a.x; h.y = a.y + 16; }
           // If reached top, mutate
           if (a.y < PLAY_TOP + 5) {
             a.type = "mutant";
@@ -629,7 +670,7 @@
         if (a.mineTimer !== undefined) {
           a.mineTimer--;
           if (a.mineTimer <= 0 && onScreen) {
-            eBullets.push({ x: a.x, y: a.y + 4, vx: 0, vy: 0.5, life: 180 });
+            eBullets.push({ x: a.x, y: a.y + 8, vx: 0, vy: 0.5, life: 180 });
             a.mineTimer = 60 + flr(rnd(60));
           }
         }
@@ -656,7 +697,7 @@
           let ang = Math.atan2(dy, dx2);
           const bspeed = 2 + wave * 0.2;
           eBullets.push({
-            x: a.x + 4, y: a.y + 4,
+            x: a.x + 8, y: a.y + 8,
             vx: cos(ang) * bspeed, vy: sin(ang) * bspeed,
             life: 120
           });
@@ -664,8 +705,9 @@
         }
       }
 
-      // Alien-player collision
-      if (invincTimer <= 0 && distWorld(a.x, player.x) < 7 && _abs(a.y - player.y) < 7) {
+      // Alien-player collision: rect-based for body overlap (16x16 sprites, 2px inset)
+      if (invincTimer <= 0 &&
+          rectCollideWorld(a.x + 2, a.y + 2, 12, 12, player.x + 2, player.y + 2, 12, 12)) {
         addExplosion(player.x, player.y);
         addExplosion(a.x, a.y);
         if (a.carriedHuman >= 0) {
@@ -687,8 +729,10 @@
       b.y += b.vy;
       b.life--;
       if (b.life <= 0 || b.y > GROUND_Y || b.y < PLAY_TOP) { eBullets.splice(i, 1); continue; }
-      // Hit player
-      if (invincTimer <= 0 && distWorld(b.x, player.x) < 6 && _abs(b.y - player.y) < 6) {
+      // Hit player: circle collision (bullet r=3, player center r=6)
+      const pcx = player.x + 8, pcy = player.y + 8;
+      const bcx = b.x + 4, bcy = b.y + 4;
+      if (invincTimer <= 0 && circCollideWorld(bcx, bcy, 3, pcx, pcy, 6)) {
         eBullets.splice(i, 1);
         lives--;
         addExplosion(player.x, player.y);
@@ -705,15 +749,15 @@
         h.vy += 0.15;
         h.y += h.vy;
         const gy = getGroundY(h.x);
-        // Player catches falling human
-        if (distWorld(h.x, player.x) < 12 && _abs(h.y - player.y) < 12) {
+        // Player catches falling human: circle collision
+        if (circCollideWorld(h.x + 8, h.y + 8, 8, player.x + 8, player.y + 8, 10)) {
           h.state = "caught";
           h.vy = 0;
           score += 500;
           rescueSound();
         }
         // Hit ground
-        if (h.y >= gy - 8) {
+        if (h.y >= gy - 16) {
           if (h.vy > 4) {
             // Splat
             h.state = "dead";
@@ -721,7 +765,7 @@
             humanDieSound();
           } else {
             h.state = "ground";
-            h.y = gy - 8;
+            h.y = gy - 16;
           }
         }
       } else if (h.state === "caught") {
@@ -729,9 +773,9 @@
         h.x = player.x;
         h.y += 1.5;
         const gy = getGroundY(h.x);
-        if (h.y >= gy - 8) {
+        if (h.y >= gy - 16) {
           h.state = "ground";
-          h.y = gy - 8;
+          h.y = gy - 16;
           score += 500; // bonus for safe landing
           note(0, "C6", 0.1);
         }
@@ -752,7 +796,7 @@
     }
 
     // Wave clear check
-    if (aliens.length === 0 && state === "play") {
+    if (aliens.length === 0) {
       waveTimer++;
       if (waveTimer > 60) {
         waveTimer = 0;
@@ -782,7 +826,7 @@
       if (sx >= 0 && sx < W) pix(sx, s.y + shakeY, s.bright);
     }
 
-    // Terrain
+    // Terrain (pixel-by-pixel with API calls)
     for (let px = 0; px < W; px++) {
       const wx = wrapX(scrollX + px);
       const seg = flr(wx / 8);
@@ -793,7 +837,7 @@
         if (py >= 0 && py < H) {
           const depth = py - gy - shakeY;
           const c = depth < 2 ? 2 : (depth < h / 2 ? 1 : 0);
-          buf32[py * W + px] = COLOR_U32[c];
+          pix(px, py, c);
         }
       }
     }
@@ -802,23 +846,25 @@
     for (const h of humans) {
       if (h.state === "dead") continue;
       const sx = worldToScreen(h.x);
-      if (sx < -8 || sx > W + 8) continue;
+      if (sx < -16 || sx > W + 16) continue;
       const sprId = h.state === "falling" || h.state === "caught" ? 7 : 6;
       spr(sprId, flr(sx), flr(h.y) + shakeY);
+      dbg(flr(sx) + 2, flr(h.y) + shakeY + 2, 12, 12);
     }
 
     // Enemy bullets
     for (const b of eBullets) {
       const sx = worldToScreen(b.x);
-      if (sx >= -4 && sx < W + 4) {
+      if (sx >= -8 && sx < W + 8) {
         spr(16, flr(sx), flr(b.y) + shakeY);
+        dbgC(flr(sx) + 4, flr(b.y) + shakeY + 4, 3);
       }
     }
 
     // Aliens
     for (const a of aliens) {
       const sx = worldToScreen(a.x);
-      if (sx < -8 || sx > W + 8) continue;
+      if (sx < -16 || sx > W + 16) continue;
       let sprId;
       if (a.type === "lander") sprId = 2;
       else if (a.type === "mutant") sprId = 3;
@@ -826,18 +872,22 @@
       else if (a.type === "bomber") sprId = 5;
       else sprId = 2;
       spr(sprId, flr(sx), flr(a.y) + shakeY);
+      dbg(flr(sx) + 2, flr(a.y) + shakeY + 2, 12, 12);
     }
 
     // Lasers
     for (const l of lasers) {
       const sx = worldToScreen(l.x);
       if (sx >= -40 && sx < W + 40) {
-        // Draw a bright laser line
-        const len = 16;
+        // Draw a bright laser line (thicker for 16x16 scale)
+        const len = 24;
         const x0 = sx;
         const x1 = sx + len * l.dir;
-        line(flr(x0), flr(l.y + 3) + shakeY, flr(x1), flr(l.y + 3) + shakeY, 3);
-        line(flr(x0), flr(l.y + 4) + shakeY, flr(x1), flr(l.y + 4) + shakeY, 2);
+        line(flr(x0), flr(l.y + 6) + shakeY, flr(x1), flr(l.y + 6) + shakeY, 3);
+        line(flr(x0), flr(l.y + 7) + shakeY, flr(x1), flr(l.y + 7) + shakeY, 3);
+        line(flr(x0), flr(l.y + 8) + shakeY, flr(x1), flr(l.y + 8) + shakeY, 2);
+        line(flr(x0), flr(l.y + 9) + shakeY, flr(x1), flr(l.y + 9) + shakeY, 2);
+        dbgC(flr(sx) + 8, flr(l.y) + shakeY + 8, 5);
       }
     }
 
@@ -847,11 +897,14 @@
         const flipX = player.dir === -1;
         const psx = worldToScreen(player.x);
         spr(1, flr(psx), flr(player.y) + shakeY, flipX);
+        dbg(flr(psx) + 2, flr(player.y) + shakeY + 2, 12, 12);
         // Engine glow
-        const engineX = flipX ? psx + 7 : psx - 2;
+        const engineX = flipX ? psx + 14 : psx - 3;
         if (flr(Mono.frame / 2) % 2 === 0) {
-          pix(flr(engineX), flr(player.y + 3) + shakeY, 3);
-          pix(flr(engineX) + (flipX ? 1 : -1), flr(player.y + 3) + shakeY, 2);
+          pix(flr(engineX), flr(player.y + 6) + shakeY, 3);
+          pix(flr(engineX) + (flipX ? 1 : -1), flr(player.y + 6) + shakeY, 2);
+          pix(flr(engineX), flr(player.y + 7) + shakeY, 2);
+          pix(flr(engineX) + (flipX ? 1 : -1), flr(player.y + 7) + shakeY, 3);
         }
       }
     }
@@ -859,9 +912,10 @@
     // Explosions
     for (const e of explosions) {
       const sx = worldToScreen(e.x);
-      if (sx >= -8 && sx < W + 8) {
+      if (sx >= -16 && sx < W + 16) {
         const sprId = e.timer > 6 ? 9 : 10;
         spr(sprId, flr(sx), flr(e.y) + shakeY);
+        dbgC(flr(sx) + 8, flr(e.y) + shakeY + 8, 8);
       }
     }
 
@@ -873,11 +927,10 @@
 
     // Smart bomb flash
     if (bombFlash > 0) {
-      const alpha = bombFlash / 15;
       if (flr(bombFlash / 2) % 2 === 0) {
         for (let py = PLAY_TOP; py < GROUND_Y; py += 2) {
           for (let px = 0; px < W; px += 2) {
-            buf32[py * W + px] = COLOR_U32[3];
+            pix(px, py, 3);
           }
         }
       }
@@ -924,32 +977,43 @@
     }
 
     // --- HUD ---
+    // HUD bar background: full width, stays within 320
     rectf(0, HUD_Y - 2, W, 10, 0);
+
+    // Score (left side)
     text("SCORE:" + score, 4, HUD_Y, 3);
+
+    // Wave (center)
     text("WAVE:" + wave, W / 2 - 17, HUD_Y, 2);
 
-    // Lives
-    for (let i = 0; i < lives; i++) spr(11, W - 53 + i * 10, HUD_Y - 1);
+    // Humans alive count (center-right)
+    const humansAlive = humans.filter(h => h.state !== "dead").length;
+    text(humansAlive + "", W / 2 + 28, HUD_Y, humansAlive > 3 ? 2 : 3);
+    spr(6, W / 2 + 40, HUD_Y - 4);
 
-    // Bombs
+    // Lives icons (right side) - spaced to fit within 320 width
+    // Max 5 lives shown, each icon 16px, spacing 2px = 18px per icon
+    const livesStartX = W - 18 * min(lives, 5) - 2;
+    for (let i = 0; i < min(lives, 5); i++) {
+      spr(11, livesStartX + i * 18, HUD_Y - 4);
+    }
+
+    // Bombs (far right, below lives area if needed - shown as small rects)
+    // Keep bombs within screen: max 5 bombs * 8px = 40px
+    const bombStartX = W - 8 * min(bombs, 5) - 2;
     for (let i = 0; i < bombs; i++) {
-      const bx = W - 25 + i * 8;
+      const bx = min(bombStartX + i * 8, W - 8);
       rectf(bx, HUD_Y, 6, 6, 2);
       pix(bx + 2, HUD_Y + 1, 3);
       pix(bx + 3, HUD_Y + 1, 3);
       pix(bx + 2, HUD_Y + 2, 3);
     }
 
-    // Humans alive count
-    const humansAlive = humans.filter(h => h.state !== "dead").length;
-    text(humansAlive + " ", W / 2 + 20, HUD_Y, humansAlive > 3 ? 2 : 3);
-    spr(6, W / 2 + 27, HUD_Y - 1);
-
     // Wave announcement
     if (waveMessage > 0) {
       const msgY = 113 + sin(waveMessage * 0.1) * 3;
-      text("WAVE " + wave, 140, flr(msgY), 3);
-      if (waveMessage > 60) text("GET READY!", 130, flr(msgY) + 14, 2);
+      text("WAVE " + wave, 135, flr(msgY), 3);
+      if (waveMessage > 60) text("GET READY!", 125, flr(msgY) + 14, 2);
     }
   }
 

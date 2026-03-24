@@ -23,11 +23,27 @@
           min, max: _max, sin, cos } = Mono;
 
   // ============================================================
-  // Sprites
+  // 8x8 → 16x16 upscale helper
+  // ============================================================
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // ============================================================
+  // Sprites (all upscaled to 16x16)
   // ============================================================
 
   // 1: Player standing right (commando with gun)
-  defSprite(1,
+  defSprite(1, up(
     "00033000" +
     "00322300" +
     "00033000" +
@@ -36,9 +52,9 @@
     "00311300" +
     "00300300" +
     "00300300"
-  );
+  ));
   // 2: Player running frame 1
-  defSprite(2,
+  defSprite(2, up(
     "00033000" +
     "00322300" +
     "00033000" +
@@ -47,9 +63,9 @@
     "00311300" +
     "00030300" +
     "00300030"
-  );
+  ));
   // 3: Player running frame 2
-  defSprite(3,
+  defSprite(3, up(
     "00033000" +
     "00322300" +
     "00033000" +
@@ -58,9 +74,9 @@
     "00311300" +
     "00300300" +
     "03000030"
-  );
+  ));
   // 4: Player jumping
-  defSprite(4,
+  defSprite(4, up(
     "00033000" +
     "00322300" +
     "00033000" +
@@ -69,9 +85,9 @@
     "00133100" +
     "03000030" +
     "00000000"
-  );
+  ));
   // 5: Player prone (ducking)
-  defSprite(5,
+  defSprite(5, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -80,9 +96,9 @@
     "00322300" +
     "33333310" +
     "03300330"
-  );
+  ));
   // 6: Player aiming up
-  defSprite(6,
+  defSprite(6, up(
     "00031000" +
     "00031000" +
     "00322300" +
@@ -91,9 +107,9 @@
     "00311300" +
     "00300300" +
     "00300300"
-  );
+  ));
   // 7: Player aiming diag up-right
-  defSprite(7,
+  defSprite(7, up(
     "00003310" +
     "00033100" +
     "00322300" +
@@ -102,10 +118,10 @@
     "00311300" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 10: Enemy soldier standing
-  defSprite(10,
+  defSprite(10, up(
     "00011000" +
     "00100100" +
     "00011000" +
@@ -114,9 +130,9 @@
     "00111000" +
     "00100100" +
     "00100100"
-  );
+  ));
   // 11: Enemy soldier running
-  defSprite(11,
+  defSprite(11, up(
     "00011000" +
     "00100100" +
     "00011000" +
@@ -125,10 +141,10 @@
     "00111000" +
     "00010100" +
     "01000010"
-  );
+  ));
 
   // 12: Turret (stationary gun emplacement)
-  defSprite(12,
+  defSprite(12, up(
     "00000000" +
     "00222000" +
     "02333200" +
@@ -137,10 +153,10 @@
     "02222200" +
     "22222220" +
     "22222220"
-  );
+  ));
 
   // 13: Sniper (guy on platform)
-  defSprite(13,
+  defSprite(13, up(
     "00022000" +
     "00211200" +
     "00022000" +
@@ -149,10 +165,10 @@
     "00211200" +
     "00200200" +
     "00200200"
-  );
+  ));
 
   // 15: Player bullet (small dot)
-  defSprite(15,
+  defSprite(15, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -161,9 +177,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 16: Spread bullet
-  defSprite(16,
+  defSprite(16, up(
     "00000000" +
     "00000000" +
     "00030000" +
@@ -172,9 +188,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 17: Laser bullet (long horizontal)
-  defSprite(17,
+  defSprite(17, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -183,10 +199,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 18: Enemy bullet
-  defSprite(18,
+  defSprite(18, up(
     "00000000" +
     "00000000" +
     "00010000" +
@@ -195,10 +211,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 20: Explosion frame 1
-  defSprite(20,
+  defSprite(20, up(
     "00000000" +
     "00200100" +
     "01003000" +
@@ -207,9 +223,9 @@
     "02000010" +
     "00100000" +
     "00000000"
-  );
+  ));
   // 21: Explosion frame 2
-  defSprite(21,
+  defSprite(21, up(
     "20010030" +
     "01000010" +
     "00302300" +
@@ -218,10 +234,10 @@
     "02000300" +
     "30002001" +
     "00300010"
-  );
+  ));
 
   // 25: Power-up S (spread)
-  defSprite(25,
+  defSprite(25, up(
     "03333300" +
     "32222230" +
     "32300030" +
@@ -230,9 +246,9 @@
     "30003230" +
     "32222230" +
     "03333300"
-  );
+  ));
   // 26: Power-up L (laser)
-  defSprite(26,
+  defSprite(26, up(
     "03333300" +
     "32222230" +
     "32300030" +
@@ -241,9 +257,9 @@
     "32300030" +
     "32333230" +
     "03333300"
-  );
+  ));
   // 27: Power-up R (rapid)
-  defSprite(27,
+  defSprite(27, up(
     "03333300" +
     "32222230" +
     "32300230" +
@@ -252,10 +268,10 @@
     "32302030" +
     "32300230" +
     "03333300"
-  );
+  ));
 
   // 30: Ground tile (flat)
-  defSprite(30,
+  defSprite(30, up(
     "22222222" +
     "11111111" +
     "21212121" +
@@ -264,9 +280,9 @@
     "11111111" +
     "21212121" +
     "11111111"
-  );
+  ));
   // 31: Platform tile
-  defSprite(31,
+  defSprite(31, up(
     "33333333" +
     "22222222" +
     "00000000" +
@@ -275,9 +291,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 32: Wall tile
-  defSprite(32,
+  defSprite(32, up(
     "21212121" +
     "12121212" +
     "21212121" +
@@ -286,9 +302,9 @@
     "12121212" +
     "21212121" +
     "12121212"
-  );
+  ));
   // 33: Bridge/gap edge
-  defSprite(33,
+  defSprite(33, up(
     "33322222" +
     "22211111" +
     "00021212" +
@@ -297,10 +313,10 @@
     "00011111" +
     "00021212" +
     "00011111"
-  );
+  ));
 
   // 35: Tree/bush background
-  defSprite(35,
+  defSprite(35, up(
     "00100100" +
     "01111110" +
     "11111111" +
@@ -309,9 +325,9 @@
     "00011000" +
     "00011000" +
     "00011000"
-  );
+  ));
   // 36: Mountain bg
-  defSprite(36,
+  defSprite(36, up(
     "00010000" +
     "00111000" +
     "01111100" +
@@ -320,10 +336,10 @@
     "11111111" +
     "11111111" +
     "11111111"
-  );
+  ));
 
   // 40: Boss body center
-  defSprite(40,
+  defSprite(40, up(
     "22233222" +
     "23333332" +
     "33333333" +
@@ -332,9 +348,9 @@
     "33322333" +
     "23333332" +
     "22233222"
-  );
+  ));
   // 41: Boss turret top
-  defSprite(41,
+  defSprite(41, up(
     "01111110" +
     "13333331" +
     "33322333" +
@@ -343,9 +359,9 @@
     "13333331" +
     "01111110" +
     "00111100"
-  );
+  ));
   // 42: Boss gun arm
-  defSprite(42,
+  defSprite(42, up(
     "00000000" +
     "00000000" +
     "33300000" +
@@ -354,9 +370,9 @@
     "33300000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 43: Boss armor plate
-  defSprite(43,
+  defSprite(43, up(
     "11222211" +
     "12233221" +
     "23333332" +
@@ -365,10 +381,10 @@
     "23333332" +
     "12233221" +
     "11222211"
-  );
+  ));
 
   // 45: Life icon
-  defSprite(45,
+  defSprite(45, up(
     "00000000" +
     "00030000" +
     "00323000" +
@@ -377,28 +393,30 @@
     "00311000" +
     "00000000" +
     "00000000"
-  );
+  ));
+
+  // ============================================================
+  // Constants (updated for 16x16 sprites)
+  // ============================================================
+  const SPR = 16;           // sprite size in pixels
+  const GROUND_Y = 210;     // base ground level in world coords
+  const TILE = 16;           // tile size now 16
+  const GRAVITY = 0.45;
+  const JUMP_FORCE = -6.5;
 
   // ============================================================
   // Level data generation
   // ============================================================
-  const GROUND_Y = 210;  // base ground level in world coords
-  const TILE = 8;
-  const GRAVITY = 0.45;
-  const JUMP_FORCE = -6.5;
-
-  // Stage definitions - each has terrain segments and enemy placements
   function generateStage(stageNum) {
     const level = {
       width: 0,
-      platforms: [],   // {x, y, w} - solid platforms
-      enemies: [],     // {type, x, y, ...}
-      powerups: [],    // {type, x, y}
+      platforms: [],
+      enemies: [],
+      powerups: [],
       boss: null,
-      bgElements: [],  // decorative bg
+      bgElements: [],
     };
 
-    // Each stage is wider
     const stageWidth = 1200 + stageNum * 400;
     level.width = stageWidth;
 
@@ -409,12 +427,10 @@
       level.platforms.push({ x: gx, y: GROUND_Y, w: segLen, ground: true });
       gx += segLen;
 
-      // Gap or elevation change
       if (rnd(1) < 0.3 && gx > 67) {
-        gx += 21 + flr(rnd(16)); // gap
+        gx += 21 + flr(rnd(16));
       }
     }
-    // Final ground segment leading to boss
     level.platforms.push({ x: gx, y: GROUND_Y, w: 200, ground: true });
     level.width = gx + 200;
 
@@ -446,7 +462,7 @@
       });
     }
 
-    // Snipers (placed on platforms)
+    // Snipers
     for (let i = 0; i < 3 + stageNum * 2; i++) {
       const sx = 167 + flr(rnd(level.width - 333));
       level.enemies.push({
@@ -493,25 +509,20 @@
     return level;
   }
 
-  // Place enemies on ground/platforms
+  // Place enemies on ground/platforms (using SPR=16 for offsets)
   function placeEnemiesOnGround(level) {
     for (const e of level.enemies) {
       if (e.type === "sniper") {
-        // Place on elevated platforms
         const elevated = level.platforms.filter(p => !p.ground && p.x < level.width - 200);
         if (elevated.length > 0) {
           const p = elevated[flr(rnd(elevated.length))];
-          e.x = p.x + flr(rnd(p.w - 8));
-          e.y = p.y - 8;
+          e.x = p.x + flr(rnd(_max(1, p.w - SPR)));
+          e.y = p.y - SPR;
         } else {
-          e.y = GROUND_Y - 8;
+          e.y = GROUND_Y - SPR;
         }
       } else {
-        // Find ground at enemy's x position
-        e.y = getGroundY(level, e.x) - 8;
-        if (e.type === "turret") {
-          e.y = getGroundY(level, e.x) - 8;
-        }
+        e.y = getGroundY(level, e.x) - SPR;
       }
       e.patrolStart = e.x;
     }
@@ -550,12 +561,12 @@
     level = generateStage(stageNum);
     placeEnemiesOnGround(level);
     player = {
-      x: 27, y: GROUND_Y - 8,
+      x: 27, y: GROUND_Y - SPR,
       vx: 0, vy: 0,
-      dir: 1,    // 1=right, -1=left
+      dir: 1,
       onGround: false,
       prone: false,
-      aimX: 1, aimY: 0,   // aiming direction
+      aimX: 1, aimY: 0,
       animTimer: 0,
       dead: false,
       invincible: 0
@@ -580,7 +591,7 @@
     const count = big ? 12 : 6;
     for (let i = 0; i < count; i++) {
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(4) - 3,
         life: 8 + flr(rnd(12)),
         color: flr(rnd(3)) + 1
@@ -616,9 +627,27 @@
   // ============================================================
   // Collision helpers
   // ============================================================
+
+  // Circle-circle collision (for round objects: bullets, explosions)
+  function circOverlap(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx;
+    const dy = ay - by;
+    const distSq = dx * dx + dy * dy;
+    const rSum = ar + br;
+    return distSq < rSum * rSum;
+  }
+
+  // Circle-rect collision (bullet vs entity box)
+  function circRectOverlap(cx, cy, cr, rx, ry, rw, rh) {
+    const nearX = _max(rx, min(cx, rx + rw));
+    const nearY = _max(ry, min(cy, ry + rh));
+    const dx = cx - nearX;
+    const dy = cy - nearY;
+    return (dx * dx + dy * dy) < (cr * cr);
+  }
+
   function isOnPlatform(wx, wy, ww) {
-    // Check if feet at (wx, wy+8) land on any platform
-    const feetY = wy + 8;
+    const feetY = wy + SPR;
     for (const p of level.platforms) {
       if (wx + ww > p.x && wx < p.x + p.w) {
         if (feetY >= p.y && feetY < p.y + 6) {
@@ -630,10 +659,10 @@
   }
 
   function isSolidBelow(wx, wy) {
-    const feetY = wy + 8;
+    const feetY = wy + SPR;
     for (const p of level.platforms) {
-      if (wx + 6 > p.x && wx + 2 < p.x + p.w) {
-        if (feetY >= p.y && feetY < p.y + 8) {
+      if (wx + 12 > p.x && wx + 4 < p.x + p.w) {
+        if (feetY >= p.y && feetY < p.y + SPR) {
           return p.y;
         }
       }
@@ -650,6 +679,56 @@
   }
 
   // ============================================================
+  // Bullet center/radius helpers
+  // ============================================================
+  function bulletCenter(b) {
+    // Bullets are drawn at (b.x, b.y) as 16x16 sprites
+    // The actual visible part is in the center
+    return { cx: b.x + 8, cy: b.y + 8 };
+  }
+
+  function bulletRadius(b) {
+    if (b.type === "laser") return 5;
+    if (b.type === "spread") return 4;
+    return 3; // normal
+  }
+
+  function eBulletCenter(b) {
+    return { cx: b.x + 8, cy: b.y + 8 };
+  }
+
+  const EBULLET_R = 3;
+
+  // Player hitbox (rect, slightly inset from 16x16 sprite)
+  const PL_HB_X = 3;   // inset from left
+  const PL_HB_Y = 2;   // inset from top
+  const PL_HB_W = 10;  // width
+  const PL_HB_H = 14;  // height (standing)
+  const PL_PRONE_HB_Y = 8;
+  const PL_PRONE_HB_H = 8;
+
+  function playerHitbox() {
+    if (player.prone) {
+      return { x: player.x + PL_HB_X, y: player.y + PL_PRONE_HB_Y, w: PL_HB_W, h: PL_PRONE_HB_H };
+    }
+    return { x: player.x + PL_HB_X, y: player.y + PL_HB_Y, w: PL_HB_W, h: PL_HB_H };
+  }
+
+  // Enemy hitbox (rect)
+  function enemyHitbox(e) {
+    if (e.type === "turret") {
+      return { x: e.x + 2, y: e.y + 2, w: 12, h: 14 };
+    }
+    return { x: e.x + 2, y: e.y + 2, w: 12, h: 14 };
+  }
+
+  // Explosion center/radius
+  function explosionCenter(e) {
+    return { cx: e.x + 8, cy: e.y + 8 };
+  }
+  const EXPLOSION_R = 8;
+
+  // ============================================================
   // Shooting
   // ============================================================
   let shootCooldown = 0;
@@ -658,21 +737,19 @@
     let ax = player.dir, ay = 0;
     if (btn("up")) { ay = -1; ax = btn("left") ? -1 : btn("right") ? 1 : 0; }
     else if (btn("down") && !player.onGround) { ay = 1; ax = btn("left") ? -1 : btn("right") ? 1 : 0; }
-    else if (btn("down") && player.onGround) { ay = 0; ax = player.dir; } // prone
+    else if (btn("down") && player.onGround) { ay = 0; ax = player.dir; }
     else { ax = player.dir; ay = 0; }
-    // Normalize
     if (ax === 0 && ay === 0) ax = player.dir;
     return { ax, ay };
   }
 
   function fireBullet() {
     const aim = getAimDir();
-    const bx = player.x + (aim.ax >= 0 ? 6 : -2);
-    const by = player.prone ? player.y + 4 : player.y + 2;
+    const bx = player.x + (aim.ax >= 0 ? 10 : -4);
+    const by = player.prone ? player.y + 6 : player.y + 2;
     const speed = 7;
 
     if (weapon === "spread") {
-      // 5-way spread
       const angles = [-0.3, -0.15, 0, 0.15, 0.3];
       const baseAngle = Math.atan2(aim.ay, aim.ax);
       for (const off of angles) {
@@ -718,10 +795,6 @@
     },
     draw() {
       cls(0);
-      // Sky gradient
-      for (let y = 0; y < 90; y++) {
-        const c = y < 30 ? 0 : y < 60 ? 0 : 0;
-      }
       for (let x = 0; x < W; x += 2) {
         const h1 = 45 + sin(x * 0.01 + 1) * 23 + sin(x * 0.025) * 11;
         const h2 = 60 + sin(x * 0.015 + 3) * 19 + sin(x * 0.04) * 8;
@@ -732,18 +805,18 @@
       rectf(0, 165, W, 75, 1);
       rectf(0, 163, W, 2, 2);
       const ty = 38 + sin(Mono.frame * 0.04) * 3;
-      text("CONTRA", 145, flr(ty), 3);
-      text("CONTRA", 146, flr(ty) + 1, 1);
-      rectf(132, flr(ty) + 10, 56, 2, 2);
-      text("MONO EDITION", 122, flr(ty) + 16, 2);
+      text("CONTRA", 115, flr(ty), 3);
+      text("CONTRA", 116, flr(ty) + 1, 1);
+      rectf(102, flr(ty) + 10, 116, 2, 2);
+      text("MONO EDITION", 107, flr(ty) + 16, 2);
       const pFrame = flr(Mono.frame / 6) % 2 === 0 ? 2 : 3;
-      sprT(pFrame, 133 + sin(Mono.frame * 0.06) * 3, 120 + sin(Mono.frame * 0.1) * 2);
-      sprT(10, 173, 122);
-      sprT(12, 193, 123);
-      if (flr(Mono.frame / 18) % 2 === 0) text("PRESS START", 132, 98, 3);
-      text("Z:JUMP  X:SHOOT  ARROWS:MOVE/AIM", 77, 210, 2);
-      text("ONE HIT DEATH - 3 LIVES", 100, 219, 1);
-      text("MONO DEMO V0.1", 117, 231, 1);
+      sprT(pFrame, 110, 110 + sin(Mono.frame * 0.1) * 2);
+      sprT(10, 155, 112);
+      sprT(12, 185, 113);
+      if (flr(Mono.frame / 18) % 2 === 0) text("PRESS START", 120, 98, 3);
+      text("Z:JUMP  X:SHOOT  ARROWS:MOVE/AIM", 55, 210, 2);
+      text("ONE HIT DEATH - 3 LIVES", 88, 220, 1);
+      text("MONO DEMO V0.1", 113, 231, 1);
     }
   });
 
@@ -754,16 +827,15 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
-      rectf(0, 0, W, H, 0);
       for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
-      text("GAME OVER", 137, 83, 3);
-      text("SCORE: " + score, 127, 101, 2);
-      text("STAGE: " + stage, 140, 113, 2);
-      if (flr(Mono.frame / 18) % 2 === 0) text("PRESS START", 132, 150, 3);
+      text("GAME OVER", 125, 83, 3);
+      text("SCORE: " + score, 115, 101, 2);
+      text("STAGE: " + stage, 130, 113, 2);
+      if (flr(Mono.frame / 18) % 2 === 0) text("PRESS START", 120, 150, 3);
     }
   });
 
@@ -780,7 +852,6 @@
           Mono.go(PLAY); return;
         }
       }
-      // Update explosions/particles in stage clear
       for (let i = explosions.length - 1; i >= 0; i--) {
         explosions[i].timer--;
         if (explosions[i].timer <= 0) explosions.splice(i, 1);
@@ -792,9 +863,8 @@
     },
     draw() {
       cls(0);
-      rectf(0, 0, W, H, 0);
-      text("STAGE " + stage + " CLEAR!", 125, 98, 3);
-      text("SCORE: " + score, 127, 120, 2);
+      text("STAGE " + stage + " CLEAR!", 110, 98, 3);
+      text("SCORE: " + score, 115, 120, 2);
       if (stageClearTimer < 60 && stageClearTimer % 8 === 0) {
         addExplosion(67 + rnd(187), 38 + rnd(150), true);
       }
@@ -809,17 +879,16 @@
   Mono.scene(WIN, {
     init() {},
     update() {
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
-      rectf(0, 0, W, H, 0);
-      text("MISSION COMPLETE!", 117, 75, 3);
-      text("FINAL SCORE: " + score, 115, 98, 2);
-      text("YOU SAVED THE WORLD!", 110, 116, 2);
-      sprT(1, 153, 135 + sin(Mono.frame * 0.08) * 3);
-      if (flr(Mono.frame / 18) % 2 === 0) text("PRESS START", 132, 173, 3);
-      text("MONO DEMO V0.1", 117, 231, 1);
+      text("MISSION COMPLETE!", 90, 75, 3);
+      text("FINAL SCORE: " + score, 95, 98, 2);
+      text("YOU SAVED THE WORLD!", 85, 116, 2);
+      sprT(1, 152, 135 + sin(Mono.frame * 0.08) * 3);
+      if (flr(Mono.frame / 18) % 2 === 0) text("PRESS START", 120, 173, 3);
+      text("MONO DEMO V0.1", 113, 231, 1);
     }
   });
 
@@ -830,7 +899,6 @@
 
     if (player.dead) {
       deathTimer++;
-      // Update explosions/particles during death
       for (let i = explosions.length - 1; i >= 0; i--) {
         explosions[i].timer--;
         if (explosions[i].timer <= 0) explosions.splice(i, 1);
@@ -865,7 +933,6 @@
       const maxCam = level.width - W;
       if (camX < maxCam) {
         camX += scrollSpeed;
-        // Push player if camera catches up
         if (player.x < camX + 8) player.x = camX + 8;
       }
     }
@@ -879,10 +946,10 @@
       if (btn("right")) { player.x += moveSpeed; player.dir = 1; }
     }
 
-    // Keep player on screen
-    player.x = _max(camX + 2, min(camX + W - 10, player.x));
+    // Keep player on screen (updated for 16px sprite)
+    player.x = _max(camX + 2, min(camX + W - SPR - 2, player.x));
 
-    // Camera follows player (push scroll faster if player goes right)
+    // Camera follows player
     const maxCam = level.width - W;
     if (player.x > camX + W * 0.6) {
       camX = min(maxCam, player.x - W * 0.6);
@@ -910,7 +977,7 @@
     player.onGround = false;
     const groundCheck = isSolidBelow(player.x, player.y);
     if (groundCheck !== null && player.vy >= 0) {
-      player.y = groundCheck - 8;
+      player.y = groundCheck - SPR;
       player.vy = 0;
       player.onGround = true;
     }
@@ -930,7 +997,7 @@
       player.animTimer = 0;
     }
 
-    // Aim direction for sprite selection
+    // Aim direction
     player.aimX = player.dir;
     player.aimY = 0;
     if (btn("up")) player.aimY = -1;
@@ -956,24 +1023,25 @@
       b.x += b.vx;
       b.y += b.vy;
       b.life--;
-      // Remove off-screen or expired
-      if (b.life <= 0 || b.x < camX - 16 || b.x > camX + W + 16 || b.y < -16 || b.y > H + 16) {
+      if (b.life <= 0 || b.x < camX - 20 || b.x > camX + W + 20 || b.y < -20 || b.y > H + 20) {
         bullets.splice(i, 1);
       }
     }
 
-    // Update enemy bullets
+    // Update enemy bullets (circle vs rect collision with player)
+    const ph = playerHitbox();
     for (let i = eBullets.length - 1; i >= 0; i--) {
       const b = eBullets[i];
       b.x += b.vx;
       b.y += b.vy;
-      if (b.x < camX - 16 || b.x > camX + W + 16 || b.y < -16 || b.y > H + 16) {
+      if (b.x < camX - 20 || b.x > camX + W + 20 || b.y < -20 || b.y > H + 20) {
         eBullets.splice(i, 1);
         continue;
       }
-      // Hit player
+      // Circle (enemy bullet) vs rect (player hitbox)
       if (!player.dead && player.invincible <= 0) {
-        if (boxOverlap(b.x - 1, b.y - 1, 3, 3, player.x + 1, player.y + 1, 6, 6)) {
+        const ec = eBulletCenter(b);
+        if (circRectOverlap(ec.cx, ec.cy, EBULLET_R, ph.x, ph.y, ph.w, ph.h)) {
           eBullets.splice(i, 1);
           killPlayer();
           break;
@@ -984,19 +1052,16 @@
     // Update enemies
     for (const e of level.enemies) {
       if (!e.alive) continue;
-      // Only active if on screen (with margin)
       const screenX = e.x - camX;
       if (screenX < -40 || screenX > W + 40) continue;
 
       if (e.type === "soldier") {
         e.animTimer++;
-        // Patrol
         e.x += e.dir * e.speed;
         if (_abs(e.x - e.patrolStart) > e.patrol) e.dir *= -1;
 
-        // Ground snap
         const gy = getGroundY(level, e.x);
-        e.y = gy - 8;
+        e.y = gy - SPR;
 
         // Shoot at player
         e.shootTimer--;
@@ -1006,7 +1071,7 @@
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist > 0) {
             eBullets.push({
-              x: e.x + 0, y: e.y + 0,
+              x: e.x, y: e.y,
               vx: (dx / dist) * 2.5, vy: (dy / dist) * 2.5
             });
           }
@@ -1016,13 +1081,11 @@
 
       if (e.type === "turret") {
         e.dir = player.x < e.x ? -1 : 1;
-        // Snap to ground
         const gy = getGroundY(level, e.x);
-        e.y = gy - 8;
+        e.y = gy - SPR;
 
         e.shootTimer--;
         if (e.shootTimer <= 0 && _abs(e.x - player.x) < 250) {
-          // Aimed shot + spread
           const dx = player.x - e.x;
           const dy = player.y - e.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1030,7 +1093,7 @@
             for (let s = -1; s <= 1; s++) {
               const angle = Math.atan2(dy, dx) + s * 0.15;
               eBullets.push({
-                x: e.x + 4, y: e.y + 2,
+                x: e.x + 8, y: e.y + 4,
                 vx: Math.cos(angle) * 2, vy: Math.sin(angle) * 2
               });
             }
@@ -1048,7 +1111,7 @@
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist > 0) {
             eBullets.push({
-              x: e.x + 0, y: e.y + 0,
+              x: e.x, y: e.y,
               vx: (dx / dist) * 3.5, vy: (dy / dist) * 3.5
             });
           }
@@ -1056,10 +1119,13 @@
         }
       }
 
-      // Bullet-enemy collision
+      // Bullet (circle) vs enemy (rect) collision
+      const eh = enemyHitbox(e);
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (boxOverlap(b.x - 1, b.y - 1, 3, 3, e.x, e.y, 8, 8)) {
+        const bc = bulletCenter(b);
+        const br = bulletRadius(b);
+        if (circRectOverlap(bc.cx, bc.cy, br, eh.x, eh.y, eh.w, eh.h)) {
           if (!b.piercing) bullets.splice(j, 1);
           if (e.hp !== undefined) {
             e.hp--;
@@ -1081,9 +1147,10 @@
         }
       }
 
-      // Enemy-player contact
+      // Enemy (rect) vs player (rect) contact
       if (!player.dead && player.invincible <= 0) {
-        if (boxOverlap(player.x + 1, player.y + 1, 6, 6, e.x, e.y, 8, 8)) {
+        const phNow = playerHitbox();
+        if (boxOverlap(phNow.x, phNow.y, phNow.w, phNow.h, eh.x, eh.y, eh.w, eh.h)) {
           killPlayer();
         }
       }
@@ -1094,51 +1161,53 @@
       const boss = level.boss;
       const bsx = boss.x - camX;
       if (bsx < W + 20) {
-        // Boss is on screen - stop auto scroll
         autoScroll = false;
 
         boss.shootTimer++;
         boss.moveTimer++;
 
-        // Boss movement
         if (boss.moveTimer > 40) {
           boss.moveTimer = 0;
           boss.moveDir = rnd(1) < 0.5 ? -1 : 1;
         }
         boss.y += Math.sin(Mono.frame * 0.03) * 0.3;
 
-        // Boss shooting patterns
+        // Boss shooting
         if (boss.shootTimer > 25) {
           boss.shootTimer = 0;
           const phase = boss.hp < boss.maxHp / 2 ? 1 : 0;
 
-          // Aimed shot
           const dx = player.x - boss.x;
-          const dy = player.y - (boss.y + 16);
+          const dy = player.y - (boss.y + 24);
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist > 0) {
             eBullets.push({
-              x: boss.x - 4, y: boss.y + 16,
+              x: boss.x - 4, y: boss.y + 24,
               vx: (dx / dist) * 3, vy: (dy / dist) * 3
             });
           }
 
-          // Extra shots in phase 2
           if (phase === 1) {
             for (let a = 0; a < 4; a++) {
               const angle = (Mono.frame * 0.05 + a * Math.PI / 2);
               eBullets.push({
-                x: boss.x, y: boss.y + 20,
+                x: boss.x, y: boss.y + 30,
                 vx: Math.cos(angle) * 2, vy: Math.sin(angle) * 2
               });
             }
           }
         }
 
-        // Bullet-boss collision
+        // Bullet (circle) vs boss (rect) collision
+        const bossHBx = boss.x - 12;
+        const bossHBy = boss.y;
+        const bossHBw = 32;
+        const bossHBh = 48;
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if (boxOverlap(b.x - 1, b.y - 1, 3, 3, boss.x - 12, boss.y, 32, 48)) {
+          const bc = bulletCenter(b);
+          const br = bulletRadius(b);
+          if (circRectOverlap(bc.cx, bc.cy, br, bossHBx, bossHBy, bossHBw, bossHBh)) {
             if (!b.piercing) bullets.splice(j, 1);
             boss.hp--;
             boss.flashTimer = 4;
@@ -1168,12 +1237,12 @@
       }
     }
 
-    // Power-ups
+    // Power-ups (rect vs rect)
     for (const pu of level.powerups) {
       if (!pu.alive) continue;
       const sx = pu.x - camX;
-      if (sx < -16 || sx > W + 16) continue;
-      if (boxOverlap(player.x, player.y, 8, 8, pu.x, pu.y, 8, 8)) {
+      if (sx < -20 || sx > W + 20) continue;
+      if (boxOverlap(player.x, player.y, SPR, SPR, pu.x, pu.y, SPR, SPR)) {
         pu.alive = false;
         sfxPowerup();
         if (pu.type === "spread") { weapon = "spread"; weaponTimer = 600; }
@@ -1213,9 +1282,7 @@
   function drawPlayState() {
     cls(0);
 
-    // ---- PLAY STATE RENDERING ----
-
-    // Sky - gradient feel
+    // Sky
     rectf(0, 0, W, 45, 0);
 
     // Background mountains (parallax)
@@ -1228,7 +1295,7 @@
       }
     }
 
-    // Mid-ground hills (faster parallax)
+    // Mid-ground hills
     const mgOff = camX * 0.4;
     for (let x = 0; x < W; x += 2) {
       const wx = x + mgOff;
@@ -1241,29 +1308,26 @@
     // Background trees
     for (const bg of level.bgElements) {
       const sx = flr(bg.x * bg.parallax + (bg.x * (1 - bg.parallax)) - camX * bg.parallax);
-      if (sx > -16 && sx < W + 16) {
+      if (sx > -SPR && sx < W + SPR) {
         if (bg.type === "tree") {
           sprT(35, sx, flr(bg.y));
         }
       }
     }
 
-    // Draw platforms
+    // Draw platforms (using 16px tiles)
     for (const p of level.platforms) {
       const sx = flr(p.x - camX);
       const ex = flr(p.x + p.w - camX);
-      if (ex < -8 || sx > W + 8) continue;
+      if (ex < -SPR || sx > W + SPR) continue;
 
       if (p.ground) {
-        // Ground tiles
-        for (let tx = sx; tx < ex; tx += 8) {
+        for (let tx = sx; tx < ex; tx += TILE) {
           sprT(30, tx, p.y);
-          // Fill below ground
-          rectf(tx, p.y + 8, 8, H - p.y - 8, 1);
+          rectf(tx, p.y + TILE, TILE, H - p.y - TILE, 1);
         }
       } else {
-        // Platform tiles
-        for (let tx = sx; tx < ex; tx += 8) {
+        for (let tx = sx; tx < ex; tx += TILE) {
           sprT(31, tx, p.y);
         }
       }
@@ -1273,17 +1337,19 @@
     for (const pu of level.powerups) {
       if (!pu.alive) continue;
       const sx = flr(pu.x - camX);
-      if (sx < -8 || sx > W + 8) continue;
+      if (sx < -SPR || sx > W + SPR) continue;
       const bob = sin(Mono.frame * 0.1) * 3;
       const sprId = pu.type === "spread" ? 25 : pu.type === "laser" ? 26 : 27;
       sprT(sprId, sx, flr(pu.y + bob));
+      // Debug: power-up hitbox
+      Mono.dbg(pu.x - camX, pu.y + bob, SPR, SPR);
     }
 
     // Draw enemies
     for (const e of level.enemies) {
       if (!e.alive) continue;
       const sx = flr(e.x - camX);
-      if (sx < -16 || sx > W + 16) continue;
+      if (sx < -SPR || sx > W + SPR) continue;
 
       if (e.type === "soldier") {
         const anim = flr(e.animTimer / 8) % 2 === 0 ? 10 : 11;
@@ -1293,6 +1359,9 @@
       } else if (e.type === "sniper") {
         sprT(13, sx, flr(e.y), e.dir < 0);
       }
+      // Debug: enemy hitbox (rect)
+      const eh = enemyHitbox(e);
+      Mono.dbg(eh.x - camX, eh.y, eh.w, eh.h);
     }
 
     // Draw boss
@@ -1303,29 +1372,31 @@
       const flash = boss.flashTimer > 0 && flr(Mono.frame / 2) % 2 === 0;
 
       if (!flash) {
-        // Main boss body (multi-sprite)
-        sprT(41, bx - 4, by);       // top turret
-        sprT(43, bx - 4, by + 8);   // armor
-        sprT(40, bx - 4, by + 16);  // center core
-        sprT(43, bx - 4, by + 24);  // lower armor
-        sprT(40, bx - 4, by + 32);  // lower core
-        sprT(42, bx - 14, by + 16); // gun arm left
-        sprT(42, bx + 6, by + 16, true); // gun arm right (for symmetry)
+        sprT(41, bx - 4, by);
+        sprT(43, bx - 4, by + SPR);
+        sprT(40, bx - 4, by + SPR * 2);
+        sprT(43, bx - 4, by + SPR * 3 - 8);
+        sprT(40, bx - 4, by + SPR * 2 + SPR);
+        sprT(42, bx - 14, by + SPR * 2);
+        sprT(42, bx + 6, by + SPR * 2, true);
 
-        // HP bar
+        // HP bar (clamped to screen)
         const hpW = 40;
         const hpFill = flr((boss.hp / boss.maxHp) * hpW);
-        rectf(bx - 12, by - 8, hpW + 2, 5, 1);
-        rectf(bx - 11, by - 7, hpFill, 3, 3);
-        rect(bx - 12, by - 8, hpW + 2, 5, 2);
+        const hpX = _max(1, min(W - hpW - 3, bx - 12));
+        rectf(hpX, by - 8, hpW + 2, 5, 1);
+        rectf(hpX + 1, by - 7, hpFill, 3, 3);
+        rect(hpX, by - 8, hpW + 2, 5, 2);
       }
+      // Debug: boss hitbox (rect)
+      Mono.dbg(boss.x - 12 - camX, boss.y, 32, 48);
     }
 
     // Draw player bullets
     for (const b of bullets) {
       const sx = flr(b.x - camX);
       const sy = flr(b.y);
-      if (sx < -8 || sx > W + 8) continue;
+      if (sx < -SPR || sx > W + SPR) continue;
       if (b.type === "laser") {
         sprT(17, sx, sy);
       } else if (b.type === "spread") {
@@ -1333,40 +1404,52 @@
       } else {
         sprT(15, sx, sy);
       }
+      // Debug: bullet hitbox (circle)
+      const bc = bulletCenter(b);
+      Mono.dbgC(bc.cx - camX, bc.cy, bulletRadius(b));
     }
 
     // Draw enemy bullets
     for (const b of eBullets) {
       const sx = flr(b.x - camX);
       sprT(18, sx, flr(b.y));
+      // Debug: enemy bullet hitbox (circle)
+      const ec = eBulletCenter(b);
+      Mono.dbgC(ec.cx - camX, ec.cy, EBULLET_R);
     }
 
     // Draw player
     if (!player.dead) {
       if (player.invincible > 0 && flr(Mono.frame / 3) % 2 === 0) {
-        // Blink during invincibility - don't draw
+        // Blink during invincibility
       } else {
         let sprId = 1;
         if (!player.onGround) {
-          sprId = 4; // jumping
+          sprId = 4;
         } else if (player.prone) {
-          sprId = 5; // prone
+          sprId = 5;
         } else if (player.aimY === -1 && player.aimX === 0) {
-          sprId = 6; // aim up
+          sprId = 6;
         } else if (player.aimY === -1) {
-          sprId = 7; // aim diagonal up
+          sprId = 7;
         } else if (btn("left") || btn("right")) {
-          sprId = flr(player.animTimer / 5) % 2 === 0 ? 2 : 3; // running
+          sprId = flr(player.animTimer / 5) % 2 === 0 ? 2 : 3;
         }
         const sx = flr(player.x - camX);
         sprT(sprId, sx, flr(player.y), player.dir < 0);
       }
+      // Debug: player hitbox (rect)
+      const ph = playerHitbox();
+      Mono.dbg(ph.x - camX, ph.y, ph.w, ph.h);
     }
 
     // Explosions
     for (const e of explosions) {
       const sid = e.timer > 5 ? 20 : 21;
       sprT(sid, flr(e.x - camX), flr(e.y));
+      // Debug: explosion hitbox (circle)
+      const ec = explosionCenter(e);
+      Mono.dbgC(ec.cx - camX, ec.cy, EXPLOSION_R);
     }
 
     // Particles
@@ -1374,26 +1457,33 @@
       pix(flr(p.x - camX), flr(p.y), p.color);
     }
 
-    // HUD
-    rectf(0, 0, W, 11, 0);
-    text("SCORE:" + score, 3, 2, 3);
-    text("STAGE:" + stage, W / 2 - 18, 2, 2);
+    // ---- HUD (within 320x240 bounds) ----
+    rectf(0, 0, W, 12, 0);
+    text("SCORE:" + score, 2, 2, 3);
+    text("STG:" + stage, 140, 2, 2);
 
-    // Lives
-    for (let i = 0; i < lives; i++) sprT(45, W - 40 + i * 10, 2);
+    // Lives icons - spaced to fit within screen right edge
+    // Each life icon is 16px, spacing 2px between, right-aligned
+    const livesStartX = W - (lives * 14) - 2;
+    for (let i = 0; i < lives; i++) {
+      const lx = livesStartX + i * 14;
+      if (lx >= 0 && lx + SPR <= W) {
+        sprT(45, lx, -2);
+      }
+    }
 
-    // Weapon indicator
+    // Weapon indicator (bottom-left, clamped)
     if (weapon !== "normal") {
       const wName = weapon.toUpperCase();
       const wc = weaponTimer < 90 && flr(Mono.frame / 6) % 2 === 0 ? 1 : 3;
-      text(wName, 3, H - 10, wc);
+      text(wName, 2, H - 10, wc);
     }
 
     // Stage intro text
     if (Mono.frame < 90) {
       if (flr(Mono.frame / 6) % 2 === 0) {
-        text("STAGE " + stage, 142, 113, 3);
-        text("GET READY!", 135, 124, 2);
+        text("STAGE " + stage, 130, 113, 3);
+        text("GET READY!", 122, 124, 2);
       }
     }
   }

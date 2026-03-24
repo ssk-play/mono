@@ -20,12 +20,26 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 to 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (all 16x16 via upscale) ---
 
   // 1: Player ship (Exerion-style fighter with wide wings)
-  defSprite(1,
+  defSprite(1, up(
     "00030000" +
     "00333000" +
     "03333300" +
@@ -34,10 +48,10 @@
     "30333030" +
     "30030030" +
     "00000000"
-  );
+  ));
 
   // 2: Player ship thrust frame
-  defSprite(2,
+  defSprite(2, up(
     "00030000" +
     "00333000" +
     "03333300" +
@@ -46,10 +60,10 @@
     "30333030" +
     "30030030" +
     "01020100"
-  );
+  ));
 
   // 10: Small fighter enemy (fast)
-  defSprite(10,
+  defSprite(10, up(
     "00000000" +
     "00100100" +
     "01111110" +
@@ -58,10 +72,10 @@
     "00111000" +
     "01000100" +
     "00000000"
-  );
+  ));
 
   // 11: Medium bomber enemy
-  defSprite(11,
+  defSprite(11, up(
     "00333000" +
     "03333300" +
     "33323330" +
@@ -70,10 +84,10 @@
     "03333300" +
     "01030100" +
     "00010000"
-  );
+  ));
 
   // 12: Large carrier enemy
-  defSprite(12,
+  defSprite(12, up(
     "01333100" +
     "33333330" +
     "33232330" +
@@ -82,10 +96,10 @@
     "33232330" +
     "33333330" +
     "01030100"
-  );
+  ));
 
-  // 20: Player bullet (dual shot, left)
-  defSprite(20,
+  // 20: Player bullet (dual shot)
+  defSprite(20, up(
     "00000000" +
     "00030000" +
     "00030000" +
@@ -94,10 +108,10 @@
     "00010000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 21: Charge bullet (big bright)
-  defSprite(21,
+  defSprite(21, up(
     "00333000" +
     "03333300" +
     "33333330" +
@@ -106,10 +120,10 @@
     "03333300" +
     "00333000" +
     "00000000"
-  );
+  ));
 
   // 25: Enemy bullet
-  defSprite(25,
+  defSprite(25, up(
     "00000000" +
     "00010000" +
     "00020000" +
@@ -118,10 +132,10 @@
     "00030000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 30: Explosion frame 1
-  defSprite(30,
+  defSprite(30, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -130,10 +144,10 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
 
   // 31: Explosion frame 2
-  defSprite(31,
+  defSprite(31, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -142,10 +156,10 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
 
   // 32: Explosion frame 3 (fading)
-  defSprite(32,
+  defSprite(32, up(
     "10000010" +
     "00100000" +
     "00001100" +
@@ -154,10 +168,10 @@
     "00000100" +
     "10000001" +
     "00010000"
-  );
+  ));
 
   // 40: Life icon (small ship)
-  defSprite(40,
+  defSprite(40, up(
     "00000000" +
     "00030000" +
     "00333000" +
@@ -166,10 +180,10 @@
     "30030030" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 50: Charge indicator frame
-  defSprite(50,
+  defSprite(50, up(
     "00333000" +
     "03000300" +
     "30000030" +
@@ -178,7 +192,10 @@
     "03000300" +
     "00333000" +
     "00000000"
-  );
+  ));
+
+  // --- Constants for 16x16 sprites ---
+  const SP = 16; // sprite size
 
   // --- Game State ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -207,8 +224,16 @@
     return arr;
   }
 
+  // --- Circle collision helper ---
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    const dist = dx * dx + dy * dy;
+    const rSum = r1 + r2;
+    return dist < rSum * rSum;
+  }
+
   function resetGame() {
-    player = { x: W / 2 - 4, y: H - 30, speed: 2.5, yBase: H - 30 };
+    player = { x: W / 2 - 8, y: H - 40, speed: 2.5, yBase: H - 40 };
     bullets = [];
     eBullets = [];
     enemies = [];
@@ -225,9 +250,9 @@
     invincible = 0;
     invTimer = 0;
     screenShake = 0;
-    stars1 = makeStars(30, 0.3, 0.6);  // far layer (slow, dim)
-    stars2 = makeStars(20, 0.8, 1.5);  // mid layer
-    stars3 = makeStars(10, 2.0, 3.0);  // near layer (fast, bright)
+    stars1 = makeStars(30, 0.3, 0.6);
+    stars2 = makeStars(20, 0.8, 1.5);
+    stars3 = makeStars(10, 2.0, 3.0);
     spawnWave();
   }
 
@@ -240,8 +265,7 @@
     const hasBomber = wave >= 2;
 
     if (hasCarrier) {
-      // Carrier enters alone first
-      enemies.push(makeEnemy(12, W / 2 - 4, -15, PATTERNS.SWOOP, 0, 3, 100));
+      enemies.push(makeEnemy(12, W / 2 - 8, -20, PATTERNS.SWOOP, 0, 3, 100));
     }
 
     for (let i = 0; i < numEnemies; i++) {
@@ -252,7 +276,6 @@
         type = 10; hp = 1; pts = 10;
       }
       let pat = pattern;
-      // Mix patterns based on wave
       if (wave > 3) pat = flr(rnd(5));
 
       enemies.push(makeEnemy(type, 0, 0, pat, i, hp, pts));
@@ -263,17 +286,17 @@
     const delay = index * 6;
     let entryX, entryDir;
     if (index % 2 === 0) {
-      entryX = -10;
+      entryX = -16;
       entryDir = 1;
     } else {
-      entryX = W + 10;
+      entryX = W + 16;
       entryDir = -1;
     }
 
     return {
       type: type,
       x: entryX,
-      y: -10 - index * 12,
+      y: -16 - index * 16,
       hp: hp,
       pts: pts,
       pattern: pattern,
@@ -282,20 +305,25 @@
       timer: -delay,
       alive: true,
       entryDir: entryDir,
-      phase: "enter", // enter, attack, exit
+      phase: "enter",
       shootTimer: 60 + flr(rnd(90)),
       baseSpeed: 1.5 + wave * 0.15,
       amplitude: 30 + rnd(22),
       freq: 0.03 + rnd(0.02),
-      // For circle pattern
       cx: W / 2 + rnd(66) - 33,
       cy: 60 + rnd(45),
       radius: 20 + rnd(30),
       angle: rnd(Math.PI * 2),
-      // V-formation offset
-      formX: (index % 6 - 2.5) * 15,
-      formY: _abs(index % 6 - 2.5) * 12,
+      formX: (index % 6 - 2.5) * 18,
+      formY: _abs(index % 6 - 2.5) * 14,
     };
+  }
+
+  // Enemy collision radius by type
+  function enemyRadius(type) {
+    if (type === 12) return 7; // carrier - large
+    if (type === 11) return 6; // bomber - medium
+    return 5; // fighter - small
   }
 
   function addExplosion(x, y, big) {
@@ -304,7 +332,7 @@
     for (let i = 0; i < count; i++) {
       const spd = big ? 3 : 2;
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(spd * 2) - spd, vy: rnd(spd * 2) - spd,
         life: 6 + flr(rnd(12)),
         color: flr(rnd(3)) + 1
@@ -416,27 +444,25 @@
     update() {
     updateStarsAndAnim();
 
-    // --- Play state ---
     if (waveMessage > 0) waveMessage--;
     if (invincible > 0) invincible--;
 
-    // Player movement: left/right freely, up/down limited range
+    // Player movement
     if (btn("left")) player.x -= player.speed;
     if (btn("right")) player.x += player.speed;
     if (btn("up")) player.y -= player.speed * 0.7;
     if (btn("down")) player.y += player.speed * 0.7;
 
-    // Clamp player position
-    player.x = _max(4, min(W - 12, player.x));
-    player.y = _max(H - 75, min(H - 15, player.y));
+    // Clamp player position (16x16 sprite)
+    player.x = _max(0, min(W - SP, player.x));
+    player.y = _max(H - 80, min(H - SP - 4, player.y));
 
-    // Shooting: dual diverging shots
+    // Shooting
     if (shootCooldown > 0) shootCooldown--;
 
     // Charge mechanic
     if (btn("a")) {
       if (!charging && shootCooldown <= 0) {
-        // Fire normal dual shot immediately on press
         if (btnp("a")) {
           fireDualShot();
           shootCooldown = 6;
@@ -447,7 +473,6 @@
       if (charging && chargeTime % 8 === 0 && chargeTime < 60) chargeTickSound();
     } else {
       if (charging && chargeTime >= 30) {
-        // Release charged shot
         fireChargeShot();
         chargeShootSound();
         shootCooldown = 15;
@@ -461,7 +486,7 @@
       const b = bullets[i];
       b.x += b.vx;
       b.y += b.vy;
-      if (b.y < -8 || b.x < -8 || b.x > W + 8) bullets.splice(i, 1);
+      if (b.y < -SP || b.x < -SP || b.x > W + SP) bullets.splice(i, 1);
     }
 
     // Update enemies
@@ -470,13 +495,12 @@
       if (!e.alive) { enemies.splice(i, 1); continue; }
 
       e.timer++;
-      if (e.timer < 0) continue; // stagger delay
+      if (e.timer < 0) continue;
 
       const t = e.timer;
       const spd = e.baseSpeed;
 
       if (e.phase === "enter") {
-        // Entry patterns
         switch (e.pattern) {
           case PATTERNS.SINE:
             e.x += e.entryDir * spd * 1.2;
@@ -502,7 +526,6 @@
             break;
 
           case PATTERNS.SWOOP:
-            // Swoop in from side in an arc
             e.x += e.entryDir * spd * 1.5;
             e.y = 22 + sin(t * 0.04) * 45 + 30;
             if (t > 80) { e.phase = "attack"; e.timer = 0; }
@@ -519,7 +542,6 @@
       }
 
       if (e.phase === "attack") {
-        // Attack patterns: weave and descend toward player
         switch (e.pattern) {
           case PATTERNS.SINE:
             e.x += sin(t * 0.04) * spd * 0.8;
@@ -532,15 +554,14 @@
             e.y += spd * 0.5;
             break;
 
-          case PATTERNS.VFORM:
-            // Dive toward player
+          case PATTERNS.VFORM: {
             const dx = player.x - e.x;
             e.x += (dx > 0 ? 1 : -1) * spd * 0.5;
             e.y += spd * 0.8;
             break;
+          }
 
           case PATTERNS.SWOOP:
-            // Big swoop
             e.x += sin(t * 0.03) * spd * 2;
             e.y += spd * 0.4;
             break;
@@ -553,11 +574,11 @@
 
         // Shoot at player
         e.shootTimer--;
-        if (e.shootTimer <= 0 && e.y > 10 && e.y < H - 38) {
-          const angle = Math.atan2(player.y - e.y, player.x - e.x);
+        if (e.shootTimer <= 0 && e.y > 10 && e.y < H - 48) {
+          const angle = Math.atan2(player.y + 8 - (e.y + 8), player.x + 8 - (e.x + 8));
           const bspd = 2.5 + wave * 0.12;
           eBullets.push({
-            x: e.x + 0, y: e.y + 8,
+            x: e.x + 4, y: e.y + SP,
             vx: cos(angle) * bspd,
             vy: sin(angle) * bspd
           });
@@ -566,16 +587,22 @@
       }
 
       // Off screen -> remove
-      if (e.y > H + 20 || e.x < -30 || e.x > W + 30) {
+      if (e.y > H + 30 || e.x < -40 || e.x > W + 40) {
         e.phase = "exit";
         enemies.splice(i, 1);
         continue;
       }
 
-      // Bullet-enemy collision
+      // Bullet-enemy collision (circle-based)
+      const eCx = e.x + 8, eCy = e.y + 8;
+      const eR = enemyRadius(e.type);
+
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.x + 8 > e.x - 2 && b.x < e.x + 9 && b.y + 8 > e.y - 2 && b.y < e.y + 9) {
+        const bCx = b.x + 8, bCy = b.y + 8;
+        const bR = b.charged ? 6 : 3;
+
+        if (circCollide(bCx, bCy, bR, eCx, eCy, eR)) {
           const dmg = b.power || 1;
           e.hp -= dmg;
           bullets.splice(j, 1);
@@ -598,27 +625,31 @@
       const b = eBullets[i];
       b.x += b.vx;
       b.y += b.vy;
-      if (b.y > H + 8 || b.y < -8 || b.x < -8 || b.x > W + 8) {
+      if (b.y > H + SP || b.y < -SP || b.x < -SP || b.x > W + SP) {
         eBullets.splice(i, 1);
         continue;
       }
 
-      // Hit player
-      if (invincible <= 0 &&
-          b.x + 8 > player.x && b.x < player.x + 8 &&
-          b.y + 8 > player.y && b.y < player.y + 8) {
-        eBullets.splice(i, 1);
-        playerHit();
+      // Hit player (circle collision)
+      if (invincible <= 0) {
+        const bCx = b.x + 8, bCy = b.y + 8, bR = 3;
+        const pCx = player.x + 8, pCy = player.y + 8, pR = 5;
+        if (circCollide(bCx, bCy, bR, pCx, pCy, pR)) {
+          eBullets.splice(i, 1);
+          playerHit();
+        }
       }
     }
 
-    // Enemy-player collision
+    // Enemy-player collision (circle-based)
     if (invincible <= 0) {
+      const pCx = player.x + 8, pCy = player.y + 8, pR = 5;
       for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
         if (e.timer < 0) continue;
-        if (player.x + 7 > e.x && player.x < e.x + 8 &&
-            player.y + 7 > e.y && player.y < e.y + 8) {
+        const eCx = e.x + 8, eCy = e.y + 8;
+        const eR = enemyRadius(e.type);
+        if (circCollide(pCx, pCy, pR, eCx, eCy, eR)) {
           addExplosion(e.x, e.y, false);
           e.alive = false;
           playerHit();
@@ -667,26 +698,26 @@
     for (const b of eBullets) {
       const bx = flr(b.x) + shakeX, by = flr(b.y) + shakeY;
       spr(25, bx, by);
+      dbgC(bx + 8, by + 8, 3);
     }
 
     // Enemies
     for (const e of enemies) {
       if (e.timer < 0) continue;
       const ex = flr(e.x) + shakeX, ey = flr(e.y) + shakeY;
-      if (e.type === 12 && e.hp < 3 && flr(Mono.frame / 3) % 2 === 0) {
-        spr(e.type, ex, ey);
-      } else {
-        spr(e.type, ex, ey);
-      }
+      spr(e.type, ex, ey);
+      dbgC(ex + 8, ey + 8, enemyRadius(e.type));
     }
 
     // Player bullets
     for (const b of bullets) {
       const bx = flr(b.x) + shakeX, by = flr(b.y) + shakeY;
       if (b.charged) {
-        spr(21, bx - 3, by - 3);
+        spr(21, bx, by);
+        dbgC(bx + 8, by + 8, 6);
       } else {
         spr(20, bx, by);
+        dbgC(bx + 8, by + 8, 3);
       }
     }
 
@@ -696,15 +727,16 @@
       const py = flr(player.y) + shakeY;
       const shipSpr = Mono.frame % 6 < 3 ? 1 : 2;
       spr(shipSpr, px, py);
+      dbgC(px + 8, py + 8, 5);
 
       if (charging && chargeTime >= 10) {
         const chargePct = min(1, (chargeTime - 10) / 20);
         const ccolor = chargeTime >= 30 ? 3 : 2;
         if (chargeTime >= 30) {
-          circ(px + 4, py + 4, 6 + sin(Mono.frame * 0.3) * 2, ccolor);
+          circ(px + 8, py + 8, 10 + sin(Mono.frame * 0.3) * 2, ccolor);
         } else {
-          const r = 3 + chargePct * 4;
-          circ(px + 4, py + 4, flr(r), 1);
+          const r = 4 + chargePct * 6;
+          circ(px + 8, py + 8, flr(r), 1);
         }
       }
     }
@@ -720,20 +752,30 @@
     // Particles
     for (const p of particles) pix(flr(p.x) + shakeX, flr(p.y) + shakeY, p.color);
 
-    // --- HUD ---
+    // --- HUD (within 320x240) ---
     rectf(0, 0, W, 10, 0);
-    text("SCORE:" + String(score).padStart(6, "0"), 3, 2, 3);
+    text("SCORE:" + String(score).padStart(6, "0"), 2, 2, 3);
+    dbg(2, 2, 60, 7);
     text("WAVE:" + wave, W / 2 - 16, 2, 2);
+    dbg(W / 2 - 16, 2, 40, 7);
 
-    // Lives
-    for (let i = 0; i < lives; i++) spr(40, W - 27 + i * 9, 1);
+    // Lives (right-aligned, 16px icons with 2px gap, fits within 320)
+    const livesStartX = W - 4 - lives * 18;
+    for (let i = 0; i < lives; i++) {
+      const lx = livesStartX + i * 18;
+      spr(40, lx, -2);
+      dbg(lx, -2, SP, SP);
+    }
 
     // Charge bar
     if (charging && chargeTime >= 10) {
       const bw = min(30, flr((chargeTime - 10) * 1.5));
       const barColor = chargeTime >= 30 ? 3 : 2;
-      rectf(player.x - 8 + shakeX, player.y + 10 + shakeY, bw, 2, barColor);
-      rect(player.x - 9 + shakeX, player.y + 9 + shakeY, 32, 4, 1);
+      const barX = flr(player.x) - 7 + shakeX;
+      const barY = flr(player.y) + SP + 2 + shakeY;
+      rectf(barX, barY, bw, 2, barColor);
+      rect(barX - 1, barY - 1, 32, 4, 1);
+      dbg(barX - 1, barY - 1, 32, 4);
     }
 
     // Wave announcement
@@ -749,8 +791,8 @@
     lives--;
     addExplosion(player.x, player.y, true);
     deathSound();
-    player.x = W / 2 - 4;
-    player.y = H - 30;
+    player.x = W / 2 - 8;
+    player.y = H - 40;
     invincible = 60;
     chargeTime = 0;
     charging = false;
@@ -761,16 +803,14 @@
   }
 
   function fireDualShot() {
-    // Two diverging bullets
-    bullets.push({ x: player.x + 0, y: player.y - 2, vx: -0.8, vy: -6, power: 1 });
-    bullets.push({ x: player.x + 0, y: player.y - 2, vx: 0.8, vy: -6, power: 1 });
+    bullets.push({ x: player.x + 2, y: player.y - 4, vx: -0.8, vy: -6, power: 1 });
+    bullets.push({ x: player.x + 2, y: player.y - 4, vx: 0.8, vy: -6, power: 1 });
     shootSound();
   }
 
   function fireChargeShot() {
-    // 5-way spread shot
-    const cx = player.x + 0;
-    const cy = player.y - 4;
+    const cx = player.x + 2;
+    const cy = player.y - 6;
     const angles = [-0.35, -0.17, 0, 0.17, 0.35];
     const spd = 7;
     for (const a of angles) {
@@ -784,10 +824,8 @@
     }
   }
 
-  // (Scene draw functions defined above)
-
   function drawTitle() {
-    const ty = 30 + sin(titleAnim * 0.04) * 4;
+    const ty = 24 + sin(titleAnim * 0.04) * 4;
 
     // Title shadow
     text("EXERION", W / 2 - 20, flr(ty) + 1, 1);
@@ -802,30 +840,28 @@
     const cx = W / 2;
     for (let i = 0; i < 5; i++) {
       const angle = titleAnim * 0.03 + i * (Math.PI * 2 / 5);
-      const ex = cx + cos(angle) * 33;
-      const ey = flr(ty) + 38 + sin(angle) * 15;
+      const ex = cx + cos(angle) * 33 - 8;
+      const ey = flr(ty) + 34 + sin(angle) * 15;
       spr(10, flr(ex), flr(ey));
     }
     // Bomber in center
-    spr(11, cx - 4, flr(ty) + 35 + flr(sin(titleAnim * 0.05) * 3));
+    spr(11, cx - 8, flr(ty) + 32 + flr(sin(titleAnim * 0.05) * 3));
     // Carrier below
-    spr(12, cx - 4, flr(ty) + 53 + flr(sin(titleAnim * 0.03) * 2));
+    spr(12, cx - 8, flr(ty) + 52 + flr(sin(titleAnim * 0.03) * 2));
 
     // Player ship demo
-    const shipY = 150 + sin(titleAnim * 0.06) * 2;
-    spr(1, cx - 4, flr(shipY));
+    const shipY = 140 + sin(titleAnim * 0.06) * 2;
+    spr(1, cx - 8, flr(shipY));
 
-    if (flr(titleAnim / 20) % 2 === 0) text("PRESS START", W / 2 - 42, 145, 3);
+    if (flr(titleAnim / 20) % 2 === 0) text("PRESS START", W / 2 - 32, 155, 3);
 
     // Score table
-    text("-SCORE TABLE-", W / 2 - 36, 170, 2);
-    spr(12, W / 2 - 44, 180); text("CARRIER  100 PTS", W / 2 - 30, 182, 2);
-    spr(11, W / 2 - 44, 192); text("BOMBER    30 PTS", W / 2 - 30, 194, 2);
-    spr(10, W / 2 - 44, 204); text("FIGHTER   10 PTS", W / 2 - 30, 206, 2);
+    text("-SCORE TABLE-", W / 2 - 36, 172, 2);
+    spr(12, W / 2 - 50, 182); text("CARRIER  100 PTS", W / 2 - 30, 186, 2);
+    spr(11, W / 2 - 50, 198); text("BOMBER    30 PTS", W / 2 - 30, 202, 2);
+    spr(10, W / 2 - 50, 214); text("FIGHTER   10 PTS", W / 2 - 30, 218, 2);
 
-    if (hiScore > 0) text("HI:" + String(hiScore).padStart(6, "0"), W / 2 - 25, 218, 2);
-
-    text("MONO DEMO V0.1", W / 2 - 46, 230, 1);
+    if (hiScore > 0) text("HI:" + String(hiScore).padStart(6, "0"), W / 2 - 25, 230, 2);
   }
 
   function drawGameOver() {
@@ -840,7 +876,7 @@
       if (flr(titleAnim / 10) % 2 === 0) text("NEW HIGH SCORE!", W / 2 - 40, flr(gy) + 36, 3);
     }
 
-    if (flr(titleAnim / 20) % 2 === 0) text("PRESS START", W / 2 - 52, 158, 3);
+    if (flr(titleAnim / 20) % 2 === 0) text("PRESS START", W / 2 - 32, 158, 3);
   }
 
   Mono.go(TITLE);

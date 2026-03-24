@@ -22,7 +22,7 @@
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
           min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites (16x16) ---
+  // --- Sprites (16x16, 256 chars each) ---
 
   // 1: P-38 Player (top-down, twin-boom fighter)
   defSprite(1,
@@ -481,6 +481,25 @@
     "0000333333000000"
   );
 
+  // --- Collision helpers ---
+  // Rect vs rect
+  function hitRR(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax + aw > bx && ax < bx + bw && ay + ah > by && ay < by + bh;
+  }
+  // Circle vs circle
+  function hitCC(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = ar + br;
+    return dx * dx + dy * dy < dist * dist;
+  }
+  // Circle vs rect
+  function hitCR(cx, cy, cr, rx, ry, rw, rh) {
+    const nearX = _max(rx, min(cx, rx + rw));
+    const nearY = _max(ry, min(cy, ry + rh));
+    const dx = cx - nearX, dy = cy - nearY;
+    return dx * dx + dy * dy < cr * cr;
+  }
+
   // --- Game State ---
   const { TITLE, PLAY, CLEAR, GAMEOVER } = Mono.SCENE;
   let player, bullets, eBullets, enemies, explosions, particles;
@@ -706,6 +725,30 @@
     setTimeout(() => note(0, "C6", 0.2), 300);
   }
 
+  // --- Hitbox dimensions ---
+  // Player: inset hitbox (body only, not wingtips)
+  const PL_HBX = 3, PL_HBY = 2, PL_HBW = 10, PL_HBH = 12;
+  // Player bullet: thin rect (2 wide, 8 tall centered in top half)
+  const PB_CX = 3, PB_CY = 3, PB_R = 3;  // circle at top of sprite
+  // Enemy bullet: circle
+  const EB_CX = 3, EB_CY = 8, EB_R = 3;
+  // Small/leader enemy: body box
+  const EN_S_HBX = 2, EN_S_HBY = 2, EN_S_HBW = 12, EN_S_HBH = 12;
+  // Medium enemy
+  const EN_M_HBX = 1, EN_M_HBY = 1, EN_M_HBW = 14, EN_M_HBH = 13;
+  // Large enemy (32x32 multi-sprite)
+  const EN_L_HBX = 2, EN_L_HBY = 2, EN_L_HBW = 28, EN_L_HBH = 28;
+  // Boss (32x32 multi-sprite)
+  const BOSS_HBX = 2, BOSS_HBY = 2, BOSS_HBW = 28, BOSS_HBH = 28;
+  // Power-up: circle
+  const PU_CX = 8, PU_CY = 8, PU_R = 7;
+
+  function enemyHitbox(e) {
+    if (e.type === "large") return { x: e.x + EN_L_HBX, y: e.y + EN_L_HBY, w: EN_L_HBW, h: EN_L_HBH };
+    if (e.type === "medium") return { x: e.x + EN_M_HBX, y: e.y + EN_M_HBY, w: EN_M_HBW, h: EN_M_HBH };
+    return { x: e.x + EN_S_HBX, y: e.y + EN_S_HBY, w: EN_S_HBW, h: EN_S_HBH };
+  }
+
   function playerHit() {
     addExplosion(player.x, player.y);
     deathSound();
@@ -770,8 +813,8 @@
     if (btn("right")) player.x += player.speed;
     if (btn("up")) player.y -= player.speed;
     if (btn("down")) player.y += player.speed;
-    player.x = _max(3, min(W - 16, player.x));
-    player.y = _max(15, min(H - 12, player.y));
+    player.x = _max(0, min(W - 16, player.x));
+    player.y = _max(10, min(H - 16, player.y));
 
     // Loop activation (X button)
     if (btnp("b") && loops > 0 && loopTimer <= 0) {
@@ -814,7 +857,7 @@
       const b = bullets[i];
       b.x += b.vx;
       b.y += b.vy;
-      if (b.y < -8 || b.x < -8 || b.x > W + 8) bullets.splice(i, 1);
+      if (b.y < -16 || b.x < -16 || b.x > W + 16) bullets.splice(i, 1);
     }
 
     // Update wingmen
@@ -899,12 +942,12 @@
         e.shootTimer = _max(25, 70 - stage * 4) + flr(rnd(40));
       }
 
-      // Bullet-enemy collision
+      // Bullet-enemy collision (circle bullet vs rect enemy)
+      const eh = enemyHitbox(e);
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        const hitW = e.type === "large" ? 32 : 16;
-        const hitH = e.type === "large" ? 32 : 16;
-        if (b.x + 16 > e.x && b.x < e.x + hitW && b.y + 16 > e.y && b.y < e.y + hitH) {
+        const bcx = b.x + PB_CX, bcy = b.y + PB_CY;
+        if (hitCR(bcx, bcy, PB_R, eh.x, eh.y, eh.w, eh.h)) {
           bullets.splice(j, 1);
           e.hp--;
           if (e.hp <= 0) {
@@ -967,10 +1010,12 @@
           }
         }
 
-        // Bullet-boss collision
+        // Bullet-boss collision (circle bullet vs rect boss)
+        const bossBox = { x: boss.x + BOSS_HBX, y: boss.y + BOSS_HBY, w: BOSS_HBW, h: BOSS_HBH };
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if (b.x + 16 > boss.x && b.x < boss.x + 32 && b.y + 16 > boss.y && b.y < boss.y + 32) {
+          const bcx = b.x + PB_CX, bcy = b.y + PB_CY;
+          if (hitCR(bcx, bcy, PB_R, bossBox.x, bossBox.y, bossBox.w, bossBox.h)) {
             bullets.splice(j, 1);
             boss.hp--;
             note(1, "A4", 0.02);
@@ -984,10 +1029,10 @@
           }
         }
 
-        // Boss-player collision
+        // Boss-player collision (rect boss vs rect player)
+        const plBox = { x: player.x + PL_HBX, y: player.y + PL_HBY, w: PL_HBW, h: PL_HBH };
         if (invincTimer <= 0 && loopTimer <= 0) {
-          if (player.x + 15 > boss.x && player.x < boss.x + 32 &&
-              player.y + 15 > boss.y && player.y < boss.y + 32) {
+          if (hitRR(plBox.x, plBox.y, plBox.w, plBox.h, bossBox.x, bossBox.y, bossBox.w, bossBox.h)) {
             playerHit();
           }
         }
@@ -1021,20 +1066,24 @@
       b.x += b.vx;
       b.y += b.vy;
       if (b.y > H + 8 || b.y < -8 || b.x < -8 || b.x > W + 8) { eBullets.splice(i, 1); continue; }
+      // Circle enemy bullet vs rect player hitbox
       if (invincTimer <= 0 && loopTimer <= 0) {
-        if (b.x + 16 > player.x && b.x < player.x + 16 && b.y + 16 > player.y && b.y < player.y + 16) {
+        const ebcx = b.x + EB_CX, ebcy = b.y + EB_CY;
+        const plBox = { x: player.x + PL_HBX, y: player.y + PL_HBY, w: PL_HBW, h: PL_HBH };
+        if (hitCR(ebcx, ebcy, EB_R, plBox.x, plBox.y, plBox.w, plBox.h)) {
           eBullets.splice(i, 1);
           playerHit();
         }
       }
     }
 
-    // Enemy-player collision
+    // Enemy-player collision (rect enemy vs rect player)
     if (invincTimer <= 0 && loopTimer <= 0) {
+      const plBox = { x: player.x + PL_HBX, y: player.y + PL_HBY, w: PL_HBW, h: PL_HBH };
       for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
-        if (player.x + 15 > e.x && player.x < e.x + 16 &&
-            player.y + 15 > e.y && player.y < e.y + 16) {
+        const eh = enemyHitbox(e);
+        if (hitRR(plBox.x, plBox.y, plBox.w, plBox.h, eh.x, eh.y, eh.w, eh.h)) {
           addExplosion(e.x, e.y);
           enemies.splice(i, 1);
           playerHit();
@@ -1043,13 +1092,14 @@
       }
     }
 
-    // Update powerups
+    // Update powerups (circle powerup vs rect player)
     for (let i = powerups.length - 1; i >= 0; i--) {
       const p = powerups[i];
       p.y += p.vy;
       if (p.y > H + 10) { powerups.splice(i, 1); continue; }
-      if (player.x + 16 > p.x && player.x < p.x + 16 &&
-          player.y + 16 > p.y && player.y < p.y + 16) {
+      const pcx = p.x + PU_CX, pcy = p.y + PU_CY;
+      const plBox = { x: player.x + PL_HBX, y: player.y + PL_HBY, w: PL_HBW, h: PL_HBH };
+      if (hitCR(pcx, pcy, PU_R, plBox.x, plBox.y, plBox.w, plBox.h)) {
         powerups.splice(i, 1);
         powerSound();
         if (p.type === 0) { shotType = 1; shotTypeTimer = 600; }
@@ -1099,8 +1149,9 @@
       drawPlay();
       rectf(W / 2 - 57, 96, 114, 33, 0);
       rect(W / 2 - 57, 96, 114, 33, 2);
-      text(stageMsg, (320 - stageMsg.length * 5) / 2, 105, 3);
-      text("BONUS: " + (stage * 1000), (320 - ("BONUS: " + (stage * 1000)).length * 5) / 2, 117, 2);
+      text(stageMsg, flr((W - stageMsg.length * 5) / 2), 105, 3);
+      const bonusStr = "BONUS: " + (stage * 1000);
+      text(bonusStr, flr((W - bonusStr.length * 5) / 2), 117, 2);
     }
   });
 
@@ -1114,7 +1165,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) Mono.go(TITLE);
+      if (btnp("start") || btnp("a")) Mono.go(TITLE);
     },
     draw() {
       cls(0);
@@ -1152,10 +1203,14 @@
 
   function drawPlay() {
     // Enemy bullets
-    for (const b of eBullets) spr(13, flr(b.x), flr(b.y));
+    for (const b of eBullets) {
+      spr(13, flr(b.x), flr(b.y));
+      Mono.dbgC(flr(b.x) + EB_CX, flr(b.y) + EB_CY, EB_R);
+    }
 
     // Enemies
     for (const e of enemies) {
+      const eh = enemyHitbox(e);
       if (e.type === "leader") {
         spr(20, flr(e.x), flr(e.y));
       } else if (e.type === "medium") {
@@ -1169,6 +1224,7 @@
       } else {
         spr(2, flr(e.x), flr(e.y));
       }
+      Mono.dbg(eh.x, eh.y, eh.w, eh.h);
     }
 
     // Boss (4-sprite)
@@ -1182,6 +1238,7 @@
         spr(10, bx, by + 16);
         spr(11, bx + 16, by + 16);
       }
+      Mono.dbg(bx + BOSS_HBX, by + BOSS_HBY, BOSS_HBW, BOSS_HBH);
       // HP bar
       if (boss.phase === "fight" || boss.phase === "dying") {
         const barW = 40;
@@ -1195,13 +1252,18 @@
     // Power-ups (bobbing)
     for (const p of powerups) {
       const bob = sin(Mono.frame * 0.15) * 2;
-      if (p.type === 0) spr(23, flr(p.x), flr(p.y + bob));
-      else if (p.type === 1) spr(24, flr(p.x), flr(p.y + bob));
-      else spr(16, flr(p.x), flr(p.y + bob));
+      const px = flr(p.x), py = flr(p.y + bob);
+      if (p.type === 0) spr(23, px, py);
+      else if (p.type === 1) spr(24, px, py);
+      else spr(16, px, py);
+      Mono.dbgC(px + PU_CX, py + PU_CY, PU_R);
     }
 
     // Player bullets
-    for (const b of bullets) spr(12, flr(b.x), flr(b.y));
+    for (const b of bullets) {
+      spr(12, flr(b.x), flr(b.y));
+      Mono.dbgC(flr(b.x) + PB_CX, flr(b.y) + PB_CY, PB_R);
+    }
 
     // Wingmen
     for (const wm of wingmen) {
@@ -1223,6 +1285,8 @@
     } else {
       spr(1, flr(player.x), flr(player.y));
     }
+    // Player hitbox debug (always register, even when blinking)
+    Mono.dbg(flr(player.x) + PL_HBX, flr(player.y) + PL_HBY, PL_HBW, PL_HBH);
 
     // Explosions
     for (const e of explosions) {
@@ -1235,30 +1299,39 @@
 
     // --- HUD ---
     rectf(0, 0, W, 10, 0);
-    text("SCORE:" + score, 3, 2, 3);
-    text("STG:" + stage, W / 2 - 11, 2, 2);
+    text("SCORE:" + score, 2, 2, 3);
 
-    // Lives (right side)
-    for (let i = 0; i < lives; i++) spr(18, W - 33 + i * 10, 1);
+    // Stage indicator (center)
+    const stgStr = "STG:" + stage;
+    text(stgStr, flr((W - stgStr.length * 5) / 2), 2, 2);
 
-    // Loops remaining
-    for (let i = 0; i < loops; i++) spr(19, W - 60 + i * 10, 1);
+    // Lives (right side, capped to fit)
+    const maxLivesShown = min(lives, 5);
+    const livesStartX = W - 2 - maxLivesShown * 10;
+    for (let i = 0; i < maxLivesShown; i++) spr(18, livesStartX + i * 10, -2);
+    if (lives > 5) text("+" + (lives - 5), W - 16, 2, 3);
+
+    // Loops remaining (left of lives area)
+    const maxLoopsShown = min(loops, 3);
+    const loopsStartX = livesStartX - 4 - maxLoopsShown * 10;
+    for (let i = 0; i < maxLoopsShown; i++) spr(19, loopsStartX + i * 10, -2);
 
     // Shot type indicator near player
     if (shotTypeTimer > 0) {
       const label = shotType === 1 ? "DBL" : shotType === 2 ? "SPR" : "";
       if (label) {
         const flash = (shotTypeTimer < 90 && flr(Mono.frame / 8) % 2 === 0) ? 1 : 3;
-        text(label, flr(player.x - 2), flr(player.y - 10), flash);
+        const labelX = _max(2, min(W - label.length * 5 - 2, flr(player.x - 2)));
+        text(label, labelX, flr(player.y - 10), flash);
       }
     }
 
     // Stage message overlay
     if (stageMsgTimer > 0) {
-      const msgX = (320 - stageMsg.length * 5) / 2;
-      text(stageMsg, flr(msgX), 113, 3);
+      const msgX = flr((W - stageMsg.length * 5) / 2);
+      text(stageMsg, msgX, 113, 3);
       if (stageMsgTimer > 60 && stageMsg.indexOf("WARNING") === -1) {
-        text("GET READY!", (320 - 10 * 5) / 2, 123, 2);
+        text("GET READY!", flr((W - 10 * 5) / 2), 123, 2);
       }
     }
   }
@@ -1267,9 +1340,9 @@
     const ty = 20 + sin(Mono.frame * 0.05) * 3;
 
     // Large title
-    text("1 9 4 2", (320 - 7 * 5) / 2, flr(ty), 3);
+    text("1 9 4 2", flr((W - 7 * 5) / 2), flr(ty), 3);
     rectf(W / 2 - 37, flr(ty) + 10, 74, 1, 2);
-    text("SUPER ACE", (320 - 9 * 5) / 2, flr(ty) + 16, 2);
+    text("SUPER ACE", flr((W - 9 * 5) / 2), flr(ty) + 16, 2);
 
     // Show player plane
     spr(1, W / 2 - 8, flr(ty) + 28 + sin(Mono.frame * 0.08) * 2);
@@ -1288,39 +1361,45 @@
     spr(10, bbx, flr(ty) + 80);
     spr(11, bbx + 16, flr(ty) + 80);
 
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", (320 - 16 * 5) / 2, 142, 3);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", flr((W - 11 * 5) / 2), 142, 3);
 
     // Controls
-    text("ARROWS  MOVE", (320 - 12 * 5) / 2, 158, 2);
-    text("A  SHOOT", (320 - 8 * 5) / 2, 168, 2);
-    text("B  LOOP (DODGE)", (320 - 15 * 5) / 2, 178, 2);
+    text("ARROWS  MOVE", flr((W - 12 * 5) / 2), 158, 2);
+    text("A  SHOOT", flr((W - 8 * 5) / 2), 168, 2);
+    text("B  LOOP (DODGE)", flr((W - 15 * 5) / 2), 178, 2);
 
     // Score table
-    text("-SCORE TABLE-", (320 - 13 * 5) / 2, 192, 1);
-    spr(2, W / 2 - 25, 201); text("FIGHTER  100", W / 2 - 16, 203, 1);
-    spr(3, W / 2 - 25, 211); text("BOMBER   200", W / 2 - 16, 213, 1);
-    spr(20, W / 2 - 25, 221); text("LEADER   200+POW", W / 2 - 16, 223, 1);
+    text("-SCORE TABLE-", flr((W - 13 * 5) / 2), 192, 1);
+    spr(2, W / 2 - 25, 201); text("FIGHTER  100", W / 2 - 8, 203, 1);
+    spr(3, W / 2 - 25, 211); text("BOMBER   200", W / 2 - 8, 213, 1);
+    spr(20, W / 2 - 25, 221); text("LEADER  200+", W / 2 - 8, 223, 1);
 
-    if (hiScore > 0) text("HI:" + hiScore, W / 2 - 11, 14, 2);
+    if (hiScore > 0) {
+      const hiStr = "HI:" + hiScore;
+      text(hiStr, flr((W - hiStr.length * 5) / 2), 14, 2);
+    }
 
-    text("MONO DEMO V0.1", (320 - 17 * 5) / 2, H - 8, 1);
+    text("MONO DEMO V0.1", flr((W - 14 * 5) / 2), H - 9, 1);
   }
 
   function drawGameOver() {
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
     if (stage >= 8 && lives > 0) {
-      text("CONGRATULATIONS!", (320 - 16 * 5) / 2, 75, 3);
-      text("ALL 8 STAGES CLEAR!", (320 - 19 * 5) / 2, 90, 2);
+      text("CONGRATULATIONS!", flr((W - 16 * 5) / 2), 75, 3);
+      const clrStr = "ALL 8 STAGES CLEAR!";
+      text(clrStr, flr((W - clrStr.length * 5) / 2), 90, 2);
     } else {
-      text("GAME OVER", (320 - 9 * 5) / 2, 90, 3);
+      text("GAME OVER", flr((W - 9 * 5) / 2), 90, 3);
     }
-    text("SCORE: " + score, (320 - ("SCORE: " + score).length * 5) / 2, 113, 2);
-    text("STAGE: " + stage, (320 - ("STAGE: " + stage).length * 5) / 2, 124, 2);
+    const scoreStr = "SCORE: " + score;
+    text(scoreStr, flr((W - scoreStr.length * 5) / 2), 113, 2);
+    const stageStr = "STAGE: " + stage;
+    text(stageStr, flr((W - stageStr.length * 5) / 2), 124, 2);
     if (score >= hiScore && score > 0) {
-      text("NEW HIGH SCORE!", (320 - 15 * 5) / 2, 139, 3);
+      text("NEW HIGH SCORE!", flr((W - 15 * 5) / 2), 139, 3);
     }
-    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", (320 - 20 * 5) / 2, 165, 3);
+    if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", flr((W - 11 * 5) / 2), 165, 3);
   }
 
   Mono.go(TITLE);

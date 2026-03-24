@@ -20,12 +20,16 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 16x16 upscale helper ---
+  // Doubles each pixel horizontally and each row vertically (8x8 -> 16x16)
+  function up(d){let o="";for(let r=0;r<8;r++){let row="";for(let c=0;c<8;c++){const ch=d[r*8+c];row+=ch+ch;}o+=row+row;}return o;}
+
+  // --- Sprites (all 16x16 via upscale) ---
 
   // 1: Player stand right (fighter stance)
-  defSprite(1,
+  defSprite(1, up(
     "00333000" +
     "00323000" +
     "00333000" +
@@ -34,9 +38,9 @@
     "00333000" +
     "00300300" +
     "00300300"
-  );
+  ));
   // 2: Player walk frame 1
-  defSprite(2,
+  defSprite(2, up(
     "00333000" +
     "00323000" +
     "00333000" +
@@ -45,9 +49,9 @@
     "00333000" +
     "00330300" +
     "00300030"
-  );
+  ));
   // 3: Player walk frame 2
-  defSprite(3,
+  defSprite(3, up(
     "00333000" +
     "00323000" +
     "00333000" +
@@ -56,9 +60,9 @@
     "00333000" +
     "03003000" +
     "30003000"
-  );
+  ));
   // 4: Player punch
-  defSprite(4,
+  defSprite(4, up(
     "00333000" +
     "00323000" +
     "00333000" +
@@ -67,9 +71,9 @@
     "00333000" +
     "00300300" +
     "00300300"
-  );
+  ));
   // 5: Player kick
-  defSprite(5,
+  defSprite(5, up(
     "00333000" +
     "00323000" +
     "00333000" +
@@ -78,9 +82,9 @@
     "00333300" +
     "00300333" +
     "00300000"
-  );
+  ));
   // 6: Player jump kick (aerial)
-  defSprite(6,
+  defSprite(6, up(
     "00333000" +
     "00323000" +
     "00333300" +
@@ -89,10 +93,10 @@
     "00030000" +
     "00003330" +
     "00000030"
-  );
+  ));
 
   // 10: Thug stand
-  defSprite(10,
+  defSprite(10, up(
     "00111000" +
     "00121000" +
     "00111000" +
@@ -101,9 +105,9 @@
     "00111000" +
     "00100100" +
     "00100100"
-  );
+  ));
   // 11: Thug walk 1
-  defSprite(11,
+  defSprite(11, up(
     "00111000" +
     "00121000" +
     "00111000" +
@@ -112,9 +116,9 @@
     "00111000" +
     "00110100" +
     "00100010"
-  );
+  ));
   // 12: Thug punch
-  defSprite(12,
+  defSprite(12, up(
     "00111000" +
     "00121000" +
     "00111000" +
@@ -123,10 +127,10 @@
     "00111000" +
     "00100100" +
     "00100100"
-  );
+  ));
 
   // 15: Big guy stand
-  defSprite(15,
+  defSprite(15, up(
     "01111100" +
     "01121100" +
     "01111100" +
@@ -135,9 +139,9 @@
     "01111100" +
     "01100110" +
     "01100110"
-  );
+  ));
   // 16: Big guy walk
-  defSprite(16,
+  defSprite(16, up(
     "01111100" +
     "01121100" +
     "01111100" +
@@ -146,9 +150,9 @@
     "01111100" +
     "01110110" +
     "01100011"
-  );
+  ));
   // 17: Big guy attack
-  defSprite(17,
+  defSprite(17, up(
     "01111100" +
     "01121100" +
     "01111100" +
@@ -157,10 +161,10 @@
     "01111100" +
     "01100110" +
     "01100110"
-  );
+  ));
 
   // 20: Knife guy stand
-  defSprite(20,
+  defSprite(20, up(
     "00222000" +
     "00232000" +
     "00222000" +
@@ -169,9 +173,9 @@
     "00222000" +
     "00200200" +
     "00200200"
-  );
+  ));
   // 21: Knife guy walk
-  defSprite(21,
+  defSprite(21, up(
     "00222000" +
     "00232000" +
     "00222000" +
@@ -180,9 +184,9 @@
     "00222000" +
     "00220200" +
     "00200020"
-  );
+  ));
   // 22: Knife guy attack (knife extended)
-  defSprite(22,
+  defSprite(22, up(
     "00222000" +
     "00232000" +
     "00222000" +
@@ -191,10 +195,10 @@
     "00222000" +
     "00200200" +
     "00200200"
-  );
+  ));
 
   // 30: Boss stand (big muscular)
-  defSprite(30,
+  defSprite(30, up(
     "03333300" +
     "03323300" +
     "03333300" +
@@ -203,9 +207,9 @@
     "33333330" +
     "03300330" +
     "03300330"
-  );
+  ));
   // 31: Boss walk
-  defSprite(31,
+  defSprite(31, up(
     "03333300" +
     "03323300" +
     "03333300" +
@@ -214,9 +218,9 @@
     "33333330" +
     "03330330" +
     "03300033"
-  );
+  ));
   // 32: Boss attack
-  defSprite(32,
+  defSprite(32, up(
     "03333300" +
     "03323300" +
     "03333300" +
@@ -225,10 +229,10 @@
     "33333330" +
     "03300330" +
     "03300330"
-  );
+  ));
 
   // 40: Bat weapon on ground
-  defSprite(40,
+  defSprite(40, up(
     "00000000" +
     "00000000" +
     "00000030" +
@@ -237,9 +241,9 @@
     "00030000" +
     "00300000" +
     "00000000"
-  );
+  ));
   // 41: Knife weapon on ground
-  defSprite(41,
+  defSprite(41, up(
     "00000000" +
     "00000000" +
     "00000020" +
@@ -248,10 +252,10 @@
     "00022000" +
     "00200000" +
     "00000000"
-  );
+  ));
 
   // 45: Player with bat punch
-  defSprite(45,
+  defSprite(45, up(
     "00333000" +
     "00323000" +
     "00333030" +
@@ -260,9 +264,9 @@
     "00333000" +
     "00300300" +
     "00300300"
-  );
+  ));
   // 46: Player with knife punch
-  defSprite(46,
+  defSprite(46, up(
     "00333000" +
     "00323000" +
     "00333020" +
@@ -271,10 +275,10 @@
     "00333000" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 50: Hit effect (star burst)
-  defSprite(50,
+  defSprite(50, up(
     "00000000" +
     "00300200" +
     "00030000" +
@@ -283,10 +287,10 @@
     "00200300" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 51: Shadow (under characters)
-  defSprite(51,
+  defSprite(51, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -295,10 +299,10 @@
     "00000000" +
     "00111100" +
     "01111110"
-  );
+  ));
 
   // 55: Life icon
-  defSprite(55,
+  defSprite(55, up(
     "00000000" +
     "01001000" +
     "11111100" +
@@ -307,11 +311,11 @@
     "00110000" +
     "00100000" +
     "00000000"
-  );
+  ));
 
-  // --- Background tiles ---
+  // --- Background tiles (16x16 via upscale) ---
   // 60: Building wall
-  defSprite(60,
+  defSprite(60, up(
     "11111111" +
     "12111211" +
     "11111111" +
@@ -320,9 +324,9 @@
     "11111111" +
     "11111111" +
     "12111211"
-  );
+  ));
   // 61: Window
-  defSprite(61,
+  defSprite(61, up(
     "11111111" +
     "10222201" +
     "10200201" +
@@ -331,9 +335,9 @@
     "10222201" +
     "11111111" +
     "11111111"
-  );
+  ));
   // 62: Door
-  defSprite(62,
+  defSprite(62, up(
     "11111111" +
     "10222201" +
     "10200201" +
@@ -342,9 +346,9 @@
     "10200201" +
     "10222201" +
     "00000000"
-  );
+  ));
   // 63: Ground/sidewalk
-  defSprite(63,
+  defSprite(63, up(
     "22222222" +
     "22222222" +
     "12222222" +
@@ -353,9 +357,9 @@
     "22212222" +
     "22222222" +
     "22222221"
-  );
+  ));
   // 64: Road
-  defSprite(64,
+  defSprite(64, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -364,9 +368,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 65: Trashcan
-  defSprite(65,
+  defSprite(65, up(
     "00000000" +
     "00111100" +
     "01111110" +
@@ -375,9 +379,9 @@
     "01122110" +
     "01111110" +
     "00111100"
-  );
+  ));
   // 66: Lamp post
-  defSprite(66,
+  defSprite(66, up(
     "00333000" +
     "00030000" +
     "00030000" +
@@ -386,9 +390,9 @@
     "00030000" +
     "00030000" +
     "00111000"
-  );
+  ));
   // 67: Fence
-  defSprite(67,
+  defSprite(67, up(
     "10101010" +
     "11111111" +
     "10101010" +
@@ -397,9 +401,9 @@
     "10101010" +
     "10101010" +
     "10101010"
-  );
+  ));
   // 68: Crate
-  defSprite(68,
+  defSprite(68, up(
     "11111111" +
     "12211221" +
     "12211221" +
@@ -408,9 +412,11 @@
     "12211221" +
     "12211221" +
     "11111111"
-  );
+  ));
 
   // --- Game Constants ---
+  // Sprite size is now 16x16
+  const SPR = 16;
   const GROUND_Y = 150;   // Top of walkable ground area
   const GROUND_H = 60;    // Height of walkable area
   const SCROLL_EDGE = 133; // X position where scrolling starts
@@ -454,12 +460,12 @@
     },
   ];
 
-  // Enemy stats
+  // Enemy stats (ranges/sizes updated for 16x16 sprites)
   const ENEMY_STATS = {
-    thug:  { hp: 3, speed: 1.0, atkRange: 14, atkDmg: 1, pts: 100, atkCooldown: 45 },
-    big:   { hp: 6, speed: 0.6, atkRange: 16, atkDmg: 2, pts: 200, atkCooldown: 60 },
-    knife: { hp: 2, speed: 1.3, atkRange: 18, atkDmg: 2, pts: 150, atkCooldown: 35 },
-    boss:  { hp: 20,speed: 0.8, atkRange: 18, atkDmg: 3, pts: 500, atkCooldown: 40 },
+    thug:  { hp: 3, speed: 1.0, atkRange: 22, atkDmg: 1, pts: 100, atkCooldown: 45 },
+    big:   { hp: 6, speed: 0.6, atkRange: 26, atkDmg: 2, pts: 200, atkCooldown: 60 },
+    knife: { hp: 2, speed: 1.3, atkRange: 28, atkDmg: 2, pts: 150, atkCooldown: 35 },
+    boss:  { hp: 20,speed: 0.8, atkRange: 28, atkDmg: 3, pts: 500, atkCooldown: 40 },
   };
 
   // --- Game State ---
@@ -544,6 +550,21 @@
     }
   }
 
+  // --- Collision helpers ---
+  // Circle vs circle collision (for round objects like hit effects, weapons)
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2;
+    const dy = y1 - y2;
+    const dist = dx * dx + dy * dy;
+    const rSum = r1 + r2;
+    return dist < rSum * rSum;
+  }
+
+  // Rect AABB collision (for character hitboxes)
+  function rectCollide(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
   // Sound effects
   function punchSound() { note(0, "C4", 0.04); setTimeout(() => note(0, "E3", 0.03), 30); }
   function kickSound() { note(0, "G3", 0.05); setTimeout(() => note(0, "C3", 0.04), 30); }
@@ -568,24 +589,33 @@
     const isPunch = !isJumpKick && btn("a");
     const isKick = !isJumpKick && btn("b");
 
-    let atkRange = 14;
+    // Attack hitbox dimensions (updated for 16x16 sprites)
+    let atkRange = 22;
     let atkDmg = 1;
-    let atkW = 16;
+    let atkW = 24;
+    let atkH = 20;
 
-    if (player.weapon === "bat") { atkRange = 20; atkDmg = 3; atkW = 22; }
-    else if (player.weapon === "knife") { atkRange = 18; atkDmg = 4; atkW = 20; }
-    else if (isKick) { atkRange = 16; atkDmg = 2; atkW = 18; }
-    else if (isJumpKick) { atkRange = 18; atkDmg = 3; atkW = 20; }
+    if (player.weapon === "bat") { atkRange = 30; atkDmg = 3; atkW = 32; atkH = 22; }
+    else if (player.weapon === "knife") { atkRange = 28; atkDmg = 4; atkW = 30; atkH = 20; }
+    else if (isKick) { atkRange = 26; atkDmg = 2; atkW = 28; atkH = 20; }
+    else if (isJumpKick) { atkRange = 28; atkDmg = 3; atkW = 30; atkH = 20; }
 
-    const atkX = player.facing === 1 ? player.x + 6 : player.x - atkW + 2;
-    const atkY = player.y - (isJumpKick ? 6 : 0);
+    const atkX = player.facing === 1 ? player.x + 10 : player.x - atkW + 6;
+    const atkY = player.y - (isJumpKick ? 10 : 0);
 
     let hitAny = false;
     for (const e of enemies) {
       if (e.dead || e.hurtTimer > 0) continue;
       const ex = e.x - scrollX;
       const ey = e.y;
-      if (_abs(atkX + atkW/2 - (ex + 4)) < atkRange && _abs(atkY - ey) < 12) {
+      // Use center+radius circle collision for attack hits
+      const atkCx = atkX + atkW / 2;
+      const atkCy = atkY + atkH / 2;
+      const atkR = atkW / 2;
+      const eCx = ex + 8;  // center of 16x16 sprite
+      const eCy = ey + 8;
+      const eR = 7;         // character body radius
+      if (circCollide(atkCx, atkCy, atkR, eCx, eCy, eR) && _abs(atkY - ey) < 20) {
         e.hp -= atkDmg;
         e.hurtTimer = 12;
         e.flashTimer = 8;
@@ -597,15 +627,15 @@
         const kb = isJumpKick ? 4 : (player.weapon ? 3 : 2);
         e.x += player.facing * kb;
 
-        addEffect(ex + (player.facing === 1 ? 8 : -2), ey, "hit");
-        addParticles(ex + 4, ey + 2, 4, 3);
+        addEffect(ex + (player.facing === 1 ? 12 : -4), ey, "hit");
+        addParticles(ex + 8, ey + 4, 4, 3);
         hitAny = true;
 
         if (e.hp <= 0) {
           e.dead = true;
           e.deathTimer = 30;
           score += ENEMY_STATS[e.type].pts;
-          addParticles(ex + 4, ey + 4, 8, 2);
+          addParticles(ex + 8, ey + 8, 8, 2);
           if (e.type === "boss") {
             bossDeathSound();
             shakeTimer = 15;
@@ -640,7 +670,12 @@
   function enemyAttack(e) {
     const ex = e.x - scrollX;
     const stats = ENEMY_STATS[e.type];
-    if (_abs(ex - player.x) < stats.atkRange && _abs(e.y - player.y) < 12) {
+    // Circle collision for enemy attacks
+    const eCx = ex + 8;
+    const eCy = e.y + 8;
+    const pCx = player.x + 8;
+    const pCy = player.y + 8;
+    if (circCollide(eCx, eCy, stats.atkRange / 2, pCx, pCy, 7) && _abs(e.y - player.y) < 20) {
       if (player.invuln <= 0 && player.state !== "hurt") {
         player.hp -= stats.atkDmg;
         player.state = "hurt";
@@ -649,8 +684,8 @@
         shakeTimer = 5;
         flashTimer = 4;
         hurtSound();
-        addEffect(player.x + (e.facing * 6), player.y, "hit");
-        addParticles(player.x + 4, player.y + 2, 3, 1);
+        addEffect(player.x + (e.facing * 10), player.y, "hit");
+        addParticles(player.x + 8, player.y + 4, 3, 1);
 
         if (player.hp <= 0) {
           player.hp = 0;
@@ -775,10 +810,10 @@
         moving = true;
       }
 
-      // Clamp Y to walkable area
-      player.y = _max(GROUND_Y, min(GROUND_Y + GROUND_H - 8, player.y));
-      // Clamp X
-      player.x = _max(4, min(W - 12, player.x));
+      // Clamp Y to walkable area (updated for 16px sprite height)
+      player.y = _max(GROUND_Y, min(GROUND_Y + GROUND_H - SPR, player.y));
+      // Clamp X to screen bounds (updated for 16px sprite width)
+      player.x = _max(4, min(W - SPR - 4, player.x));
 
       player.state = moving ? "walk" : "idle";
 
@@ -835,7 +870,6 @@
       const scrollAmt = player.x - SCROLL_EDGE;
       scrollX += scrollAmt;
       player.x = SCROLL_EDGE;
-      // Move all enemies with scroll
     }
 
     // Section complete check
@@ -861,11 +895,15 @@
       }
     }
 
-    // Weapon pickup
+    // Weapon pickup (circle collision: player center vs weapon center)
     for (const w of weapons) {
       if (w.picked) continue;
       const wx = w.x - scrollX;
-      if (_abs(player.x - wx) < 10 && _abs(player.y - w.y) < 10) {
+      const pCx = player.x + 8;
+      const pCy = player.y + 8;
+      const wCx = wx + 8;
+      const wCy = w.y + 8;
+      if (circCollide(pCx, pCy, 10, wCx, wCy, 8)) {
         player.weapon = w.type;
         player.weaponTimer = w.type === "bat" ? 8 : 6;
         w.picked = true;
@@ -913,13 +951,13 @@
         const moveY = dy / (dist || 1) * stats.speed * 0.7;
         e.x += moveX;
         e.y += moveY;
-        e.y = _max(GROUND_Y, min(GROUND_Y + GROUND_H - 8, e.y));
+        e.y = _max(GROUND_Y, min(GROUND_Y + GROUND_H - SPR, e.y));
       } else {
         e.state = "idle";
         // Circle around player a bit
         if (rnd(1) < 0.03) {
           e.y += (rnd(1) < 0.5 ? 1 : -1) * stats.speed * 2;
-          e.y = _max(GROUND_Y, min(GROUND_Y + GROUND_H - 8, e.y));
+          e.y = _max(GROUND_Y, min(GROUND_Y + GROUND_H - SPR, e.y));
         }
       }
 
@@ -956,17 +994,17 @@
 
     // Buildings (parallax - slower scroll)
     const buildScroll = flr(sx * 0.3);
-    for (let bx = -buildScroll % 32; bx < W + 32; bx += 32) {
-      const bh = 30 + ((flr((bx + buildScroll) / 32) * 7) % 23);
+    for (let bx = -buildScroll % 48; bx < W + 48; bx += 48) {
+      const bh = 30 + ((flr((bx + buildScroll) / 48) * 7) % 23);
       const by = GROUND_Y - 30 - bh;
-      // Building body
-      for (let ty = 0; ty < flr(bh / 8); ty++) {
-        for (let tx = 0; tx < 4; tx++) {
-          const worldTx = flr((bx + buildScroll) / 32);
-          if (ty % 3 === 1 && tx >= 1 && tx <= 2 && (tx + worldTx) % 2 === 0) {
-            sprT(61, bx + tx * 8, by + ty * 8); // window
+      // Building body (16x16 tiles)
+      for (let ty = 0; ty < flr(bh / SPR); ty++) {
+        for (let tx = 0; tx < 3; tx++) {
+          const worldTx = flr((bx + buildScroll) / 48);
+          if (ty % 2 === 1 && tx === 1 && worldTx % 2 === 0) {
+            sprT(61, bx + tx * SPR, by + ty * SPR); // window
           } else {
-            sprT(60, bx + tx * 8, by + ty * 8); // wall
+            sprT(60, bx + tx * SPR, by + ty * SPR); // wall
           }
         }
       }
@@ -974,18 +1012,18 @@
 
     // Mid-ground buildings (closer parallax)
     const midScroll = flr(sx * 0.6);
-    for (let bx = -midScroll % 40; bx < W + 40; bx += 40) {
-      const idx = flr((bx + midScroll) / 40);
+    for (let bx = -midScroll % 64; bx < W + 64; bx += 64) {
+      const idx = flr((bx + midScroll) / 64);
       const bh = 15 + (idx * 13 % 15);
       const by = GROUND_Y - 30 - bh;
-      for (let ty = 0; ty < flr(bh / 8) + 1; ty++) {
-        for (let tx = 0; tx < 5; tx++) {
-          if (ty === flr(bh/8) && tx >= 2 && tx <= 3 && idx % 3 === 0) {
-            sprT(62, bx + tx * 8, by + ty * 8); // door
-          } else if (ty % 2 === 0 && tx >= 1 && tx <= 3 && (tx + idx) % 3 === 0) {
-            sprT(61, bx + tx * 8, by + ty * 8);
+      for (let ty = 0; ty < flr(bh / SPR) + 1; ty++) {
+        for (let tx = 0; tx < 4; tx++) {
+          if (ty === flr(bh / SPR) && tx >= 1 && tx <= 2 && idx % 3 === 0) {
+            sprT(62, bx + tx * SPR, by + ty * SPR); // door
+          } else if (ty % 2 === 0 && tx >= 1 && tx <= 2 && (tx + idx) % 3 === 0) {
+            sprT(61, bx + tx * SPR, by + ty * SPR);
           } else {
-            sprT(60, bx + tx * 8, by + ty * 8);
+            sprT(60, bx + tx * SPR, by + ty * SPR);
           }
         }
       }
@@ -994,14 +1032,13 @@
     // Sidewalk line
     rectf(0, GROUND_Y - 30, W, 2, 2);
 
-    // Ground area (sidewalk)
-    for (let ty = 0; ty < (GROUND_H + 30) / 8 + 1; ty++) {
-      for (let tx = 0; tx < W / 8 + 1; tx++) {
-        const wx = tx * 8 + (sx % 8);
-        if (ty <= 2) {
-          sprT(63, tx * 8 - (sx % 8), GROUND_Y - 28 + ty * 8);
+    // Ground area (sidewalk) - 16x16 tiles
+    for (let ty = 0; ty < (GROUND_H + 30) / SPR + 1; ty++) {
+      for (let tx = 0; tx < W / SPR + 2; tx++) {
+        if (ty <= 1) {
+          sprT(63, tx * SPR - (sx % SPR), GROUND_Y - 28 + ty * SPR);
         } else {
-          sprT(64, tx * 8 - (sx % 8), GROUND_Y - 28 + ty * 8);
+          sprT(64, tx * SPR - (sx % SPR), GROUND_Y - 28 + ty * SPR);
         }
       }
     }
@@ -1011,22 +1048,22 @@
       rectf(dx, GROUND_Y + 15, 11, 2, 1);
     }
 
-    // Props (lamp posts, trashcans)
+    // Props (lamp posts, trashcans) - updated spacing for 16px tiles
     const propScroll = sx;
-    for (let px = -(propScroll % 80); px < W + 80; px += 80) {
-      sprT(66, px + 7, GROUND_Y - 30 - 8); // lamp
-      if ((flr((px + propScroll) / 80)) % 3 === 0) {
-        sprT(65, px + 40, GROUND_Y - 28); // trashcan near sidewalk
+    for (let px = -(propScroll % 96); px < W + 96; px += 96) {
+      sprT(66, px + 10, GROUND_Y - 30 - SPR); // lamp
+      if ((flr((px + propScroll) / 96)) % 3 === 0) {
+        sprT(65, px + 48, GROUND_Y - 28); // trashcan near sidewalk
       }
-      if ((flr((px + propScroll) / 80)) % 4 === 1) {
-        sprT(68, px + 53, GROUND_Y - 28); // crate
+      if ((flr((px + propScroll) / 96)) % 4 === 1) {
+        sprT(68, px + 64, GROUND_Y - 28); // crate
       }
     }
   }
 
   function drawCharacter(x, y, jumpY, sprStand, sprWalk1, sprWalk2, sprAtk, sprKick, charState, timer, facing, flashT) {
-    // Shadow
-    sprT(51, x - 1, y + 6);
+    // Shadow (centered under character)
+    sprT(51, x, y + 10);
 
     const drawY = y + jumpY;
     const flipX = facing === -1;
@@ -1048,6 +1085,9 @@
     }
 
     sprT(sprId, flr(x), flr(drawY), flipX);
+
+    // Debug hitbox: rect for character body
+    dbg(flr(x), flr(drawY), SPR, SPR);
   }
 
   function drawHealthBar(x, y, hp, maxHp, w) {
@@ -1094,11 +1134,11 @@
       rectf(93, flr(ty) + 9, 133, 1, 2);
       text("STREETS OF FURY", 123, flr(ty) + 15, 2);
 
-      // Player figures on title
-      const px1 = 120 + sin(Mono.frame * 0.06) * 3;
-      sprT(1, flr(px1), flr(ty) + 34);
-      sprT(10, flr(px1) + 53, flr(ty) + 34, true);
-      sprT(15, flr(px1) + 67, flr(ty) + 32, true);
+      // Player figures on title (adjusted for 16px sprites)
+      const px1 = 112 + sin(Mono.frame * 0.06) * 3;
+      sprT(1, flr(px1), flr(ty) + 30);
+      sprT(10, flr(px1) + 48, flr(ty) + 30, true);
+      sprT(15, flr(px1) + 68, flr(ty) + 28, true);
 
       // Blink start text
       if (flr(titleBlink / 18) % 2 === 0) {
@@ -1109,8 +1149,8 @@
       text("A=PUNCH  B=KICK  UP+A=JUMP KICK", 80, 188, 2);
       text("ARROWS=MOVE", 133, 197, 2);
 
-      // Credits
-      text("MONO DEMO V0.1", 118, 229, 1);
+      // Credits (ensure within 240 height)
+      text("MONO DEMO V0.1", 118, 228, 1);
     }
   }
 
@@ -1169,7 +1209,7 @@
     // Enemies
     for (const e of enemies) {
       const ex = e.x - scrollX;
-      if (ex > -16 && ex < W + 16) {
+      if (ex > -SPR && ex < W + SPR) {
         drawList.push({ type: "enemy", ref: e, y: e.y });
       }
     }
@@ -1178,7 +1218,7 @@
     for (const w of weapons) {
       if (w.picked) continue;
       const wx = w.x - scrollX;
-      if (wx > -16 && wx < W + 16) {
+      if (wx > -SPR && wx < W + SPR) {
         drawList.push({ type: "weapon", ref: w, y: w.y });
       }
     }
@@ -1194,6 +1234,8 @@
         // Bobbing animation
         const bob = sin(Mono.frame * 0.15) * 2;
         sprT(w.type === "bat" ? 40 : 41, flr(wx), flr(w.y + bob));
+        // Debug: circle collision for weapon pickup
+        dbgC(flr(wx) + 8, flr(w.y + bob) + 8, 8);
       } else if (d.type === "enemy") {
         const e = d.ref;
         const ex = e.x - scrollX;
@@ -1215,11 +1257,14 @@
 
         drawCharacter(ex, e.y, 0, sprBase, sprW1, sprBase, sprAtk, sprAtk, e.state, e.stateTimer, e.facing, e.flashTimer);
 
+        // Debug: circle collision for enemy body
+        dbgC(flr(ex) + 8, flr(e.y) + 8, 7);
+
         // Enemy health bar (boss gets bigger bar)
         if (e.type === "boss") {
-          drawHealthBar(ex - 4, e.y - 8, e.hp, e.maxHp, 16);
+          drawHealthBar(ex - 4, e.y - 10, e.hp, e.maxHp, 24);
         } else if (e.hp < e.maxHp) {
-          drawHealthBar(ex, e.y - 6, e.hp, e.maxHp, 10);
+          drawHealthBar(ex, e.y - 8, e.hp, e.maxHp, 16);
         }
       } else if (d.type === "player") {
         if (player.state === "dead") {
@@ -1237,9 +1282,14 @@
 
         drawCharacter(player.x, player.y, player.jumpY, pSprStand, pSprW1, pSprW2, pSprAtk, pSprKick, player.state, player.stateTimer, player.facing, 0);
 
+        // Debug: circle collision for player body
+        dbgC(flr(player.x) + 8, flr(player.y) + 8, 7);
+        // Debug: player pickup radius
+        dbgC(flr(player.x) + 8, flr(player.y) + 8, 10);
+
         // Weapon indicator
         if (player.weapon) {
-          text(player.weapon === "bat" ? "BAT" : "KNIFE", flr(player.x) - 2, flr(player.y) - 10, 3);
+          text(player.weapon === "bat" ? "BAT" : "KNIFE", flr(player.x) - 2, flr(player.y) - 12, 3);
         }
       }
     }
@@ -1247,6 +1297,8 @@
     // Effects
     for (const e of effects) {
       sprT(50, flr(e.x), flr(e.y));
+      // Debug: hit effect area
+      dbgC(flr(e.x) + 8, flr(e.y) + 8, 8);
     }
 
     // Particles
@@ -1255,34 +1307,40 @@
     }
 
     // --- HUD ---
-    rectf(0, 0, W, 15, 0);
+    // HUD background bar
+    rectf(0, 0, W, 16, 0);
 
-    // Player health
+    // Player health label + bar
     text("BILLY", 4, 2, 3);
-    drawHealthBar(4, 8, player.hp, player.maxHp, 40);
+    drawHealthBar(4, 9, player.hp, player.maxHp, 40);
 
-    // Lives
+    // Lives icons (16x16 sprites, spaced to fit without overflow)
     for (let i = 0; i < lives; i++) {
-      sprT(55, 47 + i * 10, 2);
+      sprT(55, 48 + i * 18, 0);
     }
 
-    // Score
-    text("SCORE:" + score, W / 2 - 20, 2, 2);
+    // Score (centered)
+    const scoreStr = "SCORE:" + score;
+    text(scoreStr, 140, 2, 2);
 
-    // Section indicator
-    text("SECTION " + (section + 1) + "/3", W - 55, 2, 2);
+    // Section indicator (right-aligned, ensure within 320px)
+    const secStr = "SECTION " + (section + 1) + "/3";
+    text(secStr, W - 68, 2, 2);
+
+    // Debug: HUD bar area
+    dbg(0, 0, W, 16);
 
     // Combo display
     if (player.combo >= 2 && player.comboTimer > 0) {
-      text(player.combo + " HIT COMBO!", 127, 23, 3);
+      text(player.combo + " HIT COMBO!", 127, 24, 3);
       if (player.combo >= 3) {
-        text("+" + (player.combo * 50), 140, 30, 2);
+        text("+" + (player.combo * 50), 140, 32, 2);
       }
     }
 
     // GO arrow when enemies cleared and more waves coming
     if (allEnemiesDead && waveIndex < SECTIONS[section].waves.length && !sectionClear) {
-      const goX = W - 33 + sin(Mono.frame * 0.15) * 5;
+      const goX = min(W - 40, W - 33 + sin(Mono.frame * 0.15) * 5);
       text("GO", flr(goX), H / 2 - 15, 3);
       // Arrow
       line(flr(goX) + 11, H/2 - 13, flr(goX) + 15, H/2 - 13, 3);
@@ -1306,14 +1364,14 @@
       const bossAlive = enemies.some(e => e.type === "boss" && !e.dead);
       if (bossAlive) {
         if (flr(Mono.frame / 10) % 2 === 0) {
-          text("!! BOSS !!", W/2 - 17, 18, 3);
+          text("!! BOSS !!", W/2 - 17, 19, 3);
         }
 
         // Boss health bar at top
         const boss = enemies.find(e => e.type === "boss" && !e.dead);
         if (boss) {
-          text("BOSS", W/2 - 10, 24, 1);
-          drawHealthBar(W/2 - 20, 30, boss.hp, boss.maxHp, 40);
+          text("BOSS", W/2 - 10, 25, 1);
+          drawHealthBar(W/2 - 20, 32, boss.hp, boss.maxHp, 40);
         }
       }
     }

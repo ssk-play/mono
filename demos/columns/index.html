@@ -19,22 +19,36 @@
   "use strict";
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
+
+  // --- 8x8 to 16x16 upscaler ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
 
   // --- Constants ---
   const COLS = 6;
   const ROWS = 13;
-  const CELL = 15;
-  const BOARD_X = 120;
+  const CELL = 16;
+  const BOARD_X = 112;
   const BOARD_Y = 16;
   const BOARD_W = COLS * CELL;
   const BOARD_H = ROWS * CELL;
   const NUM_JEWELS = 4;
 
-  // --- Jewel Sprites (8x8, 4 distinct patterns) ---
+  // --- Jewel Sprites (upscaled 8x8 -> 16x16) ---
   // Jewel 1: Solid diamond
-  defSprite(1,
+  defSprite(1, up(
     "00010000" +
     "00131000" +
     "01323100" +
@@ -43,9 +57,9 @@
     "01323100" +
     "00131000" +
     "00010000"
-  );
+  ));
   // Jewel 2: Crosshatch
-  defSprite(2,
+  defSprite(2, up(
     "20202020" +
     "02020200" +
     "20202020" +
@@ -54,9 +68,9 @@
     "02020200" +
     "20202020" +
     "02020200"
-  );
+  ));
   // Jewel 3: Circle / ring
-  defSprite(3,
+  defSprite(3, up(
     "00111000" +
     "01000100" +
     "10000010" +
@@ -65,9 +79,9 @@
     "10000010" +
     "01000100" +
     "00111000"
-  );
+  ));
   // Jewel 4: Horizontal stripes
-  defSprite(4,
+  defSprite(4, up(
     "33333330" +
     "00000000" +
     "11111110" +
@@ -76,7 +90,7 @@
     "00000000" +
     "11111110" +
     "00000000"
-  );
+  ));
 
   // --- Game State ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -156,6 +170,18 @@
       if (r >= 0 && board[r][c] !== 0) return false;
     }
     return true;
+  }
+
+  // Circle collision helper for jewels (center+radius)
+  function jewelCircle(px, py) {
+    return { cx: px + CELL / 2, cy: py + CELL / 2, r: CELL / 2 - 1 };
+  }
+
+  function circlesOverlap(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist2 = dx * dx + dy * dy;
+    const rsum = ar + br;
+    return dist2 < rsum * rsum;
   }
 
   function lockPiece() {
@@ -300,33 +326,19 @@
   }
 
   // --- Drawing helpers ---
-  function drawJewelScaled(px, py, type, flash) {
+  function drawJewel(px, py, type, flash) {
     if (py < BOARD_Y - CELL || py >= BOARD_Y + BOARD_H) return;
     // Cell background
-    rectf(px + 1, py + 1, CELL - 2, CELL - 2, 0);
+    rectf(px, py, CELL, CELL, 0);
     if (flash && Mono.frame % 4 < 2) {
       // Flash white
       rectf(px + 2, py + 2, CELL - 4, CELL - 4, 3);
     } else {
-      drawJewelInner(px, py, type);
+      sprT(type, px, py);
     }
-  }
-
-  function drawJewelInner(px, py, type) {
-    const s = sprites[type];
-    if (!s) return;
-    // Draw 8x8 sprite at 1x, centered in CELL
-    const ox = px + (CELL - 8) / 2;
-    const oy = py + (CELL - 8) / 2;
-    for (let sy = 0; sy < 8; sy++) {
-      for (let sx = 0; sx < 8; sx++) {
-        const c = s[sy * 8 + sx];
-        const fx = ox + sx;
-        const fy = oy + sy;
-        if (fx >= 0 && fx < W && fy >= 0 && fy < H)
-          buf32[fy * W + fx] = COLOR_U32[c];
-      }
-    }
+    // Debug: circle collision for each jewel (round objects)
+    const jc = jewelCircle(px, py);
+    dbgC(jc.cx, jc.cy, jc.r);
   }
 
   function drawBoard() {
@@ -349,7 +361,7 @@
           const px = BOARD_X + c * CELL;
           const py = BOARD_Y + r * CELL;
           const isFlashing = flashSet.has(r + "," + c) && flashTimer > 0;
-          drawJewelScaled(px, py, board[r][c], isFlashing);
+          drawJewel(px, py, board[r][c], isFlashing);
         }
       }
     }
@@ -362,8 +374,13 @@
       const py = BOARD_Y + flr(r) * CELL;
       const px = BOARD_X + piece.col * CELL;
       if (flr(r) >= 0) {
-        drawJewelScaled(px, py, piece.jewels[i], false);
+        drawJewel(px, py, piece.jewels[i], false);
       }
+    }
+    // Debug: piece column collision rect
+    const pr = flr(piece.row);
+    if (pr >= 0) {
+      dbg(BOARD_X + piece.col * CELL, BOARD_Y + pr * CELL, CELL, CELL * 3);
     }
   }
 
@@ -383,21 +400,22 @@
   }
 
   function drawNextPreview() {
-    const nx = BOARD_X + BOARD_W + 19;
+    const nx = BOARD_X + BOARD_W + 12;
     const ny = BOARD_Y + 12;
-    text("NEXT", nx + 3, ny - 10, 2);
+    // Ensure NEXT box fits within 320px: nx + CELL + 4 must be <= 320
+    text("NEXT", nx + 1, ny - 10, 2);
     rectf(nx - 2, ny - 2, CELL + 4, CELL * 3 + 4, 1);
     rectf(nx, ny, CELL, CELL * 3, 0);
     for (let i = 0; i < 3; i++) {
       const px = nx;
       const py = ny + i * CELL;
-      rectf(px + 1, py + 1, CELL - 2, CELL - 2, 0);
-      drawJewelInner(px, py, nextJewels[i]);
+      rectf(px, py, CELL, CELL, 0);
+      sprT(nextJewels[i], px, py);
     }
   }
 
   function drawHUD() {
-    const lx = 15;
+    const lx = 6;
     text("SCORE", lx, BOARD_Y + 3, 2);
     text(String(score), lx, BOARD_Y + 12, 3);
 
@@ -416,13 +434,16 @@
     }
 
     // Jewel legend on right side
-    const rx = BOARD_X + BOARD_W + 19;
+    const rx = BOARD_X + BOARD_W + 12;
     const ry = BOARD_Y + 82;
     text("JEWELS", rx, ry, 2);
     for (let i = 0; i < NUM_JEWELS; i++) {
-      const px = rx + 2;
-      const py = ry + 10 + i * 16;
-      drawJewelInner(px, py, i + 1);
+      const px = rx;
+      const py = ry + 10 + i * 18;
+      // Clamp to stay within 320x240
+      if (px + CELL <= W && py + CELL <= H) {
+        sprT(i + 1, px, py);
+      }
     }
   }
 
@@ -537,18 +558,13 @@
       const x = (i * 37 + 15) % W;
       const y = ((t * (1 + (i % 3)) + i * 53) % (H + 40)) - 20;
       const type = (i % NUM_JEWELS) + 1;
-      const s = sprites[type];
-      if (s) {
-        for (let sy = 0; sy < 8; sy++)
-          for (let sx = 0; sx < 8; sx++) {
-            const c = s[sy * 8 + sx];
-            if (c > 0) {
-              const dx = flr(x) + sx;
-              const dy = flr(y) + sy;
-              if (dx >= 0 && dx < W && dy >= 0 && dy < H)
-                buf32[dy * W + dx] = COLOR_U32[1];
-            }
-          }
+      // Draw small ghost jewels using sprT at half opacity feel (color 1 only)
+      if (flr(x) >= 0 && flr(x) + 16 <= W && flr(y) >= -16 && flr(y) < H) {
+        // Render a dimmed version: just draw outlines
+        const jx = flr(x), jy = flr(y);
+        if (jy >= 0 && jy + CELL <= H) {
+          rect(jx + 3, jy + 3, CELL - 6, CELL - 6, 1);
+        }
       }
     }
 
@@ -558,28 +574,28 @@
 
     // Animated jewels row
     for (let i = 0; i < NUM_JEWELS; i++) {
-      const ax = cx - 30 + i * 16;
-      const ay = 75 + sin(t * 0.08 + i * 1.5) * 4;
-      drawJewelInner(flr(ax), flr(ay), i + 1);
+      const ax = cx - 34 + i * 18;
+      const ay = 72 + sin(t * 0.08 + i * 1.5) * 4;
+      sprT(i + 1, flr(ax), flr(ay));
     }
 
     // Separator line
-    line(cx - 47, 97, cx + 47, 97, 1);
+    line(cx - 47, 100, cx + 47, 100, 1);
 
-    text("MATCH 3 OR MORE", cx - 52, 109, 2);
-    text("IN ANY DIRECTION!", cx - 55, 119, 2);
+    text("MATCH 3 OR MORE", cx - 52, 112, 2);
+    text("IN ANY DIRECTION!", cx - 55, 122, 2);
 
     if (flr(t / 18) % 2 === 0) {
-      text("PRESS START", cx - 65, 146, 3);
+      text("PRESS START", cx - 65, 148, 3);
     }
 
     if (hiScore > 0) {
-      text("HI-SCORE: " + hiScore, cx - 40, 172, 2);
+      text("HI-SCORE: " + hiScore, cx - 40, 174, 2);
     }
 
-    text("ARROWS: MOVE / DROP", cx - 60, 201, 1);
-    text("A: CYCLE JEWEL ORDER", cx - 63, 213, 1);
-    text("UP: HARD DROP", cx - 43, 225, 1);
+    text("ARROWS: MOVE / DROP", cx - 60, 204, 1);
+    text("A: CYCLE JEWEL ORDER", cx - 63, 216, 1);
+    text("UP: HARD DROP", cx - 43, 228, 1);
   }
 
   function drawPlay() {
@@ -600,19 +616,26 @@
     drawNextPreview();
     drawHUD();
 
+    // Debug: board area collision rect
+    dbg(BOARD_X, BOARD_Y, BOARD_W, BOARD_H);
+
     if (gameOver) {
       // Darken the board
       for (let py = BOARD_Y; py < BOARD_Y + BOARD_H; py++) {
         for (let px = BOARD_X; px < BOARD_X + BOARD_W; px++) {
-          if ((px + py) % 2 === 0) buf32[py * W + px] = COLOR_U32[0];
+          if ((px + py) % 2 === 0) {
+            const buf32 = Mono._buf32;
+            const COLOR_U32 = Mono._COLOR_U32;
+            buf32[py * W + px] = COLOR_U32[0];
+          }
         }
       }
-      const gx = BOARD_X + BOARD_W / 2 - 22;
+      const gx = BOARD_X + BOARD_W / 2 - 28;
       const gy = BOARD_Y + BOARD_H / 2 - 15;
-      rectf(gx - 4, gy - 4, 60, 38, 0);
-      rect(gx - 4, gy - 4, 60, 38, 2);
+      rectf(gx - 4, gy - 4, 68, 38, 0);
+      rect(gx - 4, gy - 4, 68, 38, 2);
       text("GAME OVER", gx, gy, 3);
-      text("SCORE: " + score, gx - 2, gy + 10, 2);
+      text("SCORE: " + score, gx, gy + 10, 2);
       if (flr(Mono.frame / 18) % 2 === 0) {
         text("PRESS START", gx - 2, gy + 21, 2);
       }

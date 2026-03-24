@@ -20,11 +20,14 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8→16 upscaler ---
+  function up(d){let o="";for(let r=0;r<8;r++){let row="";for(let c=0;c<8;c++){const ch=d[r*8+c];row+=ch+ch;}o+=row+row;}return o;}
+
+  // --- Sprites (16x16) ---
   // 1: Ball
-  defSprite(1,
+  defSprite(1, up(
     "00330000" +
     "03333000" +
     "33333300" +
@@ -33,9 +36,9 @@
     "03333000" +
     "00330000" +
     "00000000"
-  );
+  ));
   // 2: Power-up: Wide paddle (W icon)
-  defSprite(2,
+  defSprite(2, up(
     "01111110" +
     "10000001" +
     "12000021" +
@@ -44,9 +47,9 @@
     "12322321" +
     "10000001" +
     "01111110"
-  );
+  ));
   // 3: Power-up: Multi-ball (3 dots icon)
-  defSprite(3,
+  defSprite(3, up(
     "01111110" +
     "10000001" +
     "10300301" +
@@ -55,9 +58,9 @@
     "10000001" +
     "10000001" +
     "01111110"
-  );
+  ));
   // 4: Power-up: Slow ball (S icon)
-  defSprite(4,
+  defSprite(4, up(
     "01111110" +
     "10000001" +
     "10033001" +
@@ -66,9 +69,9 @@
     "10000301" +
     "10033001" +
     "01111110"
-  );
+  ));
   // 5: Life icon (small paddle)
-  defSprite(5,
+  defSprite(5, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -77,9 +80,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 6: Particle / spark
-  defSprite(6,
+  defSprite(6, up(
     "00000000" +
     "00000000" +
     "00030000" +
@@ -88,15 +91,17 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // --- Constants ---
+  const SPR_SIZE = 16;
   const PADDLE_Y = 221;
   const PADDLE_H = 6;
   const PADDLE_DEFAULT_W = 32;
   const PADDLE_WIDE_W = 48;
   const PADDLE_SPEED = 5;
   const BALL_SIZE = 6;
+  const BALL_RADIUS = BALL_SIZE / 2;
   const BRICK_W = 18;
   const BRICK_H = 8;
   const BRICK_GAP = 2;
@@ -122,8 +127,6 @@
   let totalBreakable;
 
   // --- Level Patterns ---
-  // Each level is a function that returns a 2D array of brick types
-  // 0=empty, 1=normal, 2=strong, 3=unbreakable
   function levelPattern(lv) {
     const rows = 8;
     const cols = BRICK_COLS;
@@ -138,7 +141,6 @@
     }
 
     if (pat === 0) {
-      // Classic rows
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           if (r < 2) grid[r][c] = 2;
@@ -146,7 +148,6 @@
         }
       }
     } else if (pat === 1) {
-      // Checkerboard
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           if ((r + c) % 2 === 0) grid[r][c] = 1;
@@ -154,7 +155,6 @@
         }
       }
     } else if (pat === 2) {
-      // Diamond with unbreakable border
       const midC = flr(cols / 2);
       const midR = flr(rows / 2);
       for (let r = 0; r < rows; r++) {
@@ -168,7 +168,6 @@
         }
       }
     } else if (pat === 3) {
-      // Fortress with walls
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           if (r === 0 || r === rows - 1) grid[r][c] = 3;
@@ -178,7 +177,6 @@
         }
       }
     } else if (pat === 4) {
-      // Zigzag
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const zigRow = (r + flr(c / 2)) % 3;
@@ -187,7 +185,6 @@
         }
       }
     } else if (pat === 5) {
-      // Invader shape
       const shape = [
         "..111111111111.",
         ".1..1111111..1.",
@@ -208,7 +205,6 @@
         }
       }
     } else if (pat === 6) {
-      // Striped with strong cores
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           if (r % 2 === 0) {
@@ -222,9 +218,7 @@
       }
     }
 
-    // Scale difficulty with level
     if (lv > 7) {
-      // After first cycle, add more strong/unbreakable
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           if (grid[r][c] === 1 && Math.random() < 0.15 * (lv - 7)) {
@@ -344,11 +338,20 @@
   function sndLaunch() { note(0, "G4", 0.05); }
 
   // --- Collision helpers ---
+  // Circle-vs-rect collision: ball is circle, bricks/paddle are rect
+  function circRectOverlap(cx, cy, r, rx, ry, rw, rh) {
+    // Find closest point on rect to circle center
+    const closestX = _max(rx, min(cx, rx + rw));
+    const closestY = _max(ry, min(cy, ry + rh));
+    const dx = cx - closestX;
+    const dy = cy - closestY;
+    return dx * dx + dy * dy <= r * r;
+  }
+
   function ballBrickCollide(ball, brick) {
-    const bx = ball.x, by = ball.y;
-    const bw = BALL_SIZE, bh = BALL_SIZE;
-    return bx < brick.x + BRICK_W && bx + bw > brick.x &&
-           by < brick.y + BRICK_H && by + bh > brick.y;
+    const bcx = ball.x + BALL_RADIUS;
+    const bcy = ball.y + BALL_RADIUS;
+    return circRectOverlap(bcx, bcy, BALL_RADIUS, brick.x, brick.y, BRICK_W, BRICK_H);
   }
 
   // --- Title Scene ---
@@ -389,7 +392,7 @@
       text("- BLOCK BREAKER -", W / 2 - 45, titleY + 12, 2);
       const ballAnimX = W / 2 + sin(Mono.frame * 0.08) * 40;
       const ballAnimY = 124 + _abs(sin(Mono.frame * 0.12)) * -20;
-      spr(1, ballAnimX - 4, ballAnimY - 4);
+      spr(1, ballAnimX - 8, ballAnimY - 8);
       if (flr(Mono.frame / 20) % 2 === 0) {
         text("PRESS START", W / 2 - 40, 158, 3);
       }
@@ -426,7 +429,6 @@
     if (slowTimer > 0) {
       slowTimer--;
       if (slowTimer <= 0) {
-        // Restore ball speeds
         for (const b of balls) {
           const len = Math.sqrt(b.vx * b.vx + b.vy * b.vy) || 1;
           b.vx = (b.vx / len) * ballSpeed;
@@ -459,7 +461,7 @@
       const b = balls[bi];
       const curSpeed = slowTimer > 0 ? ballSpeed * 0.6 : ballSpeed;
 
-      // Normalize speed each frame to handle transitions
+      // Normalize speed each frame
       const len = Math.sqrt(b.vx * b.vx + b.vy * b.vy) || 1;
       b.vx = (b.vx / len) * curSpeed;
       b.vy = (b.vy / len) * curSpeed;
@@ -467,16 +469,19 @@
       b.x += b.vx;
       b.y += b.vy;
 
-      // Wall collision
-      if (b.x <= 2) { b.x = 2; b.vx = _abs(b.vx); sndWallHit(); }
-      if (b.x + BALL_SIZE >= W - 2) { b.x = W - 2 - BALL_SIZE; b.vx = -_abs(b.vx); sndWallHit(); }
-      if (b.y <= 12) { b.y = 12; b.vy = _abs(b.vy); sndWallHit(); }
+      // Ball center for circle collision with walls
+      const bcx = b.x + BALL_RADIUS;
+      const bcy = b.y + BALL_RADIUS;
+
+      // Wall collision (circle vs wall edges)
+      if (bcx - BALL_RADIUS <= 2) { b.x = 2; b.vx = _abs(b.vx); sndWallHit(); }
+      if (bcx + BALL_RADIUS >= W - 2) { b.x = W - 2 - BALL_SIZE; b.vx = -_abs(b.vx); sndWallHit(); }
+      if (bcy - BALL_RADIUS <= 12) { b.y = 12; b.vy = _abs(b.vy); sndWallHit(); }
 
       // Ball fell below
       if (b.y > H + 8) {
         balls.splice(bi, 1);
         if (balls.length === 0) {
-          // Lose a life
           lives--;
           comboCount = 0;
           sndLoseLife();
@@ -494,13 +499,11 @@
         continue;
       }
 
-      // Paddle collision
+      // Paddle collision (circle vs rect)
       if (b.vy > 0 &&
-          b.y + BALL_SIZE >= PADDLE_Y && b.y + BALL_SIZE <= PADDLE_Y + PADDLE_H + 4 &&
-          b.x + BALL_SIZE > paddle.x && b.x < paddle.x + paddleW) {
-        // Calculate bounce angle based on where ball hits paddle
-        const hitPos = (b.x + BALL_SIZE / 2 - paddle.x) / paddleW; // 0..1
-        const angle = -Math.PI * (0.15 + 0.7 * (1 - hitPos)); // -165 to -27 degrees
+          circRectOverlap(bcx, bcy, BALL_RADIUS, paddle.x, PADDLE_Y, paddleW, PADDLE_H)) {
+        const hitPos = (bcx - paddle.x) / paddleW; // 0..1
+        const angle = -Math.PI * (0.15 + 0.7 * (1 - hitPos));
         b.vx = Math.cos(angle) * curSpeed;
         b.vy = Math.sin(angle) * curSpeed;
         b.y = PADDLE_Y - BALL_SIZE;
@@ -508,17 +511,20 @@
         sndPaddleHit();
       }
 
-      // Brick collision
+      // Brick collision (circle vs rect)
       for (let bri = bricks.length - 1; bri >= 0; bri--) {
         const br = bricks[bri];
         if (br.type === 0) continue;
-        if (!ballBrickCollide(b, br)) continue;
+
+        const bcx2 = b.x + BALL_RADIUS;
+        const bcy2 = b.y + BALL_RADIUS;
+        if (!circRectOverlap(bcx2, bcy2, BALL_RADIUS, br.x, br.y, BRICK_W, BRICK_H)) continue;
 
         // Determine collision side for bounce
-        const overlapLeft = (b.x + BALL_SIZE) - br.x;
-        const overlapRight = (br.x + BRICK_W) - b.x;
-        const overlapTop = (b.y + BALL_SIZE) - br.y;
-        const overlapBottom = (br.y + BRICK_H) - b.y;
+        const overlapLeft = (bcx2 + BALL_RADIUS) - br.x;
+        const overlapRight = (br.x + BRICK_W) - (bcx2 - BALL_RADIUS);
+        const overlapTop = (bcy2 + BALL_RADIUS) - br.y;
+        const overlapBottom = (br.y + BRICK_H) - (bcy2 - BALL_RADIUS);
         const minOverlapX = min(overlapLeft, overlapRight);
         const minOverlapY = min(overlapTop, overlapBottom);
 
@@ -533,7 +539,6 @@
         }
 
         if (br.type === 3) {
-          // Unbreakable
           br.hitFlash = 4;
           sndUnbreakable();
           addParticles(br.x + BRICK_W / 2, br.y + BRICK_H / 2, 1, 3);
@@ -541,21 +546,19 @@
           br.hp--;
           br.hitFlash = 4;
           if (br.hp <= 0) {
-            // Brick destroyed
             comboCount++;
             const pts = br.type === 2 ? 20 : 10;
             score += pts * (1 + flr(comboCount / 5));
             addParticles(br.x + BRICK_W / 2, br.y + BRICK_H / 2, br.type === 2 ? 3 : 2, 6);
-            spawnPowerup(br.x + BRICK_W / 2 - 4, br.y);
+            spawnPowerup(br.x + BRICK_W / 2 - 8, br.y);
             bricks.splice(bri, 1);
             sndBrickBreak();
           } else {
-            // Strong brick hit
             sndStrongHit();
             addParticles(br.x + BRICK_W / 2, br.y + BRICK_H / 2, 3, 3);
           }
         }
-        break; // only collide with one brick per frame per ball
+        break;
       }
     }
 
@@ -572,16 +575,14 @@
       p.y += POWERUP_SPEED;
       if (p.y > H) { powerups.splice(i, 1); continue; }
 
-      // Paddle catch
-      if (p.y + 8 >= PADDLE_Y && p.y <= PADDLE_Y + PADDLE_H &&
-          p.x + 8 > paddle.x && p.x < paddle.x + paddleW) {
+      // Paddle catch (powerup rect vs paddle rect)
+      if (p.y + SPR_SIZE >= PADDLE_Y && p.y <= PADDLE_Y + PADDLE_H &&
+          p.x + SPR_SIZE > paddle.x && p.x < paddle.x + paddleW) {
         sndPowerup();
         if (p.type === 2) {
-          // Wide paddle
-          wideTimer = 300; // 10 seconds
+          wideTimer = 300;
           paddleW = PADDLE_WIDE_W;
         } else if (p.type === 3) {
-          // Multi-ball
           if (balls.length > 0 && balls.length < 8) {
             const src = balls[0];
             const spd = Math.sqrt(src.vx * src.vx + src.vy * src.vy) || ballSpeed;
@@ -590,8 +591,7 @@
             spawnBall(src.x, src.y, Math.cos(ang - 0.5) * spd, Math.sin(ang - 0.5) * spd);
           }
         } else if (p.type === 4) {
-          // Slow ball
-          slowTimer = 240; // 8 seconds
+          slowTimer = 240;
         }
         powerups.splice(i, 1);
       }
@@ -678,9 +678,10 @@
     text("SCORE:" + score, 3 + sx, 3 + sy, 3);
     text("LV:" + level, W / 2 - 12 + sx, 3 + sy, 2);
 
-    // Lives
-    for (let i = 0; i < lives; i++) {
-      spr(5, W - 27 + i * 8 + sx, 2 + sy);
+    // Lives: draw from right edge inward, capped so they don't overflow
+    const maxLivesShown = min(lives, 5);
+    for (let i = 0; i < maxLivesShown; i++) {
+      spr(5, W - 20 - i * 18 + sx, -2 + sy);
     }
 
     // Power-up indicators
@@ -705,11 +706,11 @@
       if (br.hitFlash > 0) {
         c = 3;
       } else if (br.type === 3) {
-        c = 1; // unbreakable = dark
+        c = 1;
       } else if (br.type === 2 || br.hp === 2) {
-        c = 3; // strong = white
+        c = 3;
       } else {
-        c = 2; // normal = light
+        c = 2;
       }
       rectf(br.x + sx, br.y + sy, BRICK_W, BRICK_H, c);
       // Inner detail line for depth
@@ -721,47 +722,54 @@
           line(br.x + 1 + sx, br.y + BRICK_H - 1 + sy, br.x + BRICK_W - 1 + sx, br.y + BRICK_H - 1 + sy, 1);
           line(br.x + BRICK_W - 1 + sx, br.y + 1 + sy, br.x + BRICK_W - 1 + sx, br.y + BRICK_H - 1 + sy, 1);
         } else if (c === 1) {
-          // Unbreakable: cross-hatch pattern
           for (let px = 0; px < BRICK_W; px += 4) {
             pix(br.x + px + sx, br.y + 2 + sy, 0);
             pix(br.x + px + 2 + sx, br.y + 6 + sy, 0);
           }
         }
       }
+      // Debug: brick hitbox
+      dbg(br.x, br.y, BRICK_W, BRICK_H);
     }
 
     // Paddle
     const pw = paddleW;
     rectf(paddle.x + sx, PADDLE_Y + sy, pw, PADDLE_H, 3);
-    // Paddle detail: darker center stripe
     rectf(paddle.x + 2 + sx, PADDLE_Y + 2 + sy, pw - 4, 2, 2);
-    // Paddle edges
     rectf(paddle.x + sx, PADDLE_Y + sy, 2, PADDLE_H, 2);
     rectf(paddle.x + pw - 2 + sx, PADDLE_Y + sy, 2, PADDLE_H, 2);
+    // Debug: paddle hitbox
+    dbg(paddle.x, PADDLE_Y, pw, PADDLE_H);
 
     // Balls
     for (const b of balls) {
-      spr(1, flr(b.x) + sx, flr(b.y) + sy);
+      spr(1, flr(b.x) - 5 + sx, flr(b.y) - 5 + sy);
+      // Debug: ball circle hitbox
+      dbgC(b.x + BALL_RADIUS, b.y + BALL_RADIUS, BALL_RADIUS);
     }
 
     // Ball on paddle indicator
     if (ballOnPaddle) {
       const bx = paddle.x + pw / 2 - BALL_SIZE / 2;
       const by = PADDLE_Y - BALL_SIZE - 1;
-      spr(1, flr(bx) + sx, flr(by) + sy);
-      // Blinking "PRESS START" hint
+      spr(1, flr(bx) - 5 + sx, flr(by) - 5 + sy);
+      // Debug: ball on paddle circle hitbox
+      dbgC(bx + BALL_RADIUS, by + BALL_RADIUS, BALL_RADIUS);
+      // Blinking hint
       if (flr(Mono.frame / 15) % 2 === 0) {
-        text("PRESS START", W / 2 - 17, PADDLE_Y - 16, 2);
+        text("PRESS A", W / 2 - 14, PADDLE_Y - 16, 2);
       }
     }
 
     // Powerups
     for (const p of powerups) {
       spr(p.type, flr(p.x) + sx, flr(p.y) + sy);
+      // Debug: powerup hitbox
+      dbg(p.x, p.y, SPR_SIZE, SPR_SIZE);
       // Sparkle
       if (flr(Mono.frame / 4) % 2 === 0) {
-        pix(p.x - 1 + sx, p.y + 4 + sy, 3);
-        pix(p.x + 9 + sx, p.y + 4 + sy, 3);
+        pix(p.x - 1 + sx, p.y + 8 + sy, 3);
+        pix(p.x + SPR_SIZE + 1 + sx, p.y + 8 + sy, 3);
       }
     }
 
@@ -771,7 +779,8 @@
     // Combo display
     if (comboCount >= 5) {
       const comboText = comboCount + " COMBO!";
-      text(comboText, W / 2 - comboText.length * 2.5, PADDLE_Y - 28,
+      const ctw = comboText.length * 5;
+      text(comboText, min(W - ctw - 2, _max(2, W / 2 - ctw / 2)), PADDLE_Y - 28,
            flr(Mono.frame / 4) % 2 === 0 ? 3 : 2);
     }
   }
