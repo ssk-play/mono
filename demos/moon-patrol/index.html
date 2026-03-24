@@ -11,7 +11,7 @@
   <canvas id="screen"></canvas>
 </div>
 <div id="controls">
-  <span>←→</span> SPEED &nbsp;&nbsp; <span>A</span> JUMP &nbsp;&nbsp; <span>B</span> SHOOT
+  <span>&#x2190;&#x2192;</span> SPEED &nbsp;&nbsp; <span>A</span> JUMP &nbsp;&nbsp; <span>B</span> SHOOT
 </div>
 <script src="../../runtime/engine.js"></script>
 <script>
@@ -20,13 +20,38 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, sprT, text: drawText, btn, btnp, note, stop, rnd, flr,
-          abs: _abs, min, max: _max, sin, cos } = Mono;
+          abs: _abs, min, max: _max, sin, cos, dbg, dbgC } = Mono;
   const sprTrans = sprT;
 
-  // --- Sprites ---
+  // --- 8x8 to 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Circle collision helper ---
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    const dist = dx * dx + dy * dy;
+    const rSum = r1 + r2;
+    return dist < rSum * rSum;
+  }
+
+  // Sprite size constant (all sprites are 16x16 after upscale)
+  const SP = 16;
+
+  // --- Sprites (all 16x16 via upscale) ---
 
   // 1: Moon buggy body
-  defSprite(1,
+  defSprite(1, up(
     "00000000" +
     "00033000" +
     "00333300" +
@@ -35,10 +60,10 @@
     "33322330" +
     "03333300" +
     "00000000"
-  );
+  ));
 
   // 2: Moon buggy wheel
-  defSprite(2,
+  defSprite(2, up(
     "00000000" +
     "00000000" +
     "00033000" +
@@ -47,10 +72,10 @@
     "00322300" +
     "00033000" +
     "00000000"
-  );
+  ));
 
   // 3: Buggy turret/antenna
-  defSprite(3,
+  defSprite(3, up(
     "00000000" +
     "00030000" +
     "00030000" +
@@ -59,10 +84,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 4: UFO
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "00333300" +
     "03222230" +
@@ -71,10 +96,10 @@
     "03333330" +
     "00011000" +
     "00000000"
-  );
+  ));
 
   // 5: Forward bullet
-  defSprite(5,
+  defSprite(5, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -83,10 +108,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 6: Upward bullet
-  defSprite(6,
+  defSprite(6, up(
     "00030000" +
     "00030000" +
     "00020000" +
@@ -95,10 +120,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 7: Enemy bomb
-  defSprite(7,
+  defSprite(7, up(
     "00000000" +
     "00010000" +
     "00020000" +
@@ -107,10 +132,10 @@
     "00020000" +
     "00030000" +
     "00000000"
-  );
+  ));
 
   // 8: Rock obstacle
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00000000" +
     "00022000" +
@@ -119,10 +144,10 @@
     "23333332" +
     "33222233" +
     "32111123"
-  );
+  ));
 
   // 9: Mine obstacle
-  defSprite(9,
+  defSprite(9, up(
     "00000000" +
     "00030000" +
     "00303000" +
@@ -131,10 +156,10 @@
     "03333300" +
     "00333000" +
     "00000000"
-  );
+  ));
 
   // 10: Explosion frame 1
-  defSprite(10,
+  defSprite(10, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -143,10 +168,10 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
 
   // 11: Explosion frame 2
-  defSprite(11,
+  defSprite(11, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -155,10 +180,10 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
 
   // 12: Life icon (small buggy)
-  defSprite(12,
+  defSprite(12, up(
     "00000000" +
     "00000000" +
     "00330000" +
@@ -167,10 +192,10 @@
     "03030300" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 13: Checkpoint flag
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "03333000" +
     "03223000" +
@@ -179,15 +204,22 @@
     "03000000" +
     "03000000" +
     "03000000"
-  );
+  ));
 
   // --- Game Constants ---
   const GROUND_Y = 195;
-  const BUGGY_Y = GROUND_Y - 16;
+  const BUGGY_Y = GROUND_Y - SP;
   const SCROLL_SPEED = 2;
   const JUMP_POWER = -7;
   const GRAVITY = 0.4;
   const CHECKPOINT_DIST = 800;
+
+  // Collision radii
+  const BUGGY_R = 7;
+  const UFO_R = 7;
+  const BULLET_R = 3;
+  const BOMB_R = 4;
+  const ROCK_R = 6;
 
   // --- Game State ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -209,22 +241,19 @@
     };
   }
 
-  // Generate terrain: array of ground heights indexed by world X tile
-  // Also generate craters (gaps in the ground)
-  let craters = [];  // {x, w} in world coords
-  let groundRocks = []; // {x} in world coords
+  // Generate terrain: craters and ground rocks
+  let craters = [];
+  let groundRocks = [];
 
   function generateTerrain(startTile, count) {
     const rng = seededRandom(startTile * 7 + 42);
     for (let i = 0; i < count; i++) {
       const tx = startTile + i;
       const wx = tx * 8;
-      // Random craters
       if (rng() < 0.03 && wx > 200) {
         const cw = flr(rng() * 3 + 2) * 8;
         craters.push({ x: wx, w: cw });
       }
-      // Random rocks
       if (rng() < 0.02 && wx > 150) {
         groundRocks.push({ x: wx, alive: true });
       }
@@ -254,8 +283,6 @@
     invincible = 0;
     mountainSeed = flr(rnd(10000));
     hillSeed = flr(rnd(10000));
-
-    // Pre-generate terrain ahead
     generateTerrain(0, 200);
   }
 
@@ -263,7 +290,7 @@
     explosions.push({ x, y, timer: 12 });
     for (let i = 0; i < 6; i++)
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(4) - 2,
         life: 6 + flr(rnd(10)),
         color: flr(rnd(3)) + 1
@@ -319,8 +346,6 @@
   }
 
   function updatePlay() {
-    // --- Play state ---
-
     // Scrolling
     if (btn("right")) scrollSpeed = SCROLL_SPEED + 1.5;
     else if (btn("left")) scrollSpeed = _max(0.5, SCROLL_SPEED - 1);
@@ -329,7 +354,6 @@
     scrollX += scrollSpeed;
     distance += scrollSpeed;
 
-    // Buggy wheel animation
     buggy.wheelAnim += scrollSpeed * 0.5;
 
     // Jump
@@ -344,39 +368,27 @@
     if (!buggy.onGround) {
       buggy.vy += GRAVITY;
       buggy.y += buggy.vy;
-      // Land on ground
       if (buggy.y >= BUGGY_Y) {
-        // Check if landing in a crater
         const buggyWorldX = scrollX + buggy.x;
         const inCrater = isCrater(buggyWorldX) && isCrater(buggyWorldX + 14);
-        if (inCrater) {
-          // Fall into crater
-          killBuggy();
-          return;
-        }
+        if (inCrater) { killBuggy(); return; }
         buggy.y = BUGGY_Y;
         buggy.vy = 0;
         buggy.onGround = true;
         buggy.jumping = false;
       }
     } else {
-      // Check if walking into a crater
       const buggyWorldX = scrollX + buggy.x;
-      if (isCrater(buggyWorldX + 4) && isCrater(buggyWorldX + 12)) {
-        killBuggy();
-        return;
-      }
+      if (isCrater(buggyWorldX + 4) && isCrater(buggyWorldX + 12)) { killBuggy(); return; }
     }
 
     // Shoot
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("b") && shootCooldown <= 0) {
-      // Fire forward bullet
       bullets.push({
-        x: scrollX + buggy.x + 16, y: buggy.y + 4,
+        x: scrollX + buggy.x + SP, y: buggy.y + 4,
         vx: 5, vy: 0, type: "fwd"
       });
-      // Fire upward bullet
       bullets.push({
         x: scrollX + buggy.x + 8, y: buggy.y - 4,
         vx: 0, vy: -5, type: "up"
@@ -396,7 +408,6 @@
       }
     }
 
-    // Invincibility timer
     if (invincible > 0) invincible--;
 
     // Generate more terrain as we scroll
@@ -406,7 +417,6 @@
       generateTerrain(furthestGenerated - 50, 100);
     }
 
-    // Clean up old craters and rocks behind us
     while (craters.length > 0 && craters[0].x + craters[0].w < scrollX - 50) craters.shift();
     while (groundRocks.length > 0 && groundRocks[0].x < scrollX - 50) groundRocks.shift();
 
@@ -422,7 +432,6 @@
       u.y += sin(Mono.frame * 0.08 + u.sinOffset) * 0.5;
       u.shootTimer--;
 
-      // UFO drops bomb
       if (u.shootTimer <= 0 && u.alive) {
         const sx = u.x - scrollX;
         if (sx > 20 && sx < W - 20) {
@@ -431,18 +440,16 @@
         }
       }
 
-      // Remove off-screen UFOs
       const sx = u.x - scrollX;
-      if (sx < -40 || sx > W + 40) {
-        ufos.splice(i, 1);
-        continue;
-      }
+      if (sx < -40 || sx > W + 40) { ufos.splice(i, 1); continue; }
 
-      // Bullet-UFO collision
+      // Bullet-UFO collision (circle)
       if (u.alive) {
+        const ucx = u.x + 8, ucy = u.y + 8;
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if (b.x + 8 > u.x - 2 && b.x < u.x + 10 && b.y + 8 > u.y - 2 && b.y < u.y + 10) {
+          const bcx = b.x + 8, bcy = b.y + 8;
+          if (circCollide(bcx, bcy, BULLET_R, ucx, ucy, UFO_R)) {
             bullets.splice(j, 1);
             u.alive = false;
             addExplosion(u.x - scrollX, u.y);
@@ -466,26 +473,32 @@
       if (b.y >= GROUND_Y - 4) {
         addExplosion(sx, b.y - 4);
         bombs.splice(i, 1);
-        // Check if near buggy
-        if (_abs(sx - buggy.x) < 16 && invincible <= 0) {
+        // Check if near buggy (circle)
+        const bcx = sx + 8, bcy = b.y + 4;
+        const pcx = buggy.x + 8, pcy = buggy.y + 8;
+        if (circCollide(bcx, bcy, BOMB_R + 4, pcx, pcy, BUGGY_R) && invincible <= 0) {
           killBuggy();
         }
         continue;
       }
 
-      // Bomb hits buggy
-      if (invincible <= 0 &&
-          sx > buggy.x - 4 && sx < buggy.x + 18 &&
-          b.y > buggy.y - 2 && b.y < buggy.y + 14) {
-        bombs.splice(i, 1);
-        killBuggy();
-        continue;
+      // Bomb hits buggy (circle)
+      if (invincible <= 0) {
+        const bcx = sx + 8, bcy = b.y + 8;
+        const pcx = buggy.x + 8, pcy = buggy.y + 8;
+        if (circCollide(bcx, bcy, BOMB_R, pcx, pcy, BUGGY_R)) {
+          bombs.splice(i, 1);
+          killBuggy();
+          continue;
+        }
       }
 
-      // Bullet-bomb collision
+      // Bullet-bomb collision (circle)
+      const bombcx = b.x + 8, bombcy = b.y + 8;
       for (let j = bullets.length - 1; j >= 0; j--) {
         const bl = bullets[j];
-        if (bl.x + 8 > b.x - 4 && bl.x < b.x + 4 && bl.y + 8 > b.y - 4 && bl.y < b.y + 4) {
+        const blcx = bl.x + 8, blcy = bl.y + 8;
+        if (circCollide(blcx, blcy, BULLET_R, bombcx, bombcy, BOMB_R)) {
           bullets.splice(j, 1);
           addExplosion(sx, b.y);
           score += 50;
@@ -496,28 +509,34 @@
       }
     }
 
-    // Check rock collisions
+    // Check rock collisions (circle)
     for (let i = groundRocks.length - 1; i >= 0; i--) {
       const r = groundRocks[i];
       if (!r.alive) continue;
       const sx = r.x - scrollX;
+      const rcx = sx + 8, rcy = GROUND_Y - 8 + 8;
 
-      // Bullet-rock collision
+      // Bullet-rock collision (circle)
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.type === "fwd" && b.x + 8 > r.x - 2 && b.x < r.x + 10 && b.y + 8 > GROUND_Y - 12 && b.y < GROUND_Y + 4) {
-          bullets.splice(j, 1);
-          r.alive = false;
-          addExplosion(sx, GROUND_Y - 10);
-          score += 30;
-          hitSound();
-          break;
+        if (b.type === "fwd") {
+          const bsx = b.x - scrollX;
+          const bcx = bsx + 8, bcy = b.y + 8;
+          if (circCollide(bcx, bcy, BULLET_R, rcx, rcy, ROCK_R)) {
+            bullets.splice(j, 1);
+            r.alive = false;
+            addExplosion(sx, GROUND_Y - 10);
+            score += 30;
+            hitSound();
+            break;
+          }
         }
       }
 
-      // Buggy-rock collision
-      if (r.alive && invincible <= 0) {
-        if (sx > buggy.x - 6 && sx < buggy.x + 14 && buggy.onGround) {
+      // Buggy-rock collision (circle)
+      if (r.alive && invincible <= 0 && buggy.onGround) {
+        const pcx = buggy.x + 8, pcy = buggy.y + 8;
+        if (circCollide(pcx, pcy, BUGGY_R, rcx, rcy, ROCK_R)) {
           killBuggy();
           r.alive = false;
           addExplosion(sx, GROUND_Y - 10);
@@ -555,7 +574,6 @@
     if (lives <= 0) {
       Mono.go(GAMEOVER); return;
     } else {
-      // Respawn
       buggy.y = BUGGY_Y;
       buggy.vy = 0;
       buggy.onGround = true;
@@ -568,7 +586,6 @@
   // Draw
   // ============================================================
 
-  // Mountain height generator (seeded by X position)
   function getMountainH(wx, seed) {
     const s1 = sin(wx * 0.003 + seed) * 22;
     const s2 = sin(wx * 0.007 + seed * 2.1) * 11;
@@ -626,40 +643,133 @@
         }
       }
     }
-    for (const r of groundRocks) { if (!r.alive) continue; const sx = r.x - scrollX; if (sx > -10 && sx < W + 10) sprTrans(8, flr(sx), GROUND_Y - 7); }
+
+    // Ground rocks (16x16)
+    for (const r of groundRocks) {
+      if (!r.alive) continue;
+      const sx = r.x - scrollX;
+      if (sx > -SP && sx < W + SP) {
+        sprTrans(8, flr(sx), GROUND_Y - SP + 2);
+        dbgC(flr(sx) + 8, GROUND_Y - SP + 2 + 8, ROCK_R);
+      }
+    }
+
+    // Checkpoint markers
     for (let cp = 1; cp <= 26; cp++) {
       const cpx = cp * CHECKPOINT_DIST - scrollX;
-      if (cpx > -10 && cpx < W + 10) { line(flr(cpx), GROUND_Y - 20, flr(cpx), GROUND_Y, 2); sprTrans(13, flr(cpx), GROUND_Y - 20); drawText(String.fromCharCode(64 + cp), flr(cpx) - 2, GROUND_Y + 3, 3); }
+      if (cpx > -SP && cpx < W + SP) {
+        line(flr(cpx), GROUND_Y - 24, flr(cpx), GROUND_Y, 2);
+        sprTrans(13, flr(cpx), GROUND_Y - 24);
+        drawText(String.fromCharCode(64 + cp), flr(cpx) - 2, GROUND_Y + 3, 3);
+      }
     }
-    const progressY = 14;
-    rectf(27, progressY, 266, 5, 0); rect(27, progressY, 266, 5, 1);
-    for (let i = 0; i < 26; i++) { const px = 27 + flr(i * 266 / 26); pix(px, progressY + 4, 2); if (i <= checkpoint) rectf(27, progressY + 1, flr(min(checkpoint, 25) * 266 / 26), 3, 2); }
-    const posMarker = 27 + flr((distance % (26 * CHECKPOINT_DIST)) / (26 * CHECKPOINT_DIST) * 266);
-    rectf(posMarker - 1, progressY - 1, 3, 7, 3);
-    if (checkpoint > 0) drawText(String.fromCharCode(64 + min(checkpoint, 26)), 20, progressY - 1, 3);
+
+    // Progress bar — clamped within screen
+    const barY = 16;
+    const barX = 28;
+    const barW = 264;
+    rectf(barX, barY, barW, 5, 0);
+    rect(barX, barY, barW, 5, 1);
+    dbg(barX, barY, barW, 5);
+    for (let i = 0; i < 26; i++) {
+      const px = barX + flr(i * barW / 26);
+      pix(px, barY + 4, 2);
+    }
+    if (checkpoint > 0) {
+      const fillW = flr(min(checkpoint, 25) * barW / 26);
+      rectf(barX, barY + 1, fillW, 3, 2);
+    }
+    const posMarker = barX + flr((distance % (26 * CHECKPOINT_DIST)) / (26 * CHECKPOINT_DIST) * barW);
+    const clampedMarker = min(_max(posMarker, barX), barX + barW - 3);
+    rectf(clampedMarker - 1, barY - 1, 3, 7, 3);
+    if (checkpoint > 0) drawText(String.fromCharCode(64 + min(checkpoint, 26)), barX - 8, barY - 1, 3);
     const nextCp = min(checkpoint + 1, 26);
-    drawText(String.fromCharCode(64 + nextCp), 297, progressY - 1, 2);
-    for (const u of ufos) { if (!u.alive) continue; const sx = u.x - scrollX; if (sx > -10 && sx < W + 10) sprTrans(4, flr(sx), flr(u.y)); }
-    for (const b of bombs) { const sx = b.x - scrollX; if (sx > -10 && sx < W + 10) sprTrans(7, flr(sx), flr(b.y)); }
-    for (const b of bullets) { const sx = b.x - scrollX; if (sx > -10 && sx < W + 10) { const sprId = b.type === "fwd" ? 5 : 6; sprTrans(sprId, flr(sx), flr(b.y)); } }
-    if (invincible <= 0 || flr(Mono.frame / 3) % 2 === 0) {
-      sprTrans(3, flr(buggy.x + 4), flr(buggy.y - 6));
-      spr(1, flr(buggy.x), flr(buggy.y)); spr(1, flr(buggy.x + 8), flr(buggy.y), true);
-      if (buggy.onGround) {
-        spr(2, flr(buggy.x - 1), flr(buggy.y + 6)); spr(2, flr(buggy.x + 9), flr(buggy.y + 6));
-        if (scrollSpeed > 1 && Mono.frame % 3 === 0) particles.push({ x: buggy.x - 2, y: GROUND_Y - 2, vx: -rnd(2), vy: -rnd(1.5), life: 5 + flr(rnd(5)), color: 1 });
-      } else { spr(2, flr(buggy.x - 1), flr(buggy.y + 6)); spr(2, flr(buggy.x + 9), flr(buggy.y + 6)); }
+    drawText(String.fromCharCode(64 + nextCp), min(barX + barW + 3, W - 8), barY - 1, 2);
+
+    // UFOs (16x16)
+    for (const u of ufos) {
+      if (!u.alive) continue;
+      const sx = u.x - scrollX;
+      if (sx > -SP && sx < W + SP) {
+        sprTrans(4, flr(sx), flr(u.y));
+        dbgC(flr(sx) + 8, flr(u.y) + 8, UFO_R);
+      }
     }
-    for (const e of explosions) { const sprId = e.timer > 6 ? 10 : 11; sprTrans(sprId, flr(e.x), flr(e.y)); }
+
+    // Bombs (16x16)
+    for (const b of bombs) {
+      const sx = b.x - scrollX;
+      if (sx > -SP && sx < W + SP) {
+        sprTrans(7, flr(sx), flr(b.y));
+        dbgC(flr(sx) + 8, flr(b.y) + 8, BOMB_R);
+      }
+    }
+
+    // Bullets (16x16)
+    for (const b of bullets) {
+      const sx = b.x - scrollX;
+      if (sx > -SP && sx < W + SP) {
+        const sprId = b.type === "fwd" ? 5 : 6;
+        sprTrans(sprId, flr(sx), flr(b.y));
+        dbgC(flr(sx) + 8, flr(b.y) + 8, BULLET_R);
+      }
+    }
+
+    // Buggy (16x16 sprites)
+    if (invincible <= 0 || flr(Mono.frame / 3) % 2 === 0) {
+      sprTrans(3, flr(buggy.x + 4), flr(buggy.y - 10));
+      spr(1, flr(buggy.x), flr(buggy.y));
+      spr(1, flr(buggy.x + SP), flr(buggy.y), true);
+      dbgC(flr(buggy.x) + 8, flr(buggy.y) + 8, BUGGY_R);
+      if (buggy.onGround) {
+        spr(2, flr(buggy.x - 2), flr(buggy.y + 10));
+        spr(2, flr(buggy.x + SP + 2), flr(buggy.y + 10));
+        if (scrollSpeed > 1 && Mono.frame % 3 === 0) particles.push({ x: buggy.x - 2, y: GROUND_Y - 2, vx: -rnd(2), vy: -rnd(1.5), life: 5 + flr(rnd(5)), color: 1 });
+      } else {
+        spr(2, flr(buggy.x - 2), flr(buggy.y + 10));
+        spr(2, flr(buggy.x + SP + 2), flr(buggy.y + 10));
+      }
+    }
+
+    // Explosions (16x16)
+    for (const e of explosions) {
+      const sprId = e.timer > 6 ? 10 : 11;
+      sprTrans(sprId, flr(e.x), flr(e.y));
+    }
+
+    // Particles
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
-    rectf(0, 0, W, 12, 0);
+
+    // HUD — top bar (clamped to prevent overflow)
+    rectf(0, 0, W, 14, 0);
     drawText("SCORE:" + score, 4, 3, 3);
+    dbg(4, 3, 60, 7);
     drawText("PT:" + String.fromCharCode(65 + min(checkpoint, 25)), W / 2 - 15, 3, 2);
-    for (let i = 0; i < lives; i++) sprTrans(12, W - 40 + i * 12, 1);
-    drawText(flr(distance) + "M", W - 60, 3, 1);
+    dbg(W / 2 - 15, 3, 30, 7);
+
+    // Lives icons — capped to prevent overflow (max 5 shown)
+    const maxLivesShown = min(lives, 5);
+    const livesStartX = W - 10 - maxLivesShown * (SP + 2);
+    for (let i = 0; i < maxLivesShown; i++) {
+      const lx = livesStartX + i * (SP + 2);
+      if (lx >= 0 && lx + SP <= W) sprTrans(12, lx, 0);
+    }
+    dbg(livesStartX, 0, maxLivesShown * (SP + 2), SP);
+
+    // Distance — positioned to not overflow right edge
+    const distStr = flr(distance) + "M";
+    const distX = min(W - distStr.length * 5 - 4, livesStartX - distStr.length * 5 - 8);
+    drawText(distStr, distX, 3, 1);
+    dbg(distX, 3, distStr.length * 5, 7);
+
+    // Checkpoint announcement
     if (checkpoint > 0 && distance - checkpoint * CHECKPOINT_DIST < 100) {
       const alpha = 1 - (distance - checkpoint * CHECKPOINT_DIST) / 100;
-      if (alpha > 0) drawText("CHECKPOINT " + String.fromCharCode(64 + min(checkpoint, 26)), 112, 30, 3);
+      if (alpha > 0) {
+        const cpMsg = "CHECKPOINT " + String.fromCharCode(64 + min(checkpoint, 26));
+        const cpX = W / 2 - cpMsg.length * 5 / 2;
+        drawText(cpMsg, flr(cpX), 30, 3);
+      }
     }
   }
 
@@ -680,10 +790,15 @@
       const ty = 45 + sin(Mono.frame * 0.05) * 3;
       drawText("MOON PATROL", 105, flr(ty), 3); drawText("MOON PATROL", 106, flr(ty) + 1, 1);
       rectf(90, flr(ty) + 12, 140, 1, 2); drawText("- LUNAR PATROL -", 120, flr(ty) + 14, 2);
-      const bx = 133; const by = 157;
-      spr(1, bx, by); spr(1, bx + 8, by); spr(3, bx + 6, by - 6); spr(2, bx - 2, by + 6); spr(2, bx + 10, by + 6);
-      const u1x = (Mono.frame * 2) % (W + 40) - 20; const u1y = 75 + sin(Mono.frame * 0.07) * 6; spr(4, flr(u1x), flr(u1y));
-      const u2x = ((Mono.frame * 2) + 120) % (W + 40) - 20; const u2y = 90 + sin(Mono.frame * 0.09 + 2) * 5; spr(4, flr(u2x), flr(u2y));
+      // Title buggy (16x16)
+      const bx = 130; const by = 152;
+      spr(1, bx, by); spr(1, bx + SP, by, true); sprTrans(3, bx + 6, by - 10);
+      spr(2, bx - 2, by + 10); spr(2, bx + SP + 2, by + 10);
+      // Flying UFOs
+      const u1x = (Mono.frame * 2) % (W + 40) - 20; const u1y = 75 + sin(Mono.frame * 0.07) * 6;
+      sprTrans(4, flr(u1x), flr(u1y));
+      const u2x = ((Mono.frame * 2) + 120) % (W + 40) - 20; const u2y = 90 + sin(Mono.frame * 0.09 + 2) * 5;
+      sprTrans(4, flr(u2x), flr(u2y));
       if (flr(Mono.frame / 20) % 2 === 0) drawText("PRESS START", 132, 195, 3);
       drawText("-HOW TO PLAY-", 127, 210, 2); drawText("Z:JUMP  X:SHOOT  LR:SPEED", 95, 219, 2);
       drawText("MONO DEMO V0.1", 118, 232, 1);
@@ -702,15 +817,16 @@
     init() {},
     update() {
       updateGameoverEffects();
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0); drawStars();
       for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
       for (const e of explosions) { const sprId = e.timer > 6 ? 10 : 11; sprTrans(sprId, flr(e.x), flr(e.y)); }
-      drawText("GAME OVER", 138, 75, 3); drawText("SCORE: " + score, 130, 94, 2);
-      drawText("CHECKPOINT: " + String.fromCharCode(65 + min(checkpoint, 25)), 117, 106, 2);
-      drawText("DISTANCE: " + flr(distance), 117, 118, 1);
+      drawText("GAME OVER", 125, 75, 3);
+      drawText("SCORE: " + score, 117, 94, 2);
+      drawText("CHECKPOINT: " + String.fromCharCode(65 + min(checkpoint, 25)), 103, 106, 2);
+      drawText("DISTANCE: " + flr(distance), 103, 118, 1);
       if (flr(Mono.frame / 20) % 2 === 0) drawText("PRESS START", 132, 150, 3);
     }
   });

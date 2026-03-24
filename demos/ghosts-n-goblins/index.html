@@ -22,10 +22,28 @@
           spr, sprT, text: drawText, btn, btnp, note, stop, rnd, flr,
           abs: _abs, min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites ---
+  // ============================================================
+  // 8x8 -> 16x16 upscale helper
+  // ============================================================
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // ============================================================
+  // Sprites (all upscaled to 16x16)
+  // ============================================================
 
   // 1: Arthur armored standing
-  defSprite(1,
+  defSprite(1, up(
     "00033000" +
     "00322300" +
     "00323300" +
@@ -34,9 +52,9 @@
     "00232200" +
     "00300300" +
     "00300300"
-  );
+  ));
   // 2: Arthur armored walk frame 2
-  defSprite(2,
+  defSprite(2, up(
     "00033000" +
     "00322300" +
     "00323300" +
@@ -45,9 +63,9 @@
     "00232200" +
     "00030300" +
     "00300030"
-  );
+  ));
   // 3: Arthur underwear standing
-  defSprite(3,
+  defSprite(3, up(
     "00033000" +
     "00322300" +
     "00311300" +
@@ -56,9 +74,9 @@
     "00131100" +
     "00300300" +
     "00300300"
-  );
+  ));
   // 4: Arthur underwear walk
-  defSprite(4,
+  defSprite(4, up(
     "00033000" +
     "00322300" +
     "00311300" +
@@ -67,9 +85,9 @@
     "00131100" +
     "00030300" +
     "00300030"
-  );
+  ));
   // 5: Arthur jump armored
-  defSprite(5,
+  defSprite(5, up(
     "00033000" +
     "00322300" +
     "03323300" +
@@ -78,9 +96,9 @@
     "00232200" +
     "00033000" +
     "03000030"
-  );
+  ));
   // 6: Arthur jump underwear
-  defSprite(6,
+  defSprite(6, up(
     "00033000" +
     "00322300" +
     "03311300" +
@@ -89,9 +107,9 @@
     "00131100" +
     "00033000" +
     "03000030"
-  );
+  ));
   // 7: Arthur crouch armored
-  defSprite(7,
+  defSprite(7, up(
     "00000000" +
     "00033000" +
     "00322300" +
@@ -100,9 +118,9 @@
     "00333200" +
     "00233200" +
     "03300330"
-  );
+  ));
   // 8: Arthur crouch underwear
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00033000" +
     "00322300" +
@@ -111,9 +129,9 @@
     "00333100" +
     "00133100" +
     "03300330"
-  );
+  ));
   // 9: Death skeleton frame 1
-  defSprite(9,
+  defSprite(9, up(
     "00022000" +
     "00233200" +
     "00022000" +
@@ -122,9 +140,9 @@
     "00022000" +
     "00200200" +
     "02000020"
-  );
+  ));
   // 10: Death skeleton frame 2 (bones scatter)
-  defSprite(10,
+  defSprite(10, up(
     "20000020" +
     "00200200" +
     "02002002" +
@@ -133,9 +151,9 @@
     "02000020" +
     "00020000" +
     "20000002"
-  );
+  ));
   // 11: Lance
-  defSprite(11,
+  defSprite(11, up(
     "00000000" +
     "00000000" +
     "00000030" +
@@ -144,9 +162,9 @@
     "00000030" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 12: Dagger
-  defSprite(12,
+  defSprite(12, up(
     "00000000" +
     "00000000" +
     "00000300" +
@@ -155,9 +173,9 @@
     "00000300" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 13: Torch
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "00032000" +
     "00323000" +
@@ -166,9 +184,9 @@
     "00220000" +
     "00220000" +
     "00000000"
-  );
+  ));
   // 14: Axe
-  defSprite(14,
+  defSprite(14, up(
     "00000000" +
     "00333000" +
     "03223300" +
@@ -177,9 +195,9 @@
     "00022000" +
     "00022000" +
     "00000000"
-  );
+  ));
   // 15: Zombie
-  defSprite(15,
+  defSprite(15, up(
     "00022000" +
     "00222200" +
     "00212200" +
@@ -188,9 +206,9 @@
     "00222200" +
     "00200200" +
     "00200200"
-  );
+  ));
   // 16: Zombie emerging
-  defSprite(16,
+  defSprite(16, up(
     "00000000" +
     "00000000" +
     "00022000" +
@@ -199,9 +217,9 @@
     "02222220" +
     "11111111" +
     "11111111"
-  );
+  ));
   // 17: Ghost
-  defSprite(17,
+  defSprite(17, up(
     "00333000" +
     "03333300" +
     "03233230" +
@@ -210,9 +228,9 @@
     "33333333" +
     "33333333" +
     "30300303"
-  );
+  ));
   // 18: Red Arremer frame 1
-  defSprite(18,
+  defSprite(18, up(
     "30000003" +
     "33022033" +
     "03322330" +
@@ -221,9 +239,9 @@
     "03333300" +
     "33033033" +
     "30000003"
-  );
+  ));
   // 19: Red Arremer frame 2
-  defSprite(19,
+  defSprite(19, up(
     "03300330" +
     "03322330" +
     "00322300" +
@@ -232,9 +250,9 @@
     "03333300" +
     "33033033" +
     "30000003"
-  );
+  ));
   // 20: Skeleton enemy
-  defSprite(20,
+  defSprite(20, up(
     "00022000" +
     "00233200" +
     "00022000" +
@@ -243,9 +261,9 @@
     "00222000" +
     "00200200" +
     "00200200"
-  );
+  ));
   // 21: Plant monster
-  defSprite(21,
+  defSprite(21, up(
     "00300300" +
     "03030030" +
     "03323300" +
@@ -254,9 +272,9 @@
     "03333300" +
     "00333000" +
     "00333000"
-  );
+  ));
   // 22: Ground tile (grass top)
-  defSprite(22,
+  defSprite(22, up(
     "32323232" +
     "23232323" +
     "11111111" +
@@ -265,9 +283,9 @@
     "11111111" +
     "11111111" +
     "11111111"
-  );
+  ));
   // 23: Ground tile (dirt)
-  defSprite(23,
+  defSprite(23, up(
     "11111111" +
     "11111111" +
     "11111111" +
@@ -276,9 +294,9 @@
     "11111111" +
     "11111111" +
     "11111111"
-  );
+  ));
   // 24: Gravestone
-  defSprite(24,
+  defSprite(24, up(
     "00222200" +
     "02222220" +
     "02233220" +
@@ -287,9 +305,9 @@
     "02222220" +
     "02222220" +
     "02222220"
-  );
+  ));
   // 25: Dead tree
-  defSprite(25,
+  defSprite(25, up(
     "02020200" +
     "20222020" +
     "02222200" +
@@ -298,9 +316,9 @@
     "00222000" +
     "00222000" +
     "00222000"
-  );
+  ));
   // 26: Treasure chest
-  defSprite(26,
+  defSprite(26, up(
     "00000000" +
     "02222200" +
     "23333320" +
@@ -309,9 +327,9 @@
     "23333320" +
     "22222220" +
     "00000000"
-  );
+  ));
   // 27: Platform tile
-  defSprite(27,
+  defSprite(27, up(
     "33333333" +
     "22222222" +
     "11111111" +
@@ -320,9 +338,9 @@
     "11111111" +
     "11111111" +
     "11111111"
-  );
+  ));
   // 28-31: Boss demon (2x2 tiles)
-  defSprite(28,
+  defSprite(28, up(
     "00033300" +
     "03333330" +
     "33233230" +
@@ -331,8 +349,8 @@
     "33333330" +
     "03333300" +
     "03333300"
-  );
-  defSprite(29,
+  ));
+  defSprite(29, up(
     "00333000" +
     "03333330" +
     "03233230" +
@@ -341,8 +359,8 @@
     "33333330" +
     "03333300" +
     "03333300"
-  );
-  defSprite(30,
+  ));
+  defSprite(30, up(
     "33333330" +
     "33333330" +
     "33033030" +
@@ -351,8 +369,8 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
-  defSprite(31,
+  ));
+  defSprite(31, up(
     "03333333" +
     "03333333" +
     "03030330" +
@@ -361,9 +379,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 32-33: Explosion frames
-  defSprite(32,
+  defSprite(32, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -372,8 +390,8 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
-  defSprite(33,
+  ));
+  defSprite(33, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -382,9 +400,9 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
   // 34: Cave wall
-  defSprite(34,
+  defSprite(34, up(
     "11211121" +
     "12111211" +
     "11111111" +
@@ -393,9 +411,9 @@
     "11111121" +
     "12111111" +
     "11111211"
-  );
+  ));
   // 35: Forest tree top
-  defSprite(35,
+  defSprite(35, up(
     "00222200" +
     "02222220" +
     "22222222" +
@@ -404,9 +422,9 @@
     "00222200" +
     "00011000" +
     "00011000"
-  );
+  ));
   // 36: Life icon
-  defSprite(36,
+  defSprite(36, up(
     "00000000" +
     "00033000" +
     "00322300" +
@@ -415,9 +433,9 @@
     "00300300" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 37: Princess
-  defSprite(37,
+  defSprite(37, up(
     "00033000" +
     "00333300" +
     "00322300" +
@@ -426,9 +444,9 @@
     "33333333" +
     "03333330" +
     "03333330"
-  );
+  ));
   // 38: Armor sparkle
-  defSprite(38,
+  defSprite(38, up(
     "00000000" +
     "00030000" +
     "00303000" +
@@ -437,7 +455,68 @@
     "00030000" +
     "00000000" +
     "00000000"
-  );
+  ));
+
+  // ============================================================
+  // Sprite size constant (all sprites are 16x16 now)
+  // ============================================================
+  const SPR = 16;
+
+  // ============================================================
+  // Collision helpers
+  // ============================================================
+
+  // Circle-circle collision
+  function circOverlap(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx;
+    const dy = ay - by;
+    return (dx * dx + dy * dy) < (ar + br) * (ar + br);
+  }
+
+  // Circle-rect collision
+  function circRectOverlap(cx, cy, cr, rx, ry, rw, rh) {
+    const nearX = _max(rx, min(cx, rx + rw));
+    const nearY = _max(ry, min(cy, ry + rh));
+    const dx = cx - nearX;
+    const dy = cy - nearY;
+    return (dx * dx + dy * dy) < (cr * cr);
+  }
+
+  // Box overlap
+  function boxOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
+  // Projectile center and radius (circle hitbox)
+  function projCenter(p) {
+    return { cx: p.x + 8, cy: p.y + 8 };
+  }
+  function projRadius(p) {
+    if (p.weapon === WEAPON_LANCE) return 7;
+    if (p.weapon === WEAPON_DAGGER) return 5;
+    return 6;
+  }
+
+  // Entity hitbox (rect) -- inset from sprite edges
+  function entityHitbox(e) {
+    return { x: e.x + 2, y: e.y + 2, w: SPR - 4, h: SPR - 4 };
+  }
+
+  // Player hitbox (rect)
+  function playerHitbox() {
+    return { x: player.x + 3, y: player.y + 2, w: SPR - 6, h: SPR - 4 };
+  }
+
+  // Boss hitbox (2x2 sprite = 32x32)
+  function bossHitbox() {
+    return { x: boss.x + 2, y: boss.y + 2, w: 28, h: 28 };
+  }
+
+  // Bone hitbox (small circle)
+  function boneCenter(e) {
+    return { cx: e.x + 4, cy: e.y + 4 };
+  }
+  const BONE_R = 4;
 
   // --- Game constants ---
   const GRAVITY = 0.35;
@@ -445,7 +524,7 @@
   const MOVE_SPEED = 1.8;
   const GROUND_Y = 198;
   const LEVEL_WIDTH = 1600;
-  const TILE = 8;
+  const TILE = 16;
   const WEAPON_LANCE = 0;
   const WEAPON_DAGGER = 1;
   const WEAPON_TORCH = 2;
@@ -499,7 +578,7 @@
 
   function getPlatformAt(x, y, vy) {
     for (const p of levelData.platforms) {
-      if (x + 6 > p.x && x < p.x + p.w && y + 8 >= p.y && y + 8 <= p.y + 6 && vy >= 0) {
+      if (x + 12 > p.x && x < p.x + p.w && y + SPR >= p.y && y + SPR <= p.y + 6 && vy >= 0) {
         return p.y;
       }
     }
@@ -507,10 +586,10 @@
   }
 
   function isOnSolid(x, y) {
-    const gy = getGroundAt(x + 4);
-    if (y + 8 >= gy) return true;
+    const gy = getGroundAt(x + 8);
+    if (y + SPR >= gy) return true;
     for (const p of levelData.platforms) {
-      if (x + 6 > p.x && x < p.x + p.w && y + 8 >= p.y && y + 8 <= p.y + 4) return true;
+      if (x + 12 > p.x && x < p.x + p.w && y + SPR >= p.y && y + SPR <= p.y + 4) return true;
     }
     return false;
   }
@@ -518,7 +597,7 @@
   function resetGame() {
     generateLevel();
     player = {
-      x: 27, y: GROUND_Y - 12, vx: 0, vy: 0,
+      x: 27, y: GROUND_Y - SPR, vx: 0, vy: 0,
       facing: 1, armor: 2, weapon: WEAPON_LANCE,
       grounded: true, crouching: false,
       walkFrame: 0, walkTimer: 0,
@@ -548,7 +627,7 @@
     for (let cx = 133; cx < LEVEL_WIDTH - 133; cx += 133 + flr(rnd(133))) {
       const gy = getGroundAt(cx);
       if (gy < H) {
-        chests.push({ x: cx, y: gy - 8, alive: true, content: flr(rnd(5)) });
+        chests.push({ x: cx, y: gy - SPR, alive: true, content: flr(rnd(5)) });
       }
     }
   }
@@ -590,7 +669,7 @@
       const gy = getGroundAt(ex);
       if (gy < H) {
         enemies.push({
-          type: "skeleton", x: ex, y: gy - 8, gy: gy,
+          type: "skeleton", x: ex, y: gy - SPR, gy: gy,
           hp: 1, alive: true,
           walkDir: rnd(1) < 0.5 ? 1 : -1, animTimer: 0,
           throwTimer: 60 + flr(rnd(90))
@@ -602,7 +681,7 @@
       const gy = getGroundAt(ex);
       if (gy < H) {
         enemies.push({
-          type: "plant", x: ex, y: gy - 8, gy: gy,
+          type: "plant", x: ex, y: gy - SPR, gy: gy,
           hp: 2, alive: true, animTimer: 0, shootTimer: 90 + flr(rnd(60))
         });
       }
@@ -612,7 +691,7 @@
   function spawnBoss() {
     bossActive = true;
     boss = {
-      x: LEVEL_WIDTH - 53, y: GROUND_Y - 24,
+      x: LEVEL_WIDTH - 53, y: GROUND_Y - 32,
       hp: 12, maxHp: 12, alive: true,
       state: "idle", timer: 60,
       animFrame: 0, flashTimer: 0
@@ -622,7 +701,7 @@
   function addExplosion(x, y) {
     for (let i = 0; i < 6; i++) {
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(3) - 2,
         life: 8 + flr(rnd(10)), color: flr(rnd(3)) + 1
       });
@@ -647,8 +726,8 @@
 
   function throwWeapon() {
     if (player.throwCooldown > 0 || projectiles.length >= 2) return;
-    const px = player.x + (player.facing > 0 ? 6 : -4);
-    const py = player.crouching ? player.y + 2 : player.y;
+    const px = player.x + (player.facing > 0 ? 10 : -6);
+    const py = player.crouching ? player.y + 4 : player.y;
     let vx = 0, vy = 0;
     switch (player.weapon) {
       case WEAPON_LANCE:  vx = player.facing * 4; vy = 0; break;
@@ -673,7 +752,7 @@
       sfxArmorHit();
       for (let i = 0; i < 5; i++) {
         particles.push({
-          x: player.x + 4, y: player.y + 4,
+          x: player.x + 8, y: player.y + 8,
           vx: rnd(4) - 2, vy: -rnd(3) - 1,
           life: 15 + flr(rnd(10)), color: 2
         });
@@ -705,22 +784,21 @@
     },
     draw() {
       cls(0);
-      const cx = flr(camera.x);
       for (let i = 0; i < 40; i++) {
         const sx = (i * 37 + titleAnim) % W;
         const sy = 20 + (i * 23) % (H - 40);
         pix(sx, sy, 1);
       }
-      for (let x = 0; x < W; x += 8) {
+      for (let x = 0; x < W; x += SPR) {
         sprT(22, x, GROUND_Y);
-        sprT(23, x, GROUND_Y + 8);
+        sprT(23, x, GROUND_Y + SPR);
       }
-      sprT(24, 40, GROUND_Y - 8);
-      sprT(24, 120, GROUND_Y - 8);
-      sprT(24, 227, GROUND_Y - 8);
-      sprT(25, 80, GROUND_Y - 8);
-      sprT(25, 187, GROUND_Y - 8);
-      sprT(25, 267, GROUND_Y - 8);
+      sprT(24, 40, GROUND_Y - SPR);
+      sprT(24, 120, GROUND_Y - SPR);
+      sprT(24, 227, GROUND_Y - SPR);
+      sprT(25, 80, GROUND_Y - SPR);
+      sprT(25, 187, GROUND_Y - SPR);
+      sprT(25, 267, GROUND_Y - SPR);
       const ty = 38 + sin(titleAnim * 0.04) * 5;
       drawText("GHOSTS N GOBLINS", 120, flr(ty), 3);
       drawText("GHOSTS N GOBLINS", 121, flr(ty) + 1, 1);
@@ -747,7 +825,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
@@ -764,7 +842,7 @@
     init() {},
     update() {
       titleAnim++;
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
@@ -801,7 +879,7 @@
         player.alive = true;
         player.armor = 2;
         player.x = respawnX;
-        player.y = GROUND_Y - 12;
+        player.y = GROUND_Y - SPR;
         player.vy = 0;
         player.vx = 0;
         player.invincible = 90;
@@ -839,16 +917,16 @@
     player.y += player.vy;
 
     // Ground/platform collision
-    const gy = getGroundAt(player.x + 4);
+    const gy = getGroundAt(player.x + 8);
     const platY = getPlatformAt(player.x, player.y, player.vy);
     let landY = gy;
     if (platY !== null && (platY < gy || gy > H)) landY = platY;
 
-    if (player.y + 8 >= landY && player.vy >= 0) {
-      player.y = landY - 8;
+    if (player.y + SPR >= landY && player.vy >= 0) {
+      player.y = landY - SPR;
       player.vy = 0;
       player.grounded = true;
-    } else if (player.y + 8 < landY && player.grounded) {
+    } else if (player.y + SPR < landY && player.grounded) {
       if (!isOnSolid(player.x, player.y + 1)) player.grounded = false;
     }
 
@@ -856,7 +934,7 @@
     if (player.y > H + 20) { playerDie(); return; }
 
     // Clamp
-    player.x = _max(camera.x + 4, min(LEVEL_WIDTH - 12, player.x));
+    player.x = _max(camera.x + 4, min(LEVEL_WIDTH - SPR, player.x));
 
     // Walk animation
     if (player.grounded && (btn("left") || btn("right")) && !player.crouching) {
@@ -891,12 +969,17 @@
         projectiles.splice(i, 1);
         continue;
       }
-      // Hit enemies
+      // Projectile circle hitbox
+      const pc = projCenter(p);
+      const pr = projRadius(p);
+
+      // Hit enemies (circle vs rect)
       let hit = false;
       for (const e of enemies) {
         if (!e.alive) continue;
         if (e.type === "zombie" && e.state === "buried") continue;
-        if (p.x + 4 > e.x && p.x < e.x + 8 && p.y + 4 > e.y && p.y < e.y + 8) {
+        const eh = entityHitbox(e);
+        if (circRectOverlap(pc.cx, pc.cy, pr, eh.x, eh.y, eh.w, eh.h)) {
           e.hp--;
           if (e.hp <= 0) {
             e.alive = false;
@@ -910,9 +993,10 @@
           break;
         }
       }
-      // Hit boss
+      // Hit boss (circle vs rect)
       if (!hit && boss && boss.alive) {
-        if (p.x + 4 > boss.x && p.x < boss.x + 16 && p.y + 4 > boss.y && p.y < boss.y + 16) {
+        const bh = bossHitbox();
+        if (circRectOverlap(pc.cx, pc.cy, pr, bh.x, bh.y, bh.w, bh.h)) {
           boss.hp--;
           boss.flashTimer = 6;
           sfxBossHit();
@@ -946,10 +1030,10 @@
           if (dist < 120) { e.riseTimer--; if (e.riseTimer <= 0) e.state = "rising"; }
         } else if (e.state === "rising") {
           e.y -= 0.5;
-          if (e.y <= e.gy - 8) { e.state = "walking"; e.y = e.gy - 8; }
+          if (e.y <= e.gy - SPR) { e.state = "walking"; e.y = e.gy - SPR; }
         } else if (e.state === "walking") {
           e.x += e.walkDir * 0.5;
-          const nextGy = getGroundAt(e.x + e.walkDir * 12 + 4);
+          const nextGy = getGroundAt(e.x + e.walkDir * 20 + 8);
           if (nextGy > H) e.walkDir *= -1;
           if (dist < 80 && rnd(1) < 0.02) e.walkDir = dx < 0 ? -1 : 1;
         }
@@ -976,7 +1060,7 @@
         } else if (e.state === "swoop") {
           e.x += e.vx;
           e.y += e.vy;
-          if (e.y >= GROUND_Y - 12) { e.state = "return"; e.vy = -2; }
+          if (e.y >= GROUND_Y - SPR) { e.state = "return"; e.vy = -2; }
         } else if (e.state === "return") {
           e.y += e.vy;
           e.x += (e.baseX - e.x) * 0.03;
@@ -990,7 +1074,7 @@
 
       if (e.type === "skeleton") {
         e.x += e.walkDir * 0.4;
-        const nextGy = getGroundAt(e.x + e.walkDir * 10 + 4);
+        const nextGy = getGroundAt(e.x + e.walkDir * 18 + 8);
         if (nextGy > H) e.walkDir *= -1;
         if (dist < 120) {
           e.throwTimer--;
@@ -1029,16 +1113,18 @@
         }
       }
 
-      // Enemy-player collision
+      // Enemy-player collision (rect vs rect for entities, circle vs rect for bones)
       if (e.type !== "bone" && player.alive && player.invincible <= 0) {
-        if (player.x + 6 > e.x && player.x < e.x + 7 &&
-            player.y + 7 > e.y && player.y < e.y + 7) {
+        const eh = entityHitbox(e);
+        const ph = playerHitbox();
+        if (boxOverlap(ph.x, ph.y, ph.w, ph.h, eh.x, eh.y, eh.w, eh.h)) {
           hitPlayer();
         }
       }
       if (e.type === "bone" && player.alive && player.invincible <= 0) {
-        if (player.x + 6 > e.x && player.x < e.x + 6 &&
-            player.y + 7 > e.y && player.y < e.y + 6) {
+        const bc = boneCenter(e);
+        const ph = playerHitbox();
+        if (circRectOverlap(bc.cx, bc.cy, BONE_R, ph.x, ph.y, ph.w, ph.h)) {
           hitPlayer();
           e.alive = false;
         }
@@ -1069,8 +1155,9 @@
         }
       }
       if (player.alive && player.invincible <= 0) {
-        if (player.x + 6 > boss.x && player.x < boss.x + 16 &&
-            player.y + 7 > boss.y && player.y < boss.y + 16) {
+        const bh = bossHitbox();
+        const ph = playerHitbox();
+        if (boxOverlap(ph.x, ph.y, ph.w, ph.h, bh.x, bh.y, bh.w, bh.h)) {
           hitPlayer();
         }
       }
@@ -1079,12 +1166,13 @@
     // --- Chests ---
     for (const ch of chests) {
       if (!ch.alive) continue;
-      if (player.alive && player.x + 6 > ch.x && player.x < ch.x + 8 &&
-          player.y + 7 > ch.y && player.y < ch.y + 8) {
+      const chBox = { x: ch.x + 2, y: ch.y + 2, w: SPR - 4, h: SPR - 4 };
+      const ph = playerHitbox();
+      if (player.alive && boxOverlap(ph.x, ph.y, ph.w, ph.h, chBox.x, chBox.y, chBox.w, chBox.h)) {
         ch.alive = false;
         sfxPickup();
         pickups.push({
-          x: ch.x, y: ch.y - 10, vy: -2,
+          x: ch.x, y: ch.y - 16, vy: -2,
           type: ch.content, life: 180
         });
       }
@@ -1095,12 +1183,13 @@
       const pk = pickups[i];
       pk.vy += 0.15;
       pk.y += pk.vy;
-      const pgy = getGroundAt(pk.x + 4);
-      if (pk.y + 8 >= pgy) { pk.y = pgy - 8; pk.vy = 0; }
+      const pgy = getGroundAt(pk.x + 8);
+      if (pk.y + SPR >= pgy) { pk.y = pgy - SPR; pk.vy = 0; }
       pk.life--;
       if (pk.life <= 0) { pickups.splice(i, 1); continue; }
-      if (player.alive && player.x + 6 > pk.x && player.x < pk.x + 8 &&
-          player.y + 7 > pk.y && player.y < pk.y + 8) {
+      const pkBox = { x: pk.x + 2, y: pk.y + 2, w: SPR - 4, h: SPR - 4 };
+      const ph = playerHitbox();
+      if (player.alive && boxOverlap(ph.x, ph.y, ph.w, ph.h, pkBox.x, pkBox.y, pkBox.w, pkBox.h)) {
         if (pk.type === 4) {
           player.armor = 2;
         } else {
@@ -1117,6 +1206,7 @@
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--;
       if (p.life <= 0) particles.splice(i, 1);
+    }
     },
     draw() {
     cls(0);
@@ -1143,21 +1233,21 @@
     // Decorations
     for (const d of levelData.decorations) {
       const sx = d.x - cx;
-      if (sx > -16 && sx < W + 16) {
+      if (sx > -SPR && sx < W + SPR) {
         const dgy = getGroundAt(d.x);
-        if (dgy < H) sprT(d.sprId, flr(sx), dgy - 8);
+        if (dgy < H) sprT(d.sprId, flr(sx), dgy - SPR);
       }
     }
 
     // Ground tiles
     for (const g of levelData.grounds) {
       const gsx = g.x - cx;
-      if (gsx + g.w < -8 || gsx > W + 8) continue;
-      for (let tx = 0; tx < g.w; tx += 8) {
+      if (gsx + g.w < -SPR || gsx > W + SPR) continue;
+      for (let tx = 0; tx < g.w; tx += SPR) {
         const sx = flr(gsx + tx);
-        if (sx > -8 && sx < W) {
+        if (sx > -SPR && sx < W) {
           sprT(22, sx, g.y);
-          sprT(23, sx, g.y + 8);
+          sprT(23, sx, g.y + SPR);
         }
       }
     }
@@ -1165,10 +1255,10 @@
     // Platforms
     for (const p of levelData.platforms) {
       const psx = p.x - cx;
-      if (psx + p.w < -8 || psx > W + 8) continue;
-      for (let tx = 0; tx < p.w; tx += 8) {
+      if (psx + p.w < -SPR || psx > W + SPR) continue;
+      for (let tx = 0; tx < p.w; tx += SPR) {
         const sx = flr(psx + tx);
-        if (sx > -8 && sx < W) sprT(27, sx, p.y);
+        if (sx > -SPR && sx < W) sprT(27, sx, p.y);
       }
     }
 
@@ -1176,19 +1266,23 @@
     for (const ch of chests) {
       if (!ch.alive) continue;
       const sx = ch.x - cx;
-      if (sx > -8 && sx < W) sprT(26, flr(sx), flr(ch.y));
+      if (sx > -SPR && sx < W) {
+        sprT(26, flr(sx), flr(ch.y));
+        Mono.dbg(flr(sx) + 2, flr(ch.y) + 2, SPR - 4, SPR - 4);
+      }
     }
 
     // Pickups
     for (const pk of pickups) {
       const sx = pk.x - cx;
-      if (sx > -8 && sx < W) {
+      if (sx > -SPR && sx < W) {
         if (pk.life < 60 && flr(pk.life / 4) % 2 === 0) continue;
         if (pk.type === 4) {
           sprT(38, flr(sx), flr(pk.y));
         } else {
           sprT(11 + pk.type, flr(sx), flr(pk.y));
         }
+        Mono.dbg(flr(sx) + 2, flr(pk.y) + 2, SPR - 4, SPR - 4);
       }
     }
 
@@ -1196,7 +1290,7 @@
     for (const e of enemies) {
       if (!e.alive) continue;
       const sx = e.x - cx;
-      if (sx < -16 || sx > W + 16) continue;
+      if (sx < -SPR || sx > W + SPR) continue;
 
       if (e.type === "zombie") {
         if (e.state === "buried") continue;
@@ -1205,17 +1299,36 @@
         } else {
           sprT(15, flr(sx), flr(e.y), e.walkDir < 0);
         }
+        const eh = entityHitbox(e);
+        Mono.dbg(flr(eh.x - cx), flr(eh.y), eh.w, eh.h);
       }
-      if (e.type === "ghost") sprT(17, flr(sx), flr(e.y));
+      if (e.type === "ghost") {
+        sprT(17, flr(sx), flr(e.y));
+        const eh = entityHitbox(e);
+        Mono.dbg(flr(eh.x - cx), flr(eh.y), eh.w, eh.h);
+      }
       if (e.type === "arremer") {
         const fr = flr(e.animTimer / 8) % 2 === 0 ? 18 : 19;
         sprT(fr, flr(sx), flr(e.y), e.vx > 0);
+        const eh = entityHitbox(e);
+        Mono.dbg(flr(eh.x - cx), flr(eh.y), eh.w, eh.h);
       }
-      if (e.type === "skeleton") sprT(20, flr(sx), flr(e.y), e.walkDir < 0);
-      if (e.type === "plant") sprT(21, flr(sx), flr(e.y));
+      if (e.type === "skeleton") {
+        sprT(20, flr(sx), flr(e.y), e.walkDir < 0);
+        const eh = entityHitbox(e);
+        Mono.dbg(flr(eh.x - cx), flr(eh.y), eh.w, eh.h);
+      }
+      if (e.type === "plant") {
+        sprT(21, flr(sx), flr(e.y));
+        const eh = entityHitbox(e);
+        Mono.dbg(flr(eh.x - cx), flr(eh.y), eh.w, eh.h);
+      }
       if (e.type === "bone") {
-        rectf(flr(sx), flr(e.y), 4, 4, 2);
-        pix(flr(sx) + 1, flr(e.y) + 1, 3);
+        rectf(flr(sx), flr(e.y), 8, 8, 2);
+        pix(flr(sx) + 2, flr(e.y) + 2, 3);
+        pix(flr(sx) + 5, flr(e.y) + 5, 3);
+        const bc = boneCenter(e);
+        Mono.dbgC(flr(bc.cx - cx), flr(bc.cy), BONE_R);
       }
     }
 
@@ -1223,26 +1336,32 @@
     if (boss && boss.alive) {
       const bsx = flr(boss.x - cx);
       if (boss.flashTimer > 0 && boss.flashTimer % 2 === 0) {
-        rectf(bsx, boss.y, 16, 16, 3);
+        rectf(bsx, boss.y, 32, 32, 3);
       } else {
         sprT(28, bsx, boss.y);
-        sprT(29, bsx + 8, boss.y);
-        sprT(30, bsx, boss.y + 8);
-        sprT(31, bsx + 8, boss.y + 8);
+        sprT(29, bsx + SPR, boss.y);
+        sprT(30, bsx, boss.y + SPR);
+        sprT(31, bsx + SPR, boss.y + SPR);
       }
       // HP bar
       const barW = 40;
-      const barX = bsx - 12;
+      const barX = bsx - 4;
       const barY = boss.y - 8;
       rectf(barX, barY, barW, 3, 1);
       rectf(barX, barY, flr(barW * boss.hp / boss.maxHp), 3, 3);
       rect(barX, barY, barW, 3, 2);
+      const bh = bossHitbox();
+      Mono.dbg(flr(bh.x - cx), flr(bh.y), bh.w, bh.h);
     }
 
     // Projectiles
     for (const p of projectiles) {
       const sx = p.x - cx;
-      if (sx > -8 && sx < W) sprT(11 + p.weapon, flr(sx), flr(p.y), p.vx < 0);
+      if (sx > -SPR && sx < W) {
+        sprT(11 + p.weapon, flr(sx), flr(p.y), p.vx < 0);
+        const pc = projCenter(p);
+        Mono.dbgC(flr(pc.cx - cx), flr(pc.cy), projRadius(p));
+      }
     }
 
     // Player
@@ -1264,6 +1383,8 @@
         }
         sprT(sprId, flr(player.x - cx), flr(player.y), flip);
       }
+      const ph = playerHitbox();
+      Mono.dbg(flr(ph.x - cx), flr(ph.y), ph.w, ph.h);
     } else {
       if (deathTimer > 60) {
         sprT(9, flr(player.x - cx), flr(player.y));
@@ -1280,7 +1401,7 @@
     drawText("SCORE:" + score, 4, 3, 3);
     drawText("TIME:" + timeLeft, 133, 3, timeLeft <= 30 ? 3 : 2);
     drawText(WEAPON_NAMES[player.weapon], 213, 3, 2);
-    for (let i = 0; i < lives; i++) sprT(36, W - 40 + i * 10, 2);
+    for (let i = 0; i < lives; i++) sprT(36, W - 40 + i * 12, 2);
     if (player.armor >= 2) drawText("AR", 253, 3, 2);
     else if (player.armor === 1) drawText("AR", 253, 3, 1);
 

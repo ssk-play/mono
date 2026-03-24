@@ -19,8 +19,22 @@
   "use strict";
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
+
+  // --- 8x8 -> 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
 
   // --- Tile constants ---
   // 0=empty, 1=brick, 2=ladder, 3=bar(rope), 4=gold, 5=solid(unbreakable), 6=exit ladder(hidden), 7=dug hole
@@ -32,9 +46,12 @@
   const HUD_H = 24; // pixels for HUD at top
   const TILE = 8;
 
-  // --- Sprites ---
+  // Sprite size after upscale
+  const SP = 16;
+
+  // --- Sprites (8x8 data upscaled to 16x16) ---
   // 1: Brick
-  defSprite(1,
+  defSprite(1, up(
     "22222222" +
     "21111112" +
     "21111112" +
@@ -43,9 +60,9 @@
     "11211112" +
     "11211112" +
     "22222222"
-  );
+  ));
   // 2: Ladder
-  defSprite(2,
+  defSprite(2, up(
     "30000030" +
     "30000030" +
     "33333330" +
@@ -54,9 +71,9 @@
     "30000030" +
     "33333330" +
     "30000030"
-  );
+  ));
   // 3: Bar/rope
-  defSprite(3,
+  defSprite(3, up(
     "00000000" +
     "00000000" +
     "33333333" +
@@ -65,9 +82,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 4: Gold
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "00333000" +
     "03223300" +
@@ -76,9 +93,9 @@
     "03222300" +
     "00333000" +
     "00000000"
-  );
+  ));
   // 5: Solid block (unbreakable)
-  defSprite(5,
+  defSprite(5, up(
     "11111111" +
     "12222221" +
     "12111121" +
@@ -87,9 +104,9 @@
     "12111121" +
     "12222221" +
     "11111111"
-  );
+  ));
   // 6: Exit ladder (revealed)
-  defSprite(6,
+  defSprite(6, up(
     "30000030" +
     "33333330" +
     "30000030" +
@@ -98,10 +115,10 @@
     "33333330" +
     "30000030" +
     "33333330"
-  );
+  ));
 
   // 10: Player standing right
-  defSprite(10,
+  defSprite(10, up(
     "00333000" +
     "00323000" +
     "00333000" +
@@ -110,9 +127,9 @@
     "00333000" +
     "00300300" +
     "00300300"
-  );
+  ));
   // 11: Player running right frame 1
-  defSprite(11,
+  defSprite(11, up(
     "00333000" +
     "00323000" +
     "00333000" +
@@ -121,9 +138,9 @@
     "00333000" +
     "03000300" +
     "30000030"
-  );
+  ));
   // 12: Player climbing
-  defSprite(12,
+  defSprite(12, up(
     "00333000" +
     "00323000" +
     "00333000" +
@@ -132,9 +149,9 @@
     "00333000" +
     "00300300" +
     "03000030"
-  );
+  ));
   // 13: Player on bar (hanging)
-  defSprite(13,
+  defSprite(13, up(
     "30000030" +
     "03333300" +
     "00323000" +
@@ -143,10 +160,10 @@
     "00333000" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 20: Enemy standing
-  defSprite(20,
+  defSprite(20, up(
     "00111000" +
     "00121000" +
     "00111000" +
@@ -155,9 +172,9 @@
     "00111000" +
     "00100100" +
     "00100100"
-  );
+  ));
   // 21: Enemy running frame 1
-  defSprite(21,
+  defSprite(21, up(
     "00111000" +
     "00121000" +
     "00111000" +
@@ -166,9 +183,9 @@
     "00111000" +
     "01000100" +
     "10000010"
-  );
+  ));
   // 22: Enemy climbing
-  defSprite(22,
+  defSprite(22, up(
     "00111000" +
     "00121000" +
     "00111000" +
@@ -177,9 +194,9 @@
     "00111000" +
     "00100100" +
     "01000010"
-  );
+  ));
   // 23: Enemy trapped in hole
-  defSprite(23,
+  defSprite(23, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -188,10 +205,10 @@
     "00111000" +
     "01111100" +
     "00111000"
-  );
+  ));
 
   // 30: Life icon
-  defSprite(30,
+  defSprite(30, up(
     "00000000" +
     "00330000" +
     "00320000" +
@@ -200,10 +217,10 @@
     "00300300" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // --- Dug hole sprite (crumbling brick) ---
-  defSprite(7,
+  defSprite(7, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -212,7 +229,18 @@
     "00000000" +
     "20000020" +
     "22200222"
-  );
+  ));
+
+  // --- Circle collision helper (circle vs circle) ---
+  function circCircOverlap(cx1, cy1, r1, cx2, cy2, r2) {
+    const dx = cx1 - cx2;
+    const dy = cy1 - cy2;
+    const dist = r1 + r2;
+    return (dx * dx + dy * dy) <= (dist * dist);
+  }
+
+  // Hitbox radius for player and enemies (roughly half of 8px logical size)
+  const ACTOR_R = 3;
 
   // --- Level data ---
   // Each level is an array of strings, 40 chars wide, 27 tall
@@ -519,6 +547,14 @@
     setTimeout(() => { note(0, "A2", 0.18); note(1, "E2", 0.18); }, 120);
   }
 
+  // --- Actor center for circle collision ---
+  function actorCenter(actor) {
+    return {
+      cx: actor.x + TILE / 2,
+      cy: actor.y + TILE / 2
+    };
+  }
+
   function updateActor(actor, isPlayer) {
     const tx = flr(actor.x / TILE);
     const ty = flr(actor.y / TILE);
@@ -816,11 +852,11 @@
     for (const e of enemies) {
       updateActor(e, false);
 
-      // Collision with player
+      // Circle collision: player vs enemy
       if (e.state !== "trapped" && deathTimer <= 0) {
-        const dx = _abs(e.x - player.x);
-        const dy = _abs(e.y - player.y);
-        if (dx < 6 && dy < 6) {
+        const pc = actorCenter(player);
+        const ec = actorCenter(e);
+        if (circCircOverlap(pc.cx, pc.cy, ACTOR_R, ec.cx, ec.cy, ACTOR_R)) {
           killPlayer();
         }
       }
@@ -864,11 +900,11 @@
       rectf(107, flr(ty) + 10, 107, 1, 2);
 
       // Show some sprites on title
-      spr(10, 133, flr(ty) + 25);
-      spr(4, 147, flr(ty) + 25);
-      spr(20, 160, flr(ty) + 25);
+      sprT(10, 133, flr(ty) + 25);
+      sprT(4, 147, flr(ty) + 25);
+      sprT(20, 160, flr(ty) + 25);
       spr(1, 173, flr(ty) + 25);
-      spr(2, 187, flr(ty) + 25);
+      sprT(2, 187, flr(ty) + 25);
 
       if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 133, 120, 3);
 
@@ -879,11 +915,11 @@
       // Draw a mini scene
       const by = 184;
       for (let i = 0; i < 20; i++) spr(1, 107 + i * 8, by + 24);
-      spr(2, 139, by + 0); spr(2, 139, by + 8); spr(2, 139, by + 16);
-      spr(10, 117, by + 16);
-      spr(4, 160, by + 16);
-      spr(20, 197, by + 16);
-      spr(3, 171, by + 8); spr(3, 176, by + 8); spr(3, 181, by + 8); spr(3, 187, by + 8);
+      sprT(2, 139, by + 0); sprT(2, 139, by + 8); sprT(2, 139, by + 16);
+      sprT(10, 117, by + 16);
+      sprT(4, 160, by + 16);
+      sprT(20, 197, by + 16);
+      sprT(3, 171, by + 8); sprT(3, 176, by + 8); sprT(3, 181, by + 8); sprT(3, 187, by + 8);
 
       text("MONO DEMO V0.1", 118, 229, 1);
   }
@@ -908,11 +944,11 @@
         const py = ty * TILE + HUD_H;
         const t = charToTile(ch);
         if (t === T_BRICK) spr(1, px, py);
-        else if (t === T_LADDER) spr(2, px, py);
-        else if (t === T_BAR) spr(3, px, py);
-        else if (t === T_GOLD) spr(4, px, py);
+        else if (t === T_LADDER) sprT(2, px, py);
+        else if (t === T_BAR) sprT(3, px, py);
+        else if (t === T_GOLD) sprT(4, px, py);
         else if (t === T_SOLID) spr(5, px, py);
-        else if (t === T_EXIT && exitOpen) spr(6, px, py);
+        else if (t === T_EXIT && exitOpen) sprT(6, px, py);
       }
     }
 
@@ -922,7 +958,7 @@
       const py = h.ty * TILE + HUD_H;
       if (h.regenerating) {
         // Flash to indicate regenerating
-        if (flr(animFrame / 4) % 2 === 0) spr(7, px, py);
+        if (flr(animFrame / 4) % 2 === 0) sprT(7, px, py);
       }
     }
 
@@ -932,19 +968,23 @@
       const py = flr(e.y) + HUD_H;
       const flipX = e.dir < 0;
       if (e.state === "trapped") {
-        spr(23, px, py, flipX);
+        sprT(23, px, py, flipX);
       } else if (e.state === "climb") {
-        spr(flr(e.animT / 6) % 2 === 0 ? 22 : 20, px, py, flipX);
+        sprT(flr(e.animT / 6) % 2 === 0 ? 22 : 20, px, py, flipX);
       } else if (e.state === "hang") {
-        spr(22, px, py, flipX); // reuse climb sprite for hanging
+        sprT(22, px, py, flipX); // reuse climb sprite for hanging
       } else {
-        spr(flr(e.animT / 4) % 2 === 0 ? 20 : 21, px, py, flipX);
+        sprT(flr(e.animT / 4) % 2 === 0 ? 20 : 21, px, py, flipX);
       }
       // Show gold indicator if carrying
       if (e.carriesGold) {
         pix(px + 3, py - 1, 2);
         pix(px + 4, py - 1, 2);
       }
+
+      // Debug circle hitbox for enemies
+      const ec = actorCenter(e);
+      dbgC(ec.cx, ec.cy + HUD_H, ACTOR_R);
     }
 
     // Draw player
@@ -953,14 +993,18 @@
       const py = flr(player.y) + HUD_H;
       const flipX = player.dir < 0;
       if (player.state === "climb") {
-        spr(flr(player.animT / 6) % 2 === 0 ? 12 : 10, px, py, flipX);
+        sprT(flr(player.animT / 6) % 2 === 0 ? 12 : 10, px, py, flipX);
       } else if (player.state === "hang") {
-        spr(13, px, py, flipX);
+        sprT(13, px, py, flipX);
       } else if (player.state === "fall") {
-        spr(10, px, py, flipX);
+        sprT(10, px, py, flipX);
       } else {
-        spr(flr(player.animT / 4) % 2 === 0 ? 10 : 11, px, py, flipX);
+        sprT(flr(player.animT / 4) % 2 === 0 ? 10 : 11, px, py, flipX);
       }
+
+      // Debug circle hitbox for player
+      const pc = actorCenter(player);
+      dbgC(pc.cx, pc.cy + HUD_H, ACTOR_R);
     }
 
     // Death effect
@@ -993,8 +1037,10 @@
       if (flr(animFrame / 10) % 2 === 0) text("ESCAPE!", 133, 3, 3);
     }
 
+    // Lives - capped display to prevent overflow (max 5 icons shown)
     text("LIVES:", 227, 3, 2);
-    for (let i = 0; i < lives; i++) spr(30, 262 + i * 10, 0);
+    const maxLivesShown = min(lives, 5);
+    for (let i = 0; i < maxLivesShown; i++) sprT(30, 262 + i * 10, 0);
 
     // Level start message
     if (deathTimer <= 0 && levelCompleteTimer <= 0 && Mono.frame < 60) {

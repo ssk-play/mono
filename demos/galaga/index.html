@@ -22,9 +22,36 @@
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
           min, max: _max, sin, cos } = Mono;
 
-  // --- Sprites ---
+  // --- 8→16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Circle collision helper ---
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    const dist = dx * dx + dy * dy;
+    const rSum = r1 + r2;
+    return dist < rSum * rSum;
+  }
+
+  // --- Rect collision helper ---
+  function rectCollide(x1, y1, w1, h1, x2, y2, w2, h2) {
+    return x1 + w1 > x2 && x1 < x2 + w2 && y1 + h1 > y2 && y1 < y2 + h2;
+  }
+
+  // --- Sprites (8x8 data upscaled to 16x16) ---
   // 1: Player ship (arrow up)
-  defSprite(1,
+  defSprite(1, up(
     "00030000" +
     "00333000" +
     "00333000" +
@@ -33,9 +60,9 @@
     "33311330" +
     "33000030" +
     "01000010"
-  );
+  ));
   // 2: Enemy type A — bug/bee
-  defSprite(2,
+  defSprite(2, up(
     "03000030" +
     "00300300" +
     "03333300" +
@@ -44,9 +71,9 @@
     "03033030" +
     "30300303" +
     "03000030"
-  );
+  ));
   // 3: Enemy type B — butterfly
-  defSprite(3,
+  defSprite(3, up(
     "00300300" +
     "03030300" +
     "33333330" +
@@ -55,9 +82,9 @@
     "01333100" +
     "03030300" +
     "30000003"
-  );
+  ));
   // 4: Boss enemy — galaga boss
-  defSprite(4,
+  defSprite(4, up(
     "03333300" +
     "33333330" +
     "32233220" +
@@ -66,9 +93,9 @@
     "03333300" +
     "00333000" +
     "03030300"
-  );
+  ));
   // 5: Player bullet
-  defSprite(5,
+  defSprite(5, up(
     "00030000" +
     "00030000" +
     "00020000" +
@@ -77,9 +104,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 6: Enemy bullet
-  defSprite(6,
+  defSprite(6, up(
     "00000000" +
     "00000000" +
     "00010000" +
@@ -88,9 +115,9 @@
     "00030000" +
     "00030000" +
     "00000000"
-  );
+  ));
   // 7: Explosion frame 1
-  defSprite(7,
+  defSprite(7, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -99,9 +126,9 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
   // 8: Explosion frame 2
-  defSprite(8,
+  defSprite(8, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -110,9 +137,9 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
   // 9: Life icon (small ship)
-  defSprite(9,
+  defSprite(9, up(
     "00000000" +
     "00030000" +
     "00333000" +
@@ -121,9 +148,9 @@
     "33311330" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 10: Star
-  defSprite(10,
+  defSprite(10, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -132,7 +159,7 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // --- Game state ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -142,16 +169,19 @@
   let formationX, formationDir, formationSpeed;
   let diveTimer;
 
-  // Formation grid config
+  // Formation grid config (updated for 16x16 sprites)
   const FORM_COLS = 10;
   const FORM_ROWS = 4;
-  const FORM_CELL_W = 12;
-  const FORM_CELL_H = 12;
+  const FORM_CELL_W = 20;
+  const FORM_CELL_H = 20;
   const FORM_BASE_X = (W - FORM_COLS * FORM_CELL_W) / 2;
   const FORM_BASE_Y = 30;
 
+  // Max lives icons to display (layout overflow guard)
+  const MAX_LIVES_DISPLAY = 5;
+
   function resetGame() {
-    player = { x: W / 2 - 4, y: H - 24, speed: 3 };
+    player = { x: W / 2 - 8, y: H - 32, speed: 3 };
     bullets = [];
     eBullets = [];
     enemies = [];
@@ -175,22 +205,21 @@
 
   function spawnWave() {
     wave++;
-    waveMessage = 90; // show "WAVE X" for 3 seconds
+    waveMessage = 90;
     formationSpeed = 0.3 + wave * 0.05;
     const rows = min(FORM_ROWS + flr(wave / 3), 5);
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < FORM_COLS; col++) {
         let type, hp, pts;
-        if (row === 0) { type = 4; hp = 2; pts = 40; }       // boss row
-        else if (row <= 1) { type = 3; hp = 1; pts = 20; }    // butterfly
-        else { type = 2; hp = 1; pts = 10; }                  // bee
+        if (row === 0) { type = 4; hp = 2; pts = 40; }
+        else if (row <= 1) { type = 3; hp = 1; pts = 20; }
+        else { type = 2; hp = 1; pts = 10; }
         enemies.push({
           formRow: row, formCol: col,
-          x: 0, y: 0, // computed from formation offset
+          x: 0, y: 0,
           type: type, hp: hp, pts: pts,
-          state: "forming",  // "forming" | "formation" | "diving" | "returning"
-          enterT: -(row * FORM_COLS + col) * 3, // stagger entrance
-          // dive state
+          state: "forming",
+          enterT: -(row * FORM_COLS + col) * 3,
           diveAngle: 0, diveSpeed: 0,
           divePath: null, diveT: 0,
           shootTimer: 60 + flr(rnd(120)),
@@ -211,7 +240,7 @@
     explosions.push({ x: x, y: y, timer: 12 });
     for (let i = 0; i < 8; i++)
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(4) - 2,
         life: 6 + flr(rnd(10)),
         color: flr(rnd(3)) + 1
@@ -235,7 +264,6 @@
   function startDive(enemy) {
     enemy.state = "diving";
     enemy.diveT = 0;
-    // Create a bezier-like dive path
     const startX = enemy.x;
     const startY = enemy.y;
     const midX = startX + (rnd(133) - 67);
@@ -271,22 +299,21 @@
     draw() {
       cls(0);
       for (const s of stars) pix(s.x, s.y, s.bright);
-      const ty = 53 + sin(Mono.frame * 0.05) * 5;
-      text("GALAGA", 145, flr(ty), 3);
-      text("GALAGA", 146, flr(ty) + 1, 1);
-      rectf(113, flr(ty) + 12, 93, 1, 2);
-      const bx = W / 2 - 40;
+      const ty = 40 + sin(Mono.frame * 0.05) * 5;
+      text("GALAGA", 138, flr(ty), 3);
+      text("GALAGA", 139, flr(ty) + 1, 1);
+      rectf(110, flr(ty) + 12, 100, 1, 2);
+      const bx = W / 2 - 48;
       spr(4, bx, flr(ty) + 25 + sin(Mono.frame * 0.08) * 3);
-      spr(3, bx + 20, flr(ty) + 27 + sin(Mono.frame * 0.08 + 1) * 3);
-      spr(2, bx + 40, flr(ty) + 25 + sin(Mono.frame * 0.08 + 2) * 3);
-      spr(3, bx + 60, flr(ty) + 27 + sin(Mono.frame * 0.08 + 3) * 3);
-      spr(4, bx + 80, flr(ty) + 25 + sin(Mono.frame * 0.08 + 4) * 3);
+      spr(3, bx + 24, flr(ty) + 27 + sin(Mono.frame * 0.08 + 1) * 3);
+      spr(2, bx + 48, flr(ty) + 25 + sin(Mono.frame * 0.08 + 2) * 3);
+      spr(3, bx + 72, flr(ty) + 27 + sin(Mono.frame * 0.08 + 3) * 3);
+      spr(4, bx + 96, flr(ty) + 25 + sin(Mono.frame * 0.08 + 4) * 3);
       if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 120, 150, 3);
-      text("-SCORE TABLE-", 128, 173, 2);
-      spr(4, 130, 183); text("  BOSS   40 PTS", 140, 185, 2);
-      spr(3, 130, 194); text("  WING   20 PTS", 140, 195, 2);
-      spr(2, 130, 205); text("  BEE    10 PTS", 140, 206, 2);
-      text("MONO DEMO V0.1", 118, 229, 1);
+      text("-SCORE TABLE-", 120, 173, 2);
+      spr(4, 120, 185); text("  BOSS   40 PTS", 138, 189, 2);
+      spr(3, 120, 203); text("  WING   20 PTS", 138, 207, 2);
+      spr(2, 120, 221); text("  BEE    10 PTS", 138, 225, 2);
     }
   });
 
@@ -299,16 +326,16 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
       for (const s of stars) pix(s.x, s.y, s.bright);
       for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
-      text("GAME OVER", 138, 90, 3);
-      text("SCORE: " + score, 138, 109, 2);
-      text("WAVE: " + wave, 148, 120, 2);
-      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 113, 158, 3);
+      text("GAME OVER", 130, 90, 3);
+      text("SCORE: " + score, 130, 109, 2);
+      text("WAVE: " + wave, 140, 120, 2);
+      if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 120, 158, 3);
     }
   });
 
@@ -318,20 +345,18 @@
     update() {
     updateStarsG();
 
-    // --- Play state ---
-
     // Wave message timer
     if (waveMessage > 0) waveMessage--;
 
     // Player movement (left/right only, like Galaga)
     if (btn("left")) player.x -= player.speed;
     if (btn("right")) player.x += player.speed;
-    player.x = _max(4, min(W - 12, player.x));
+    player.x = _max(0, min(W - 16, player.x));
 
     // Player shoot
     if (shootCooldown > 0) shootCooldown--;
     if (btnp("a") && shootCooldown <= 0 && bullets.length < 2) {
-      bullets.push({ x: player.x + 0, y: player.y - 4 });
+      bullets.push({ x: player.x + 4, y: player.y - 8 });
       shootCooldown = 8;
       shootSound();
     }
@@ -339,7 +364,7 @@
     // Update player bullets
     for (let i = bullets.length - 1; i >= 0; i--) {
       bullets[i].y -= 6;
-      if (bullets[i].y < -8) bullets.splice(i, 1);
+      if (bullets[i].y < -16) bullets.splice(i, 1);
     }
 
     // Formation movement (sway left/right)
@@ -348,21 +373,19 @@
     if (formationX < -20) { formationDir = 1; }
 
     // Enemy entrance and formation
-    const aliveEnemies = enemies.length;
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
 
       if (e.state === "forming") {
         e.enterT++;
-        if (e.enterT < 0) continue; // staggered delay
+        if (e.enterT < 0) continue;
         const target = formationPos(e.formRow, e.formCol);
-        // Fly in from top
         const flyInDuration = 30;
         if (e.enterT <= flyInDuration) {
           const t = e.enterT / flyInDuration;
           const startX = W / 2 + sin(e.formCol * 0.8) * 67;
           e.x = startX + (target.x - startX) * t;
-          e.y = -10 + (target.y + 10) * t;
+          e.y = -16 + (target.y + 16) * t;
         } else {
           e.state = "formation";
         }
@@ -377,10 +400,9 @@
       if (e.state === "diving") {
         e.diveT += e.diveSpeed / 200;
         if (e.diveT >= 1) {
-          // Return from bottom — loop back to formation
           e.state = "returning";
           e.x = e.divePath.ex;
-          e.y = -10;
+          e.y = -16;
           e.diveT = 0;
         } else {
           const p = e.divePath;
@@ -390,7 +412,7 @@
         // Enemy shoots while diving
         e.shootTimer--;
         if (e.shootTimer <= 0 && e.y > 0 && e.y < H - 30) {
-          eBullets.push({ x: e.x + 0, y: e.y + 8 });
+          eBullets.push({ x: e.x + 4, y: e.y + 16 });
           e.shootTimer = 30 + flr(rnd(40));
         }
       }
@@ -408,10 +430,18 @@
         }
       }
 
-      // Bullet-enemy collision
+      // Bullet-enemy collision: circle for bullets vs rect for enemies
       for (let j = bullets.length - 1; j >= 0; j--) {
         const b = bullets[j];
-        if (b.x + 8 > e.x && b.x < e.x + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
+        // Bullet center + radius 3, enemy as 16x16 box
+        const bCx = b.x + 8, bCy = b.y + 8, bR = 3;
+        // Closest point on enemy rect to bullet center
+        const closestX = _max(e.x, min(bCx, e.x + 16));
+        const closestY = _max(e.y, min(bCy, e.y + 16));
+        const dx = bCx - closestX, dy = bCy - closestY;
+        if (dx * dx + dy * dy < bR * bR) {
+          Mono.dbg(e.x, e.y, 16, 16);
+          Mono.dbgC(bCx, bCy, bR);
           bullets.splice(j, 1);
           e.hp--;
           if (e.hp <= 0) {
@@ -441,14 +471,19 @@
     // Update enemy bullets
     for (let i = eBullets.length - 1; i >= 0; i--) {
       eBullets[i].y += 3;
-      if (eBullets[i].y > H + 8) { eBullets.splice(i, 1); continue; }
+      if (eBullets[i].y > H + 16) { eBullets.splice(i, 1); continue; }
       const b = eBullets[i];
-      if (b.x + 8 > player.x && b.x < player.x + 8 && b.y + 8 > player.y && b.y < player.y + 8) {
+      // Circle vs circle: enemy bullet (r=3) vs player center (r=6)
+      const bCx = b.x + 8, bCy = b.y + 8, bR = 3;
+      const pCx = player.x + 8, pCy = player.y + 8, pR = 6;
+      if (circCollide(bCx, bCy, bR, pCx, pCy, pR)) {
+        Mono.dbgC(bCx, bCy, bR);
+        Mono.dbgC(pCx, pCy, pR);
         eBullets.splice(i, 1);
         lives--;
         addExplosion(player.x, player.y);
         deathSound();
-        player.x = W / 2 - 4;
+        player.x = W / 2 - 8;
         if (lives <= 0) {
           addExplosion(player.x, player.y);
           Mono.go(GAMEOVER); return;
@@ -456,19 +491,23 @@
       }
     }
 
-    // Enemy-player collision (diving enemies)
+    // Enemy-player collision (diving enemies) — circle vs circle
     for (let i = enemies.length - 1; i >= 0; i--) {
       const e = enemies[i];
-      if (e.state === "diving" &&
-          player.x + 7 > e.x && player.x < e.x + 8 &&
-          player.y + 7 > e.y && player.y < e.y + 8) {
-        addExplosion(e.x, e.y);
-        addExplosion(player.x, player.y);
-        enemies.splice(i, 1);
-        lives--;
-        deathSound();
-        player.x = W / 2 - 4;
-        if (lives <= 0) { Mono.go(GAMEOVER); return; }
+      if (e.state === "diving") {
+        const eCx = e.x + 8, eCy = e.y + 8, eR = 7;
+        const pCx = player.x + 8, pCy = player.y + 8, pR = 6;
+        if (circCollide(eCx, eCy, eR, pCx, pCy, pR)) {
+          Mono.dbgC(eCx, eCy, eR);
+          Mono.dbgC(pCx, pCy, pR);
+          addExplosion(e.x, e.y);
+          addExplosion(player.x, player.y);
+          enemies.splice(i, 1);
+          lives--;
+          deathSound();
+          player.x = W / 2 - 8;
+          if (lives <= 0) { Mono.go(GAMEOVER); return; }
+        }
       }
     }
 
@@ -500,37 +539,41 @@
       if (e.state === "formation") {
         e.shootTimer--;
         if (e.shootTimer <= 0) {
-          // Only bottom row or random chance
           const hasBelow = enemies.some(o => o.formCol === e.formCol && o.formRow > e.formRow && o.state === "formation");
           if (!hasBelow && rnd(1) < 0.4) {
-            eBullets.push({ x: e.x + 0, y: e.y + 8 });
+            eBullets.push({ x: e.x + 4, y: e.y + 16 });
           }
           e.shootTimer = _max(40, 120 - wave * 8) + flr(rnd(60));
         }
       }
+    }
     },
     draw() {
     cls(0);
     for (const s of stars) pix(s.x, s.y, s.bright);
 
     // Enemy bullets
-    for (const b of eBullets) spr(6, flr(b.x), flr(b.y));
+    for (const b of eBullets) {
+      spr(6, flr(b.x), flr(b.y));
+      Mono.dbgC(flr(b.x) + 8, flr(b.y) + 8, 3);
+    }
 
     // Enemies
     for (const e of enemies) {
       if (e.state === "forming" && e.enterT < 0) continue;
-      if (e.type === 4 && e.hp === 1 && flr(Mono.frame / 4) % 2 === 0) {
-        spr(e.type, flr(e.x), flr(e.y));
-      } else {
-        spr(e.type, flr(e.x), flr(e.y));
-      }
+      spr(e.type, flr(e.x), flr(e.y));
+      Mono.dbg(flr(e.x), flr(e.y), 16, 16);
     }
 
     // Player bullets
-    for (const b of bullets) spr(5, flr(b.x), flr(b.y));
+    for (const b of bullets) {
+      spr(5, flr(b.x), flr(b.y));
+      Mono.dbgC(flr(b.x) + 8, flr(b.y) + 8, 3);
+    }
 
     // Player
     spr(1, flr(player.x), flr(player.y));
+    Mono.dbgC(flr(player.x) + 8, flr(player.y) + 8, 6);
 
     // Explosions
     for (const e of explosions) {
@@ -541,17 +584,28 @@
     // Particles
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
-    // HUD
-    rectf(0, 0, W, 12, 0);
+    // HUD — stays within 320x240
+    rectf(0, 0, W, 14, 0);
     text("SCORE:" + score, 4, 3, 3);
-    text("WAVE:" + wave, W / 2 - 15, 3, 2);
-    for (let i = 0; i < lives; i++) spr(9, W - 36 + i * 10, 2);
+    text("WAVE:" + wave, W / 2 - 18, 3, 2);
+    // Cap lives icons to MAX_LIVES_DISPLAY to prevent overflow
+    const livesToShow = min(lives, MAX_LIVES_DISPLAY);
+    const livesStartX = W - 4 - livesToShow * 18;
+    for (let i = 0; i < livesToShow; i++) spr(9, livesStartX + i * 18, 0);
+    // Show +N if capped
+    if (lives > MAX_LIVES_DISPLAY) {
+      text("+" + (lives - MAX_LIVES_DISPLAY), W - 4 - 20, 3, 2);
+    }
 
-    // Wave announcement
+    // Wave announcement — centered within screen
     if (waveMessage > 0) {
       const msgY = 113 + sin(waveMessage * 0.1) * 3;
-      text("WAVE " + wave, 143, flr(msgY), 3);
-      if (waveMessage > 60) text("GET READY!", 135, flr(msgY) + 14, 2);
+      const waveStr = "WAVE " + wave;
+      const waveX = flr((W - waveStr.length * 5) / 2);
+      text(waveStr, waveX, flr(msgY), 3);
+      if (waveMessage > 60) {
+        text("GET READY!", flr((W - 50) / 2), flr(msgY) + 14, 2);
+      }
     }
     }
   });

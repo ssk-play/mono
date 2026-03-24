@@ -20,11 +20,19 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // ============================================================
+  // 8x8 -> 16x16 upscale helper
+  // ============================================================
+  function up(d){let o="";for(let r=0;r<8;r++){let row="";for(let c=0;c<8;c++){const ch=d[r*8+c];row+=ch+ch;}o+=row+row;}return o;}
+
+  // ============================================================
+  // Sprites (all upscaled to 16x16)
+  // ============================================================
+
   // Player head (standing)
-  defSprite(1,
+  defSprite(1, up(
     "00333000" +
     "03333300" +
     "03122100" +
@@ -33,9 +41,9 @@
     "00030000" +
     "00333000" +
     "00333000"
-  );
+  ));
   // Player body (standing)
-  defSprite(2,
+  defSprite(2, up(
     "00333000" +
     "03333300" +
     "33333330" +
@@ -44,9 +52,9 @@
     "00303000" +
     "00303000" +
     "03300330"
-  );
+  ));
   // Player punch arm
-  defSprite(3,
+  defSprite(3, up(
     "00000000" +
     "00000000" +
     "33333300" +
@@ -55,9 +63,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // Player kick leg
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -66,9 +74,31 @@
     "33333330" +
     "00000330" +
     "00000000"
-  );
+  ));
+  // Player crouch body
+  defSprite(5, up(
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "00333000" +
+    "00333000" +
+    "03300330" +
+    "03300330" +
+    "00000000"
+  ));
+  // Player jump body
+  defSprite(6, up(
+    "00333000" +
+    "03333300" +
+    "33333330" +
+    "00333000" +
+    "03030300" +
+    "30303030" +
+    "00000000" +
+    "00000000"
+  ));
   // Grunt head
-  defSprite(10,
+  defSprite(10, up(
     "00111000" +
     "01111100" +
     "01233200" +
@@ -77,9 +107,9 @@
     "00010000" +
     "00111000" +
     "00111000"
-  );
+  ));
   // Grunt body
-  defSprite(11,
+  defSprite(11, up(
     "00111000" +
     "01111100" +
     "11111110" +
@@ -88,9 +118,9 @@
     "00101000" +
     "00101000" +
     "01100110"
-  );
+  ));
   // Knife thrower head
-  defSprite(12,
+  defSprite(12, up(
     "00222000" +
     "02222200" +
     "02133100" +
@@ -99,9 +129,9 @@
     "00020000" +
     "00222000" +
     "00222000"
-  );
+  ));
   // Knife thrower body
-  defSprite(13,
+  defSprite(13, up(
     "00222000" +
     "02222200" +
     "22222220" +
@@ -110,9 +140,9 @@
     "00202000" +
     "00202000" +
     "02200220"
-  );
+  ));
   // Knife projectile
-  defSprite(14,
+  defSprite(14, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -121,9 +151,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // Jumper head
-  defSprite(15,
+  defSprite(15, up(
     "00333000" +
     "03333300" +
     "03122100" +
@@ -132,9 +162,9 @@
     "00030000" +
     "00333000" +
     "00333000"
-  );
+  ));
   // Jumper body (in air)
-  defSprite(16,
+  defSprite(16, up(
     "00333000" +
     "03333300" +
     "33333330" +
@@ -143,9 +173,9 @@
     "30303030" +
     "30000030" +
     "00000000"
-  );
+  ));
   // Boss head
-  defSprite(20,
+  defSprite(20, up(
     "03333300" +
     "33333330" +
     "31233210" +
@@ -154,9 +184,9 @@
     "03333300" +
     "00330000" +
     "03333300"
-  );
+  ));
   // Boss body
-  defSprite(21,
+  defSprite(21, up(
     "03333300" +
     "33333330" +
     "33333330" +
@@ -165,9 +195,9 @@
     "03313300" +
     "03303300" +
     "33300330"
-  );
+  ));
   // Boss attack arm
-  defSprite(22,
+  defSprite(22, up(
     "00000000" +
     "33333330" +
     "33333330" +
@@ -176,9 +206,9 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
   // Explosion 1
-  defSprite(30,
+  defSprite(30, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -187,9 +217,9 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
   // Explosion 2
-  defSprite(31,
+  defSprite(31, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -198,9 +228,9 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
   // Heart/life icon
-  defSprite(32,
+  defSprite(32, up(
     "00000000" +
     "03303300" +
     "33333330" +
@@ -209,9 +239,9 @@
     "00333000" +
     "00030000" +
     "00000000"
-  );
+  ));
   // Floor pillar tile
-  defSprite(40,
+  defSprite(40, up(
     "01111110" +
     "11222211" +
     "12222221" +
@@ -220,9 +250,9 @@
     "12222221" +
     "11222211" +
     "01111110"
-  );
+  ));
   // Floor brick tile
-  defSprite(41,
+  defSprite(41, up(
     "33333333" +
     "32222223" +
     "32222223" +
@@ -231,9 +261,9 @@
     "22322222" +
     "22322222" +
     "33333333"
-  );
+  ));
   // Floor plain
-  defSprite(42,
+  defSprite(42, up(
     "11111111" +
     "12121212" +
     "21212121" +
@@ -242,31 +272,9 @@
     "21212121" +
     "11111111" +
     "11111111"
-  );
-  // Player crouch body
-  defSprite(5,
-    "00333000" +
-    "03333300" +
-    "33333330" +
-    "00333000" +
-    "00333000" +
-    "03300330" +
-    "03300330" +
-    "00000000"
-  );
-  // Player jump body
-  defSprite(6,
-    "00333000" +
-    "03333300" +
-    "33333330" +
-    "00333000" +
-    "03030300" +
-    "30303030" +
-    "00000000" +
-    "00000000"
-  );
+  ));
   // Grab effect overlay
-  defSprite(33,
+  defSprite(33, up(
     "00000000" +
     "00300300" +
     "03030300" +
@@ -275,9 +283,9 @@
     "00300300" +
     "00000000" +
     "00000000"
-  );
+  ));
   // Staircase tile
-  defSprite(43,
+  defSprite(43, up(
     "00000033" +
     "00000033" +
     "00003333" +
@@ -286,23 +294,27 @@
     "00333333" +
     "33333333" +
     "33333333"
-  );
+  ));
 
   // --- Constants ---
-  const FLOOR_Y = 188;         // ground Y for player feet
-  const FLOOR_W = 640;         // total floor width in pixels
-  const PLAYER_W = 12;
-  const PLAYER_H = 16;
+  // NOTE: all coordinates are now in 16x16 sprite units.
+  // Sprites went from 8px to 16px, so visual sizes doubled.
+  // Physics/positions scaled x2 to match.
+  const SPR = 16;             // sprite size
+  const FLOOR_Y = 188;        // ground Y for player feet (unchanged - screen coord)
+  const FLOOR_W = 640;        // total floor width in pixels
+  const PLAYER_W = 24;        // player collision width (was 12, x2)
+  const PLAYER_H = 32;        // player collision height (was 16, x2)
   const GRAVITY = 0.6;
   const JUMP_VEL = -6;
   const PLAYER_SPEED = 2.2;
-  const ATTACK_DUR = 10;       // frames an attack is active
-  const HIT_INVULN = 30;       // invulnerability frames after being hit
-  const GRAB_ESCAPE = 8;       // button presses needed to escape grab
+  const ATTACK_DUR = 10;      // frames an attack is active
+  const HIT_INVULN = 30;      // invulnerability frames after being hit
+  const GRAB_ESCAPE = 8;      // button presses needed to escape grab
   const MAX_HP = 40;
-  const TIMER_MAX = 60 * 30;   // 60 seconds at 30fps
+  const TIMER_MAX = 60 * 30;  // 60 seconds at 30fps
 
-  // Floor themes: [wall color, floor tile, enemy types, boss type, bg detail]
+  // Floor themes
   const FLOORS = [
     { name: "1F", enemies: ["grunt","grunt","grunt"], spawnRate: 45, bossHp: 12 },
     { name: "2F", enemies: ["grunt","knife"], spawnRate: 40, bossHp: 16 },
@@ -310,6 +322,22 @@
     { name: "4F", enemies: ["knife","jumper","jumper"], spawnRate: 30, bossHp: 24 },
     { name: "5F", enemies: ["grunt","knife","jumper"], spawnRate: 25, bossHp: 30 },
   ];
+
+  // ============================================================
+  // Collision helpers
+  // ============================================================
+  function boxOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+  }
+
+  // Circle-circle collision (for round objects: knife projectiles, hit effects)
+  function circOverlap(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx;
+    const dy = ay - by;
+    const distSq = dx * dx + dy * dy;
+    const rSum = ar + br;
+    return distSq <= rSum * rSum;
+  }
 
   // --- Game State ---
   const { TITLE, PLAY, GAMEOVER, WIN } = Mono.SCENE;
@@ -332,8 +360,8 @@
     player = {
       x: 27, y: FLOOR_Y, vx: 0, vy: 0,
       facingR: true, hp: MAX_HP,
-      state: "idle",     // idle, walk, jump, crouch, attack, hurt, grabbed, dead
-      attackType: "",    // punch, kick, jumpkick, crouchpunch
+      state: "idle",
+      attackType: "",
       attackTimer: 0,
       hurtTimer: 0,
       invuln: 0,
@@ -364,7 +392,7 @@
     let e = {
       type: type, x: ex, y: ey, vx: 0, vy: 0,
       hp: 1, facingR: !fromRight,
-      state: "walk",   // walk, attack, hurt, dead, grab, jump
+      state: "walk",
       animFrame: 0, attackTimer: 0, hurtTimer: 0,
       jumpTimer: 0, shootTimer: 0,
       deathTimer: 0,
@@ -412,39 +440,46 @@
     setTimeout(() => note(1, "C5", 0.15), 240);
   }
 
-  // --- Collision ---
-  function boxOverlap(ax, ay, aw, ah, bx, by, bw, bh) {
-    return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
-  }
+  // ============================================================
+  // Hitbox helpers (all scaled for 16x16 sprites)
+  // ============================================================
 
+  // Player attack box (AABB for melee attacks)
   function getAttackBox() {
     const p = player;
-    const dir = p.facingR ? 1 : -1;
     if (p.attackType === "punch" || p.attackType === "crouchpunch") {
-      const px = p.facingR ? p.x + PLAYER_W : p.x - 14;
-      const py = p.attackType === "crouchpunch" ? p.y - 4 : p.y - 10;
-      return { x: px, y: py, w: 14, h: 6 };
+      const px = p.facingR ? p.x + PLAYER_W : p.x - 28;
+      const py = p.attackType === "crouchpunch" ? p.y - 8 : p.y - 20;
+      return { x: px, y: py, w: 28, h: 12 };
     }
     if (p.attackType === "kick") {
-      const px = p.facingR ? p.x + PLAYER_W : p.x - 16;
-      return { x: px, y: p.y - 4, w: 16, h: 6 };
+      const px = p.facingR ? p.x + PLAYER_W : p.x - 32;
+      return { x: px, y: p.y - 8, w: 32, h: 12 };
     }
     if (p.attackType === "jumpkick") {
-      const px = p.facingR ? p.x + PLAYER_W : p.x - 18;
-      return { x: px, y: p.y - 8, w: 18, h: 8 };
+      const px = p.facingR ? p.x + PLAYER_W : p.x - 36;
+      return { x: px, y: p.y - 16, w: 36, h: 16 };
     }
     return null;
   }
 
+  // Enemy body hitbox (AABB)
   function getEnemyBox(e) {
-    if (e.type === "boss") return { x: e.x - 8, y: e.y - 16, w: 16, h: 16 };
-    return { x: e.x - 5, y: e.y - 16, w: 10, h: 16 };
+    if (e.type === "boss") return { x: e.x - 16, y: e.y - 32, w: 32, h: 32 };
+    return { x: e.x - 10, y: e.y - 32, w: 20, h: 32 };
   }
 
+  // Player body hitbox (AABB)
   function getPlayerBox() {
     const p = player;
-    if (p.state === "crouch") return { x: p.x, y: p.y - 8, w: PLAYER_W, h: 8 };
+    if (p.state === "crouch") return { x: p.x, y: p.y - 16, w: PLAYER_W, h: 16 };
     return { x: p.x, y: p.y - PLAYER_H, w: PLAYER_W, h: PLAYER_H };
+  }
+
+  // Circle hitbox for knife projectile
+  const KNIFE_R = 6;
+  function knifeCenter(pr) {
+    return { cx: pr.x, cy: pr.y, r: KNIFE_R };
   }
 
   // --- Particles ---
@@ -455,7 +490,7 @@
         life: 5 + flr(rnd(8)), color: flr(rnd(2)) + 2
       });
     }
-    effects.push({ x: x - 4, y: y - 4, timer: 8 });
+    effects.push({ x: x - 8, y: y - 8, timer: 8 });
   }
 
   // --- Update ---
@@ -465,7 +500,6 @@
       if (floorTransTimer <= 0) {
         floor++;
         if (floor >= 5) {
-          // Game complete!
           gameOverTimer = 180;
           Mono.go(WIN); return;
         }
@@ -476,7 +510,6 @@
 
     timer--;
     if (timer <= 0) {
-      // Time out - lose a life
       player.hp = 0;
     }
 
@@ -498,7 +531,6 @@
           sndPunch();
         }
         if (p.grabCount >= GRAB_ESCAPE) {
-          // Break free
           p.state = "idle";
           p.invuln = HIT_INVULN;
           if (p.grabber) {
@@ -518,7 +550,6 @@
       }
       // Normal input
       else if (p.state !== "hurt" && p.attackTimer <= 0) {
-        // Movement
         let moving = false;
         if (btn("left") && p.state !== "crouch") {
           p.x -= PLAYER_SPEED;
@@ -632,7 +663,6 @@
           gameOverTimer = 120;
           Mono.go(GAMEOVER); return;
         } else {
-          // Respawn
           p.x = camX + 27;
           p.y = FLOOR_Y;
           p.hp = MAX_HP;
@@ -675,7 +705,6 @@
         e.deathTimer--;
         if (e.deathTimer <= 0) {
           enemies.splice(i, 1);
-          // Check if boss defeated
           if (e.type === "boss") {
             bossDefeated = true;
             floorComplete = true;
@@ -702,7 +731,7 @@
         continue;
       }
 
-      if (e.state === "grab") continue; // held by player logic
+      if (e.state === "grab") continue;
 
       // Face player
       e.facingR = p.x > e.x;
@@ -710,12 +739,10 @@
       const dist = _abs(dx);
 
       if (e.type === "grunt") {
-        // Walk toward player
         if (dist > 10) {
           e.x += (e.facingR ? 1 : -1) * e.speed;
           e.state = "walk";
         } else if (dist <= 10 && p.state !== "dead") {
-          // Try to grab
           if (p.state !== "grabbed" && p.invuln <= 0) {
             p.state = "grabbed";
             p.grabCount = 0;
@@ -727,14 +754,12 @@
       }
 
       if (e.type === "knife") {
-        // Keep distance and throw
         if (dist > 80) {
           e.x += (e.facingR ? 1 : -1) * e.speed;
           e.state = "walk";
         } else if (dist > 40) {
           e.shootTimer--;
           if (e.shootTimer <= 0) {
-            // Throw knife
             projectiles.push({
               x: e.x, y: e.y - 6,
               vx: e.facingR ? 3.5 : -3.5, vy: 0,
@@ -745,7 +770,6 @@
           }
           e.state = "walk";
         } else {
-          // Back away
           e.x += (e.facingR ? -1 : 1) * e.speed * 0.5;
           e.state = "walk";
         }
@@ -758,7 +782,6 @@
         } else {
           e.jumpTimer--;
           if (e.jumpTimer <= 0 && e.onGround !== false) {
-            // Jump attack
             e.vy = -5;
             e.vx = (e.facingR ? 2 : -2);
             e.onGround = false;
@@ -782,17 +805,14 @@
       }
 
       if (e.type === "boss") {
-        // Boss AI
         if (dist > 40) {
           e.x += (e.facingR ? 1 : -1) * e.speed;
           e.state = "walk";
         } else {
           e.attackTimer--;
           if (e.attackTimer <= 0) {
-            // Boss punch
             e.state = "attack";
             e.attackTimer = 40 + flr(rnd(30));
-            // Check if hitting player
             if (dist < 30 && p.invuln <= 0 && p.state !== "dead" && p.state !== "grabbed") {
               p.hp -= 4;
               p.state = "hurt";
@@ -808,7 +828,7 @@
         }
       }
 
-      // Enemy attack collision with player (non-grab enemies on contact)
+      // Enemy contact collision with player (jumper aerial kick)
       if (e.type !== "grunt" && e.type !== "boss" && e.state !== "dead" && e.state !== "hurt") {
         const eb = getEnemyBox(e);
         const pb = getPlayerBox();
@@ -850,10 +870,8 @@
             e.hp -= dmg;
             e.state = "hurt";
             e.hurtTimer = 10;
-            // Knockback
             e.x += (p.facingR ? 8 : -8);
             if (e.state === "grab") {
-              // Release grab
               p.state = "idle";
               p.grabber = null;
             }
@@ -865,7 +883,7 @@
       }
     }
 
-    // --- Projectiles ---
+    // --- Projectiles (knife uses circle collision vs player box) ---
     for (let i = projectiles.length - 1; i >= 0; i--) {
       const pr = projectiles[i];
       pr.x += pr.vx;
@@ -875,10 +893,15 @@
         projectiles.splice(i, 1);
         continue;
       }
-      // Hit player
+      // Hit player: circle (knife) vs AABB (player)
       const pb = getPlayerBox();
       if (p.state !== "dead" && p.state !== "grabbed" && p.invuln <= 0) {
-        if (boxOverlap(pr.x - 3, pr.y - 2, 6, 4, pb.x, pb.y, pb.w, pb.h)) {
+        // Circle vs AABB: clamp circle center to box, check distance
+        const closestX = _max(pb.x, min(pr.x, pb.x + pb.w));
+        const closestY = _max(pb.y, min(pr.y, pb.y + pb.h));
+        const ddx = pr.x - closestX;
+        const ddy = pr.y - closestY;
+        if (ddx * ddx + ddy * ddy <= KNIFE_R * KNIFE_R) {
           p.hp -= 3;
           p.state = "hurt";
           p.hurtTimer = 8;
@@ -909,7 +932,9 @@
     if (shakeTimer > 0) shakeTimer--;
   }
 
-  // --- Draw ---
+  // ============================================================
+  // Draw
+  // ============================================================
   function drawGame() {
     cls(0);
 
@@ -919,15 +944,12 @@
     const oy = shakeY;
 
     // --- Background ---
-    // Wall / background pattern
-    const wallC = floor < 2 ? 1 : (floor < 4 ? 0 : 1);
     const bgC = 0;
     rectf(0, 0, W, H, bgC);
 
     // Draw background pillars
     for (let px = flr(camX / 43) * 43; px < camX + W + 43; px += 43) {
       const sx = px + ox;
-      // Pillar
       rectf(sx + 19, 30 + oy, 6, FLOOR_Y - 30 + oy, 1);
       rectf(sx + 17, 29 + oy, 10, 3, 1);
       rectf(sx + 17, FLOOR_Y - 2 + oy, 10, 3, 1);
@@ -941,66 +963,75 @@
       }
     }
 
-    // Draw floor
+    // Draw floor tiles (16x16 sprites now)
     const floorTile = 42;
-    for (let fx = flr(camX / 8) * 8; fx < camX + W + 8; fx += 8) {
+    for (let fx = flr(camX / SPR) * SPR; fx < camX + W + SPR; fx += SPR) {
       const sx = fx + ox;
       spr(floorTile, sx, FLOOR_Y + oy);
-      spr(41, sx, FLOOR_Y + 8 + oy);
-      spr(41, sx, FLOOR_Y + 16 + oy);
+      spr(41, sx, FLOOR_Y + SPR + oy);
+      spr(41, sx, FLOOR_Y + SPR * 2 + oy);
     }
 
     // --- Draw enemies ---
     for (const e of enemies) {
       const sx = e.x + ox;
       const sy = e.y + oy;
-      if (sx < -20 || sx > W + 20) continue;
+      if (sx < -40 || sx > W + 40) continue;
 
       const flip = !e.facingR;
 
       if (e.state === "dead") {
-        // Flash
         if (e.deathTimer % 4 < 2) {
-          sprT(30 + (e.deathTimer % 8 < 4 ? 0 : 1), sx - 4, sy - 16, false, false);
+          sprT(30 + (e.deathTimer % 8 < 4 ? 0 : 1), sx - 8, sy - 32, false, false);
         }
         continue;
       }
 
-      if (e.state === "hurt" && e.hurtTimer % 3 === 0) continue; // blink
+      if (e.state === "hurt" && e.hurtTimer % 3 === 0) continue;
 
       if (e.type === "grunt") {
-        sprT(10, sx - 4, sy - 16, flip, false);
-        sprT(11, sx - 4, sy - 8, flip, false);
+        sprT(10, sx - 8, sy - 32, flip, false);
+        sprT(11, sx - 8, sy - 16, flip, false);
         if (e.state === "grab") {
-          // Arms extended
-          sprT(3, flip ? sx - 12 : sx + 4, sy - 10, !flip, false);
+          sprT(3, flip ? sx - 24 : sx + 8, sy - 20, !flip, false);
         }
+        // Debug: grunt hitbox (rect)
+        const eb = getEnemyBox(e);
+        dbg(eb.x + ox, eb.y + oy, eb.w, eb.h);
       } else if (e.type === "knife") {
-        sprT(12, sx - 4, sy - 16, flip, false);
-        sprT(13, sx - 4, sy - 8, flip, false);
+        sprT(12, sx - 8, sy - 32, flip, false);
+        sprT(13, sx - 8, sy - 16, flip, false);
+        // Debug: knife thrower hitbox (rect)
+        const eb = getEnemyBox(e);
+        dbg(eb.x + ox, eb.y + oy, eb.w, eb.h);
       } else if (e.type === "jumper") {
-        sprT(15, sx - 4, sy - 16, flip, false);
+        sprT(15, sx - 8, sy - 32, flip, false);
         if (e.state === "jump") {
-          sprT(16, sx - 4, sy - 8, flip, false);
+          sprT(16, sx - 8, sy - 16, flip, false);
         } else {
-          sprT(11, sx - 4, sy - 8, flip, false);
+          sprT(11, sx - 8, sy - 16, flip, false);
         }
+        // Debug: jumper hitbox (rect)
+        const eb = getEnemyBox(e);
+        dbg(eb.x + ox, eb.y + oy, eb.w, eb.h);
       } else if (e.type === "boss") {
-        // Boss is bigger - draw larger
-        sprT(20, sx - 8, sy - 20, flip, false);
-        sprT(21, sx - 8, sy - 12, flip, false);
-        // Also mirror side for width
-        sprT(20, sx, sy - 20, flip, false);
-        sprT(21, sx, sy - 12, flip, false);
+        // Boss is bigger - draw larger (2x2 tile of 16x16 sprites)
+        sprT(20, sx - 16, sy - 40, flip, false);
+        sprT(21, sx - 16, sy - 24, flip, false);
+        sprT(20, sx, sy - 40, flip, false);
+        sprT(21, sx, sy - 24, flip, false);
         if (e.state === "attack") {
-          sprT(22, flip ? sx - 16 : sx + 8, sy - 14, flip, false);
+          sprT(22, flip ? sx - 32 : sx + 16, sy - 28, flip, false);
         }
         // Boss HP bar
         const bossHpW = 40;
         const bossHpFill = flr((e.hp / FLOORS[floor].bossHp) * bossHpW);
-        rectf(sx - 8, sy - 28, bossHpW, 3, 0);
-        rectf(sx - 8, sy - 28, bossHpFill, 3, 3);
-        rect(sx - 9, sy - 29, bossHpW + 2, 5, 2);
+        rectf(sx - 8, sy - 48, bossHpW, 3, 0);
+        rectf(sx - 8, sy - 48, bossHpFill, 3, 3);
+        rect(sx - 9, sy - 49, bossHpW + 2, 5, 2);
+        // Debug: boss hitbox (rect)
+        const eb = getEnemyBox(e);
+        dbg(eb.x + ox, eb.y + oy, eb.w, eb.h);
       }
     }
 
@@ -1009,7 +1040,9 @@
       const sx = pr.x + ox;
       const sy = pr.y + oy;
       if (pr.type === "knife") {
-        sprT(14, sx - 4, sy - 4, pr.vx < 0, false);
+        sprT(14, sx - 8, sy - 8, pr.vx < 0, false);
+        // Debug: knife projectile hitbox (circle)
+        dbgC(sx, sy, KNIFE_R);
       }
     }
 
@@ -1020,57 +1053,55 @@
     const pFlip = !p.facingR;
 
     if (p.state !== "dead" || (p.hurtTimer % 6 < 3)) {
-      // Invulnerability blink
       if (p.invuln > 0 && p.invuln % 4 < 2 && p.state !== "dead") {
         // skip draw - blink
       } else {
         if (p.state === "crouch" || p.attackType === "crouchpunch") {
-          // Crouching
-          sprT(1, psx, psy - 12, pFlip, false);
-          sprT(5, psx, psy - 4, pFlip, false);
+          sprT(1, psx, psy - 24, pFlip, false);
+          sprT(5, psx, psy - 8, pFlip, false);
           if (p.attackTimer > 0 && p.attackType === "crouchpunch") {
-            sprT(3, pFlip ? psx - 10 : psx + 8, psy - 6, pFlip, false);
+            sprT(3, pFlip ? psx - 20 : psx + 16, psy - 12, pFlip, false);
           }
         } else if (p.state === "jump" || (!p.onGround && p.state !== "hurt")) {
-          // Jumping
-          sprT(1, psx, psy - 16, pFlip, false);
-          sprT(6, psx, psy - 8, pFlip, false);
+          sprT(1, psx, psy - 32, pFlip, false);
+          sprT(6, psx, psy - 16, pFlip, false);
           if (p.attackTimer > 0 && p.attackType === "jumpkick") {
-            sprT(4, pFlip ? psx - 12 : psx + 8, psy - 6, pFlip, false);
+            sprT(4, pFlip ? psx - 24 : psx + 16, psy - 12, pFlip, false);
           }
         } else if (p.state === "grabbed") {
-          // Grabbed - shake
           const gx = psx + flr(rnd(3)) - 1;
-          sprT(1, gx, psy - 16, pFlip, false);
-          sprT(2, gx, psy - 8, pFlip, false);
-          // Struggle effect
-          if (Mono.frame % 4 < 2) sprT(33, gx - 2, psy - 12, false, false);
+          sprT(1, gx, psy - 32, pFlip, false);
+          sprT(2, gx, psy - 16, pFlip, false);
+          if (Mono.frame % 4 < 2) sprT(33, gx - 4, psy - 24, false, false);
         } else if (p.state === "hurt") {
-          // Hurt - knocked back slightly
-          sprT(1, psx, psy - 16, pFlip, false);
-          sprT(2, psx, psy - 8, pFlip, false);
+          sprT(1, psx, psy - 32, pFlip, false);
+          sprT(2, psx, psy - 16, pFlip, false);
         } else if (p.state === "dead") {
-          // Dead - lying down (draw sideways-ish)
-          sprT(1, psx, psy - 8, pFlip, false);
-          sprT(2, psx + (pFlip ? -8 : 8), psy - 8, pFlip, false);
+          sprT(1, psx, psy - 16, pFlip, false);
+          sprT(2, psx + (pFlip ? -16 : 16), psy - 16, pFlip, false);
         } else {
           // Normal standing/walking
-          sprT(1, psx, psy - 16, pFlip, false);
-          sprT(2, psx, psy - 8, pFlip, false);
-          // Attack arms/legs
+          sprT(1, psx, psy - 32, pFlip, false);
+          sprT(2, psx, psy - 16, pFlip, false);
           if (p.attackTimer > 0) {
             if (p.attackType === "punch") {
-              sprT(3, pFlip ? psx - 10 : psx + 8, psy - 12, pFlip, false);
+              sprT(3, pFlip ? psx - 20 : psx + 16, psy - 24, pFlip, false);
             } else if (p.attackType === "kick") {
-              sprT(4, pFlip ? psx - 12 : psx + 8, psy - 4, pFlip, false);
+              sprT(4, pFlip ? psx - 24 : psx + 16, psy - 8, pFlip, false);
             }
-          }
-          // Walk animation - slight bob
-          if (p.state === "walk" && p.animFrame % 8 < 4) {
-            // Offset already handled via sprite
           }
         }
       }
+    }
+
+    // Debug: player hitbox (rect)
+    const pb = getPlayerBox();
+    dbg(pb.x + ox, pb.y + oy, pb.w, pb.h);
+
+    // Debug: attack hitbox (rect)
+    if (p.attackTimer > 0) {
+      const atk = getAttackBox();
+      if (atk) dbg(atk.x + ox, atk.y + oy, atk.w, atk.h);
     }
 
     // --- Draw effects ---
@@ -1098,9 +1129,10 @@
     rectf(12, 5, hpW, 5, 3);
     rectf(12 + hpW, 5, 43 - hpW, 5, 1);
 
-    // Lives
-    for (let i = 0; i < lives; i++) {
-      sprT(32, 64 + i * 10, 2, false, false);
+    // Lives: capped to prevent overflow
+    const maxLivesShown = min(lives, 5);
+    for (let i = 0; i < maxLivesShown; i++) {
+      sprT(32, 64 + i * 18, 0, false, false);
     }
 
     // Score
@@ -1147,19 +1179,19 @@
     text("KUNG-FU MASTER", W / 2 - 35, 26, 3);
     text("SPARTAN X", W / 2 - 22, 36, 2);
 
-    // Decorative martial arts figure
-    sprT(1, W / 2 - 33, 75, false, false);
-    sprT(2, W / 2 - 33, 83, false, false);
-    sprT(3, W / 2 - 25, 73, false, false); // punch
+    // Decorative martial arts figure (16x16 sprites now)
+    sprT(1, W / 2 - 40, 68, false, false);
+    sprT(2, W / 2 - 40, 84, false, false);
+    sprT(3, W / 2 - 24, 68, false, false);
 
     // VS enemies
-    sprT(10, W / 2 + 13, 75, true, false);
-    sprT(11, W / 2 + 13, 83, true, false);
-    sprT(10, W / 2 + 27, 72, true, false);
-    sprT(11, W / 2 + 27, 80, true, false);
+    sprT(10, W / 2 + 10, 68, true, false);
+    sprT(11, W / 2 + 10, 84, true, false);
+    sprT(10, W / 2 + 30, 64, true, false);
+    sprT(11, W / 2 + 30, 80, true, false);
 
     // Floor display
-    text("5 FLOORS OF FURY!", W / 2 - 44, 98, 2);
+    text("5 FLOORS OF FURY!", W / 2 - 44, 105, 2);
 
     // Controls
     text("CONTROLS:", W / 2 - 22, 120, 3);
@@ -1184,7 +1216,6 @@
   }
 
   function drawGameOver() {
-    // Draw game in background
     drawGame();
 
     // Overlay
@@ -1211,12 +1242,12 @@
     text("THE PRINCESS!", W / 2 - 34, 72, 2);
     text("SCORE " + String(score).padStart(7, "0"), W / 2 - 30, 87, 3);
 
-    // Player celebration
-    sprT(1, W / 2 - 4, 135, false, false);
-    sprT(6, W / 2 - 4, 143, false, false);
+    // Player celebration (16x16 sprites)
+    sprT(1, W / 2 - 8, 130, false, false);
+    sprT(6, W / 2 - 8, 146, false, false);
 
     if (gameOverTimer <= 60 && Mono.frame % 30 < 20) {
-      text("PRESS START", W / 2 - 27, 165, 3);
+      text("PRESS START", W / 2 - 27, 170, 3);
     }
   }
 

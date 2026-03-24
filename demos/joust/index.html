@@ -18,14 +18,44 @@
 (() => {
   "use strict";
   const W = Mono.WIDTH, H = Mono.HEIGHT;
+  const SS = 16; // sprite size (engine native)
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, sprWrap, text: drawText, btn, btnp, note, stop, rnd, flr,
-          abs: _abs, min, max: _max, sin, cos } = Mono;
+          spr, sprT, text: drawText, btn, btnp, note, stop, rnd, flr,
+          abs: _abs, min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 -> 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprite-with-wrap helper (draws at x and x+W or x-W for seamless wrap) ---
+  function sprWrap(id, x, y, flip) {
+    sprT(id, x, y, flip);
+    if (x < 0) sprT(id, x + W, y, flip);
+    else if (x + SS > W) sprT(id, x - W, y, flip);
+  }
+
+  // --- Circle collision helper ---
+  function circHit(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const dist = dx * dx + dy * dy;
+    const rSum = ar + br;
+    return dist < rSum * rSum;
+  }
+
+  // --- Sprites (all upscaled from 8x8 to 16x16) ---
 
   // 1: Player knight on ostrich - facing right, wings up
-  defSprite(1,
+  defSprite(1, up(
     "00033000" +
     "00033200" +
     "03333300" +
@@ -34,10 +64,10 @@
     "00322000" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 2: Player knight on ostrich - facing right, wings down
-  defSprite(2,
+  defSprite(2, up(
     "00033000" +
     "00033200" +
     "00333300" +
@@ -46,10 +76,10 @@
     "03322000" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 3: Player knight on ostrich - facing right, wings mid (glide)
-  defSprite(3,
+  defSprite(3, up(
     "00033000" +
     "00033200" +
     "03333300" +
@@ -58,10 +88,10 @@
     "00322000" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 4: Enemy buzzard rider - facing right, wings up
-  defSprite(4,
+  defSprite(4, up(
     "00011000" +
     "00011100" +
     "01111100" +
@@ -70,10 +100,10 @@
     "00122000" +
     "00100100" +
     "00100100"
-  );
+  ));
 
   // 5: Enemy buzzard rider - facing right, wings down
-  defSprite(5,
+  defSprite(5, up(
     "00011000" +
     "00011100" +
     "00111100" +
@@ -82,10 +112,10 @@
     "01122000" +
     "00100100" +
     "00100100"
-  );
+  ));
 
   // 6: Enemy buzzard rider - facing right, wings mid
-  defSprite(6,
+  defSprite(6, up(
     "00011000" +
     "00011100" +
     "01111100" +
@@ -94,10 +124,10 @@
     "00122000" +
     "00100100" +
     "00100100"
-  );
+  ));
 
   // 7: Egg
-  defSprite(7,
+  defSprite(7, up(
     "00000000" +
     "00000000" +
     "00033000" +
@@ -106,10 +136,10 @@
     "03222230" +
     "00322300" +
     "00033000"
-  );
+  ));
 
   // 8: Hatching egg (cracking)
-  defSprite(8,
+  defSprite(8, up(
     "00000000" +
     "00020000" +
     "00233000" +
@@ -118,10 +148,10 @@
     "03222030" +
     "00322300" +
     "00033000"
-  );
+  ));
 
   // 9: Explosion frame 1
-  defSprite(9,
+  defSprite(9, up(
     "00000000" +
     "00200100" +
     "01002000" +
@@ -130,10 +160,10 @@
     "01000010" +
     "00100000" +
     "00000000"
-  );
+  ));
 
   // 10: Explosion frame 2
-  defSprite(10,
+  defSprite(10, up(
     "20010020" +
     "01000010" +
     "00203200" +
@@ -142,10 +172,10 @@
     "01000300" +
     "20001001" +
     "00200010"
-  );
+  ));
 
   // 11: Platform tile
-  defSprite(11,
+  defSprite(11, up(
     "33333333" +
     "22222222" +
     "21212121" +
@@ -154,10 +184,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 12: Lava surface (animated frame 1)
-  defSprite(12,
+  defSprite(12, up(
     "00000000" +
     "01001010" +
     "10110101" +
@@ -166,10 +196,10 @@
     "12121212" +
     "11111111" +
     "11111111"
-  );
+  ));
 
   // 13: Lava surface (animated frame 2)
-  defSprite(13,
+  defSprite(13, up(
     "00000000" +
     "10010100" +
     "01101011" +
@@ -178,10 +208,10 @@
     "21212121" +
     "11111111" +
     "11111111"
-  );
+  ));
 
   // 14: Life icon (small knight)
-  defSprite(14,
+  defSprite(14, up(
     "00000000" +
     "00033000" +
     "00033200" +
@@ -190,10 +220,10 @@
     "03322000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 15: Shadow enemy (stronger) - wings up
-  defSprite(15,
+  defSprite(15, up(
     "00011000" +
     "00011100" +
     "01111100" +
@@ -202,10 +232,10 @@
     "00111000" +
     "00100100" +
     "00100100"
-  );
+  ));
 
   // 16: Shadow enemy - wings down
-  defSprite(16,
+  defSprite(16, up(
     "00011000" +
     "00011100" +
     "00111100" +
@@ -214,25 +244,25 @@
     "01111000" +
     "00100100" +
     "00100100"
-  );
+  ));
 
-  // --- Platforms ---
+  // --- Platforms (doubled coordinates for 16x16 world) ---
   const platforms = [
     // Bottom ground platforms (above lava)
-    { x: 0, y: 218, w: 53 },
-    { x: 267, y: 218, w: 53 },
+    { x: 0, y: 218, w: 106 },
+    { x: 214, y: 218, w: 106 },
     // Mid-low platforms
-    { x: 53, y: 188, w: 53 },
-    { x: 200, y: 188, w: 53 },
+    { x: 53, y: 188, w: 80 },
+    { x: 187, y: 188, w: 80 },
     // Middle platforms
-    { x: 113, y: 150, w: 67 },
-    { x: 0, y: 135, w: 40 },
-    { x: 280, y: 135, w: 40 },
+    { x: 100, y: 150, w: 120 },
+    { x: 0, y: 135, w: 64 },
+    { x: 256, y: 135, w: 64 },
     // Upper platforms
-    { x: 40, y: 105, w: 53 },
-    { x: 200, y: 98, w: 60 },
+    { x: 40, y: 105, w: 80 },
+    { x: 200, y: 98, w: 80 },
     // Top platform
-    { x: 120, y: 60, w: 80 },
+    { x: 104, y: 60, w: 112 },
   ];
 
   const GRAVITY = 0.18;
@@ -241,15 +271,19 @@
   const MOVE_SPEED = 1.8;
   const LAVA_Y = 230;
 
+  // Collision radii
+  const PLAYER_R = 7;
+  const ENEMY_R = 7;
+  const EGG_R = 6;
+
   // --- Game state ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
   let player, enemies, eggs, explosions, particles;
   let score, lives, wave, waveTimer, waveMessage, spawnQueue;
-  let titleBob;
 
   function resetGame() {
     player = {
-      x: W / 2 - 4, y: 150,
+      x: W / 2 - 8, y: 150,
       vx: 0, vy: 0,
       facing: 1,  // 1=right, -1=left
       wingFrame: 0,
@@ -286,7 +320,7 @@
   function spawnEnemy(type) {
     // Spawn from top edges
     const side = rnd(1) < 0.5 ? -1 : 1;
-    const ex = side < 0 ? -8 : W;
+    const ex = side < 0 ? -SS : W;
     const ey = 8 + rnd(45);
     enemies.push({
       x: ex, y: ey,
@@ -307,7 +341,7 @@
     explosions.push({ x, y, timer: 12 });
     for (let i = 0; i < 8; i++)
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         vx: rnd(4) - 2, vy: rnd(4) - 2,
         life: 6 + flr(rnd(10)),
         color: flr(rnd(3)) + 1
@@ -330,14 +364,14 @@
   }
   function lavaSound() { note(1, "A2", 0.15); note(0, "D2", 0.2); }
 
-  // --- Platform collision ---
+  // --- Platform collision (16x16 sprites) ---
   function checkPlatformCollision(ent) {
     ent.onGround = false;
     if (ent.vy < 0) return; // moving up, skip
     for (const p of platforms) {
-      if (ent.x + 6 > p.x && ent.x + 2 < p.x + p.w &&
-          ent.y + 8 > p.y && ent.y + 8 < p.y + 6 && ent.vy >= 0) {
-        ent.y = p.y - 8;
+      if (ent.x + SS - 2 > p.x && ent.x + 2 < p.x + p.w &&
+          ent.y + SS > p.y && ent.y + SS < p.y + 6 && ent.vy >= 0) {
+        ent.y = p.y - SS;
         ent.vy = 0;
         ent.onGround = true;
         return;
@@ -347,8 +381,8 @@
 
   // --- Wrap horizontally ---
   function wrapX(ent) {
-    if (ent.x < -8) ent.x += W + 8;
-    if (ent.x > W) ent.x -= W + 8;
+    if (ent.x < -SS) ent.x += W + SS;
+    if (ent.x > W) ent.x -= W + SS;
   }
 
   // --- Title Scene ---
@@ -372,16 +406,16 @@
       drawText("JOUST", 137, flr(ty) + 1, 1);
       drawText("JOUST", 136, flr(ty), 3);
       rectf(123, flr(ty) + 10, 73, 1, 2);
-      const px = 133 + sin(Mono.frame * 0.04) * 27;
-      const py = 75 + sin(Mono.frame * 0.06) * 11;
+      const px = 125 + sin(Mono.frame * 0.04) * 27;
+      const py = 70 + sin(Mono.frame * 0.06) * 11;
       const wf = flr(Mono.frame / 6) % 3;
       const sprId = wf === 0 ? 1 : wf === 1 ? 2 : 3;
-      spr(sprId, flr(px), flr(py));
-      const ex = 187 - sin(Mono.frame * 0.04) * 27;
-      const ey = 79 + sin(Mono.frame * 0.06 + 2) * 11;
+      sprT(sprId, flr(px), flr(py));
+      const ex = 180 - sin(Mono.frame * 0.04) * 27;
+      const ey = 74 + sin(Mono.frame * 0.06 + 2) * 11;
       const ef = flr(Mono.frame / 6) % 3;
       const esprId = ef === 0 ? 4 : ef === 1 ? 5 : 6;
-      spr(esprId, flr(ex), flr(ey), true);
+      sprT(esprId, flr(ex), flr(ey), true);
       if (flr(Mono.frame / 20) % 2 === 0) drawText("PRESS FLAP TO START", 112, 128, 3);
       drawText("DEFEAT ENEMY KNIGHTS", 110, 150, 2);
       drawText("HIGHER LANCE WINS", 117, 159, 2);
@@ -399,7 +433,7 @@
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.life--;
         if (p.life <= 0) particles.splice(i, 1);
       }
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
@@ -475,11 +509,11 @@
     if (player.y < 9) { player.y = 9; player.vy = 0.5; }
 
     // Lava death
-    if (player.y + 8 > LAVA_Y) {
+    if (player.y + SS > LAVA_Y) {
       lives--;
-      addExplosion(player.x, LAVA_Y - 10);
+      addExplosion(player.x, LAVA_Y - 12);
       lavaSound();
-      player.x = W / 2 - 4;
+      player.x = W / 2 - 8;
       player.y = 45;
       player.vx = 0;
       player.vy = 0;
@@ -539,26 +573,25 @@
       checkPlatformCollision(e);
 
       // Lava death for enemies
-      if (e.y + 8 > LAVA_Y) {
-        addExplosion(e.x, LAVA_Y - 10);
+      if (e.y + SS > LAVA_Y) {
+        addExplosion(e.x, LAVA_Y - 12);
         score += 50;
         enemies.splice(i, 1);
         hitSound();
         continue;
       }
 
-      // Player-enemy collision
+      // Player-enemy collision (circle collision for jousting)
       if (player.invincible <= 0) {
-        const dx = player.x - e.x;
-        const dy = player.y - e.y;
-        // Check overlap (roughly 6x6 hitbox centered)
-        if (_abs(dx) < 7 && _abs(dy) < 8) {
+        const pcx = player.x + 8, pcy = player.y + 8;
+        const ecx = e.x + 8, ecy = e.y + 8;
+
+        if (circHit(pcx, pcy, PLAYER_R, ecx, ecy, ENEMY_R)) {
           // Jousting: whoever is higher (lower y) with downward momentum wins
-          // Also: player lance tip is at top, so if player is above enemy = win
           const playerTop = player.y;
           const enemyTop = e.y;
 
-          if (playerTop < enemyTop - 2) {
+          if (playerTop < enemyTop - 3) {
             // Player wins!
             addExplosion(e.x, e.y);
             const pts = e.type === 1 ? 300 : 150;
@@ -569,7 +602,7 @@
               x: e.x, y: e.y,
               vx: e.vx * 0.3,
               vy: -1,
-              hatchTimer: 300 + flr(rnd(150)), // time before hatching
+              hatchTimer: 300 + flr(rnd(150)),
               onGround: false,
               hatching: false,
               type: e.type,
@@ -577,12 +610,12 @@
             enemies.splice(i, 1);
             // Bounce player up
             player.vy = -2;
-          } else if (enemyTop < playerTop - 2) {
+          } else if (enemyTop < playerTop - 3) {
             // Enemy wins!
             lives--;
             addExplosion(player.x, player.y);
             deathSound();
-            player.x = W / 2 - 4;
+            player.x = W / 2 - 8;
             player.y = 45;
             player.vx = 0;
             player.vy = 0;
@@ -590,6 +623,7 @@
             if (lives <= 0) { addExplosion(player.x, player.y); Mono.go(GAMEOVER); return; }
           } else {
             // Tie - bounce apart
+            const dx = pcx - ecx;
             player.vx = dx > 0 ? 2 : -2;
             e.vx = dx > 0 ? -2 : 2;
             player.vy = -1.5;
@@ -614,9 +648,9 @@
       eg.onGround = false;
       if (eg.vy >= 0) {
         for (const p of platforms) {
-          if (eg.x + 6 > p.x && eg.x + 2 < p.x + p.w &&
-              eg.y + 8 > p.y && eg.y + 8 < p.y + 6) {
-            eg.y = p.y - 8;
+          if (eg.x + SS - 2 > p.x && eg.x + 2 < p.x + p.w &&
+              eg.y + SS > p.y && eg.y + SS < p.y + 6) {
+            eg.y = p.y - SS;
             eg.vy = 0;
             eg.vx = 0;
             eg.onGround = true;
@@ -626,7 +660,7 @@
       }
 
       // Lava
-      if (eg.y + 8 > LAVA_Y) {
+      if (eg.y + SS > LAVA_Y) {
         eggs.splice(i, 1);
         continue;
       }
@@ -643,14 +677,16 @@
         continue;
       }
 
-      // Player collects egg
-      if (_abs(player.x - eg.x) < 8 && _abs(player.y - eg.y) < 8) {
+      // Player collects egg (circle collision)
+      const pcx = player.x + 8, pcy = player.y + 8;
+      const ecx = eg.x + 8, ecy = eg.y + 8;
+      if (circHit(pcx, pcy, PLAYER_R, ecx, ecy, EGG_R)) {
         score += 250;
         collectSound();
         // Small sparkle particles
         for (let p = 0; p < 5; p++)
           particles.push({
-            x: eg.x + 4, y: eg.y + 4,
+            x: eg.x + 8, y: eg.y + 8,
             vx: rnd(3) - 1.5, vy: rnd(3) - 1.5,
             life: 8 + flr(rnd(6)),
             color: 3
@@ -689,14 +725,18 @@
     drawPlatforms();
     drawLava(lavaFrame);
 
+    // Eggs
     for (const eg of eggs) {
       if (eg.hatching && flr(Mono.frame / 4) % 2 === 0) {
         sprWrap(8, flr(eg.x), flr(eg.y));
       } else {
         sprWrap(7, flr(eg.x), flr(eg.y));
       }
+      // Debug: circle hitbox for eggs
+      dbgC(flr(eg.x) + 8, flr(eg.y) + 8, EGG_R);
     }
 
+    // Enemies
     for (const e of enemies) {
       let sprBase;
       if (e.type === 1) {
@@ -706,26 +746,39 @@
       }
       const flip = e.facing < 0;
       sprWrap(sprBase, flr(e.x), flr(e.y), flip);
+      // Debug: circle hitbox for enemies
+      dbgC(flr(e.x) + 8, flr(e.y) + 8, ENEMY_R);
     }
 
+    // Player
     if (player.invincible <= 0 || flr(Mono.frame / 3) % 2 === 0) {
       const sprBase = player.wingFrame === 1 ? 1 : player.wingFrame === 2 ? 2 : 3;
       const flip = player.facing < 0;
       sprWrap(sprBase, flr(player.x), flr(player.y), flip);
     }
+    // Debug: circle hitbox for player (always, even when blinking)
+    dbgC(flr(player.x) + 8, flr(player.y) + 8, PLAYER_R);
 
+    // Explosions
     for (const e of explosions) {
       const sprId = e.timer > 6 ? 9 : 10;
-      spr(sprId, flr(e.x), flr(e.y));
+      sprT(sprId, flr(e.x), flr(e.y));
     }
 
+    // Particles
     for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
 
-    rectf(0, 0, W, 12, 0);
+    // HUD background
+    rectf(0, 0, W, 14, 0);
     drawText("SCORE:" + score, 4, 3, 3);
     drawText("WAVE:" + wave, W / 2 - 25, 3, 2);
-    for (let i = 0; i < lives; i++) spr(14, W - 36 + i * 10, 2);
 
+    // Lives icons (capped to prevent overflow)
+    const maxLivesShown = min(lives, 5);
+    for (let i = 0; i < maxLivesShown; i++) spr(14, W - 20 - i * 18, 0);
+    if (lives > 5) drawText("+" + (lives - 5), W - 20, 5, 2);
+
+    // Wave announcement
     if (waveMessage > 0) {
       const msgY = 30 + sin(waveMessage * 0.1) * 3;
       drawText("WAVE " + wave, 140, flr(msgY), 3);
@@ -736,21 +789,23 @@
 
   function drawPlatforms() {
     for (const p of platforms) {
-      const tiles = Math.ceil(p.w / 8);
+      const tiles = Math.ceil(p.w / SS);
       for (let t = 0; t < tiles; t++) {
-        spr(11, p.x + t * 8, p.y);
+        spr(11, p.x + t * SS, p.y);
       }
+      // Debug: platform hitbox
+      dbg(p.x, p.y, p.w, 6);
     }
   }
 
   function drawLava(frame) {
     const sprId = frame === 0 ? 12 : 13;
     // Lava surface
-    for (let x = 0; x < W; x += 8) {
+    for (let x = 0; x < W; x += SS) {
       spr(sprId, x, LAVA_Y);
     }
     // Lava body below surface
-    rectf(0, LAVA_Y + 4, W, H - LAVA_Y - 4, 1);
+    rectf(0, LAVA_Y + 8, W, H - LAVA_Y - 8, 1);
     // Lava glow particles
     if (flr(Mono.frame / 4) % 3 === 0) {
       const gx = flr(rnd(W));

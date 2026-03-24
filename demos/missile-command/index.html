@@ -20,11 +20,25 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8x8 → 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Sprites (all 8x8 art upscaled to 16x16 via up()) ---
   // 1: City (intact)
-  defSprite(1,
+  defSprite(1, up(
     "00000000" +
     "00322000" +
     "03232300" +
@@ -33,9 +47,9 @@
     "32232230" +
     "33233330" +
     "33333330"
-  );
+  ));
   // 2: City destroyed (rubble)
-  defSprite(2,
+  defSprite(2, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -44,9 +58,9 @@
     "01010100" +
     "11011010" +
     "11111110"
-  );
+  ));
   // 3: Missile base
-  defSprite(3,
+  defSprite(3, up(
     "00000000" +
     "00000000" +
     "00033000" +
@@ -55,9 +69,9 @@
     "33333333" +
     "22222222" +
     "22222222"
-  );
+  ));
   // 4: Missile base destroyed
-  defSprite(4,
+  defSprite(4, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -66,9 +80,9 @@
     "01001010" +
     "11010101" +
     "11111111"
-  );
-  // 5: Crosshair center
-  defSprite(5,
+  ));
+  // 5: Crosshair center (unused now, crosshair drawn via lines)
+  defSprite(5, up(
     "00030000" +
     "00030000" +
     "00000000" +
@@ -77,9 +91,10 @@
     "00000000" +
     "00030000" +
     "00030000"
-  );
+  ));
 
   // --- Constants ---
+  const SS = 16;                     // sprite size (engine native)
   const GROUND_Y = 218;
   const HUD_Y = 4;
   const CURSOR_SPEED = 3;
@@ -95,6 +110,19 @@
   // Base X positions (left, center, right)
   const BASE_X = [13, 147, 293];
   const BASE_MAX_AMMO = 10;
+
+  // Collision radii
+  const ENEMY_MISSILE_R = 3;        // enemy missile warhead radius
+  const COUNTER_MISSILE_R = 3;      // counter-missile warhead radius
+  const CITY_HIT_R = 10;            // city hit detection radius
+  const BASE_HIT_R = 10;            // base hit detection radius
+
+  // --- Circle-vs-circle collision helper ---
+  function circCirc(ax, ay, ar, bx, by, br) {
+    const dx = ax - bx, dy = ay - by;
+    const rr = ar + br;
+    return dx * dx + dy * dy < rr * rr;
+  }
 
   // --- Game State ---
   const { TITLE, PLAY, CLEAR, GAMEOVER } = Mono.SCENE;
@@ -141,7 +169,7 @@
       if (!target) break;
       const isMirv = i < numMirv;
       const isSmart = !isMirv && i < numMirv + numSmart;
-      spawnEnemyMissile(sx, -rnd(45) - 8, target.x + 4, target.y,
+      spawnEnemyMissile(sx, -rnd(45) - 8, target.x + 8, target.y,
         isSmart ? speed * 1.8 : speed,
         isMirv, isSmart,
         rnd(120) + i * 8 // delay before active
@@ -183,8 +211,8 @@
     let bestDist = Infinity;
     for (const b of bases) {
       if (!b.alive || b.ammo <= 0) continue;
-      const dx = (b.x + 4) - tx;
-      const dy = (GROUND_Y + 4) - ty;
+      const dx = (b.x + 8) - tx;
+      const dy = (GROUND_Y + 8) - ty;
       const d = dx * dx + dy * dy;
       if (d < bestDist) { bestDist = d; best = b; }
     }
@@ -195,7 +223,7 @@
     const base = findNearestBase(targetX, targetY);
     if (!base) return;
     base.ammo--;
-    const bx = base.x + 4;
+    const bx = base.x + 8;
     const by = GROUND_Y;
     const dx = targetX - bx;
     const dy = targetY - by;
@@ -283,10 +311,17 @@
       line(m.sx, m.sy, m.x, m.y, 2);
       pix(m.x, m.y, 3); pix(m.x - 1, m.y, 3); pix(m.x + 1, m.y, 3); pix(m.x, m.y - 1, 3);
       if (m.smart) { pix(m.x - 1, m.y - 1, 3); pix(m.x + 1, m.y - 1, 3); }
+      // Debug: enemy missile warhead
+      dbgC(m.x, m.y, ENEMY_MISSILE_R);
     }
 
     // Draw counter-missile trails
-    for (const m of counterMissiles) { line(m.sx, m.sy, m.x, m.y, 3); pix(m.x, m.y, 3); }
+    for (const m of counterMissiles) {
+      line(m.sx, m.sy, m.x, m.y, 3);
+      pix(m.x, m.y, 3);
+      // Debug: counter-missile warhead
+      dbgC(m.x, m.y, COUNTER_MISSILE_R);
+    }
 
     // Draw target markers
     for (const m of counterMissiles) {
@@ -303,26 +338,37 @@
         circf(e.x, e.y, _max(1, flr(r * 0.4)), 3);
         if (e.growing && Mono.frame % 3 === 0) circf(e.x, e.y, r, 3);
       }
+      // Debug: explosion radius
+      dbgC(e.x, e.y, flr(e.r));
     }
 
     // Draw cities
-    for (let i = 0; i < 6; i++) spr(cities[i].alive ? 1 : 2, cities[i].x, GROUND_Y - 8);
+    for (let i = 0; i < 6; i++) {
+      spr(cities[i].alive ? 1 : 2, cities[i].x, GROUND_Y - SS);
+      // Debug: city hitbox
+      if (cities[i].alive) dbgC(cities[i].x + 8, GROUND_Y - SS + 8, CITY_HIT_R);
+    }
 
     // Draw bases
     for (let i = 0; i < 3; i++) {
-      spr(bases[i].alive ? 3 : 4, bases[i].x, GROUND_Y - 8);
+      spr(bases[i].alive ? 3 : 4, bases[i].x, GROUND_Y - SS);
+      // Debug: base hitbox
+      if (bases[i].alive) dbgC(bases[i].x + 8, GROUND_Y - SS + 8, BASE_HIT_R);
       if (bases[i].alive) {
         const bx = bases[i].x;
-        for (let a = 0; a < bases[i].ammo; a++) {
+        // Ammo pips — cap display to prevent overflow (max 10 shown)
+        const showAmmo = min(bases[i].ammo, BASE_MAX_AMMO);
+        for (let a = 0; a < showAmmo; a++) {
           const ax = bx + (a % 5) * 2; const ay = GROUND_Y + 4 + flr(a / 5) * 2;
           pix(ax, ay, 3);
         }
       }
     }
 
-    // HUD
+    // HUD — clamp text to screen bounds
     text("SCORE:" + String(score).padStart(6, "0"), 4, HUD_Y, 3);
-    text("WAVE:" + wave, W - 50, HUD_Y, 2);
+    const waveStr = "WAVE:" + wave;
+    text(waveStr, min(W - 50, W - waveStr.length * 5), HUD_Y, 2);
   }
 
   function updatePlayLogic() {
@@ -367,21 +413,38 @@
         for (let j = 0; j < 2; j++) {
           const target = pickTarget();
           if (target) {
-            spawnEnemyMissile(m.x, m.y, target.x + 4, target.y, m.speed * 1.1, false, false, 0);
+            spawnEnemyMissile(m.x, m.y, target.x + 8, target.y, m.speed * 1.1, false, false, 0);
             enemyMissiles[enemyMissiles.length - 1].active = true;
             enemyMissiles[enemyMissiles.length - 1].delay = 0;
           }
         }
       }
+
+      // Circle collision: enemy missile vs explosions
       let destroyed = false;
       for (const e of explosions) {
-        const dx = m.x - e.x; const dy = m.y - e.y;
-        if (dx * dx + dy * dy < e.r * e.r) { destroyed = true; score += 25; addExplosion(m.x, m.y); note(0, "A4", 0.03); break; }
+        if (circCirc(m.x, m.y, ENEMY_MISSILE_R, e.x, e.y, e.r)) {
+          destroyed = true; score += 25; addExplosion(m.x, m.y); note(0, "A4", 0.03); break;
+        }
       }
       if (destroyed) { enemyMissiles.splice(i, 1); continue; }
+
+      // Ground impact — circle collision with cities and bases
       if (m.y >= GROUND_Y) {
-        for (let ci = 0; ci < 6; ci++) { if (!cities[ci].alive) continue; if (_abs(m.x - (cities[ci].x + 4)) < 10) { destroyCity(ci); break; } }
-        for (let bi = 0; bi < 3; bi++) { if (!bases[bi].alive) continue; if (_abs(m.x - (bases[bi].x + 4)) < 10) { destroyBase(bi); break; } }
+        for (let ci = 0; ci < 6; ci++) {
+          if (!cities[ci].alive) continue;
+          // Circle collision: missile warhead vs city center
+          if (circCirc(m.x, m.y, ENEMY_MISSILE_R, cities[ci].x + 8, GROUND_Y - SS + 8, CITY_HIT_R)) {
+            destroyCity(ci); break;
+          }
+        }
+        for (let bi = 0; bi < 3; bi++) {
+          if (!bases[bi].alive) continue;
+          // Circle collision: missile warhead vs base center
+          if (circCirc(m.x, m.y, ENEMY_MISSILE_R, bases[bi].x + 8, GROUND_Y - SS + 8, BASE_HIT_R)) {
+            destroyBase(bi); break;
+          }
+        }
         addExplosion(m.x, GROUND_Y - 4); explosionSound(); enemyMissiles.splice(i, 1); continue;
       }
     }
@@ -418,7 +481,7 @@
       text("MISSILE COMMAND", W / 2 - 37, 45, 3);
       text("- CITY DEFENSE -", W / 2 - 40, 59, 2);
       for (let i = 0; i < 6; i++) spr(1, 53 + i * 37, 150);
-      rectf(0, 158, W, 2, 1);
+      rectf(0, 158 + SS, W, 2, 1);
       for (let i = 0; i < 5; i++) { const mx = 40 + i * 60; const my = 75 + sin(titleFlash * 0.05 + i) * 22; line(mx, my - 15, mx + 3, my, 2); }
       if (flr(titleFlash / 20) % 2 === 0) text("PRESS START", W / 2 - 27, 109, 3);
       text("ARROWS:AIM  A:FIRE  B:FAST AIM", W / 2 - 77, 188, 1);
@@ -491,9 +554,11 @@
         rectf(W / 2 - 67, 53, 134, 105, 0); rect(W / 2 - 67, 53, 134, 105, 2);
         text("BONUS POINTS", W / 2 - 30, 62, 3);
         text("CITIES:" + bonusTally.cityCount + " X 100", W / 2 - 47, 83, 2);
-        for (let i = 0; i < bonusTally.cityCount; i++) spr(1, W / 2 - 40 + i * 12, 93);
-        text("AMMO:" + bonusTally.ammoCount + " X 5", W / 2 - 40, 109, 2);
-        text("TOTAL:" + bonusTally.bonusTotal, W / 2 - 37, 131, 3);
+        // Cap city icons to prevent overflow (max 6 fit in the panel)
+        const maxCityIcons = min(bonusTally.cityCount, 6);
+        for (let i = 0; i < maxCityIcons; i++) spr(1, W / 2 - 50 + i * 18, 93);
+        text("AMMO:" + bonusTally.ammoCount + " X 5", W / 2 - 40, 115, 2);
+        text("TOTAL:" + bonusTally.bonusTotal, W / 2 - 37, 137, 3);
       }
     }
   });
@@ -503,7 +568,7 @@
     init() {},
     update() {
       titleFlash++;
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
