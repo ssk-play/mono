@@ -359,7 +359,7 @@ const GrayBox = (() => {
   let demoPlayBits = 0;         // current key state during playback
   let demoIdleFrames = 0;       // frames since last real input
   const DEMO_IDLE_THRESHOLD = 150; // 5 seconds at 30fps
-  const DEMO_MAX_SECONDS = 60;
+  // No time limit — recording runs until go("gameover") or go("win")
   let gameId = "";              // derived from URL path
 
   function getDemoKey() { return "graybox_demo_" + gameId; }
@@ -463,7 +463,7 @@ const GrayBox = (() => {
       for (const k of KEY_BITS) if (keys[k]) { realKeyActive = true; break; }
       if (realKeyActive) demoIdleFrames = 0; else demoIdleFrames++;
 
-      // Record key changes during play scene
+      // Record key changes until go("gameover") or go("win") saves it
       if (demoState === "recording") {
         const bits = packKeys();
         if (bits !== demoLastBits) {
@@ -471,11 +471,6 @@ const GrayBox = (() => {
           demoLastBits = bits;
         }
         demoRecFrame++;
-        if (demoRecFrame >= DEMO_MAX_SECONDS * FPS) {
-          demoRecording.push([demoRecFrame, 0]);
-          saveDemoToStorage();
-          demoState = "idle";
-        }
       }
 
       // Start playback on title scene after idle threshold
