@@ -82,7 +82,7 @@
     "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
     "w": "up", "s": "down", "a": "left", "d": "right", "ㅈ": "up", "ㄴ": "down", "ㅁ": "left", "ㅇ": "right",
     "z": "a", "Z": "a", "x": "b", "X": "b", "ㅋ": "a", "ㅌ": "b",
-    "Enter": "start", " ": "a"
+    "Enter": "a", " ": "a"
   };
   const keys = {};
   const keysPressed = {};
@@ -285,8 +285,9 @@
         if (id > 0) API.spr(id, sx + tx * 8, sy + ty * 8);
       }
   };
-  API.btn = function(k) { return !!keys[k]; };
-  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  const VALID_KEYS = {up:1,down:1,left:1,right:1,a:1,b:1};
+  API.btn = function(k) { if(!VALID_KEYS[k]) console.warn("GrayBox: invalid key \""+k+"\". Use: up/down/left/right/a/b"); return !!keys[k]; };
+  API.btnp = function(k) { if(!VALID_KEYS[k]) console.warn("GrayBox: invalid key \""+k+"\". Use: up/down/left/right/a/b"); return !!keys[k] && !keysPrev[k]; };
   API.note = function(ch, noteStr, dur) {
     ensureAudio();
     if (ch < 0 || ch > 1) return;
@@ -364,13 +365,13 @@
   API._update = function() {
     if (state === "title") {
       for (const s of stars) { s.y += s.speed; if (s.y > H) { s.y = 0; s.x = flr(rnd(W)); } }
-      if (btnp("a") || btnp("start")) { state = "play"; resetGame(); note(0, "C5", 0.1); setTimeout(() => note(0, "E5", 0.1), 100); setTimeout(() => note(0, "G5", 0.15), 200); }
+      if (btnp("a") || btnp("a")) { state = "play"; resetGame(); note(0, "C5", 0.1); setTimeout(() => note(0, "E5", 0.1), 100); setTimeout(() => note(0, "G5", 0.15), 200); }
       return;
     }
     if (state === "gameover") {
       for (const s of stars) { s.y += s.speed * 0.3; if (s.y > H) { s.y = 0; s.x = flr(rnd(W)); } }
       for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; if (p.life <= 0) particles.splice(i, 1); }
-      if (btnp("a") || btnp("start")) state = "title";
+      if (btnp("a") || btnp("a")) state = "title";
       return;
     }
     diffLevel = 1 + flr(score / 200) * 0.3;

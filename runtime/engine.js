@@ -40,7 +40,7 @@ const GrayBox = (() => {
     "ArrowUp": "up", "ArrowDown": "down", "ArrowLeft": "left", "ArrowRight": "right",
     "w": "up", "s": "down", "a": "left", "d": "right", "ㅈ": "up", "ㄴ": "down", "ㅁ": "left", "ㅇ": "right",
     "z": "a", "Z": "a", "x": "b", "X": "b", "ㅋ": "a", "ㅌ": "b",
-    "Enter": "start", " ": "a"
+    "Enter": "a", " ": "a"
   };
   const keys = {};
   const keysPressed = {};
@@ -265,8 +265,9 @@ const GrayBox = (() => {
   };
 
   // --- Input ---
-  API.btn = function(k) { return !!keys[k]; };
-  API.btnp = function(k) { return !!keys[k] && !keysPrev[k]; };
+  const VALID_KEYS = {up:1,down:1,left:1,right:1,a:1,b:1};
+  API.btn = function(k) { if(!VALID_KEYS[k]) console.warn("GrayBox: invalid key \""+k+"\". Use: up/down/left/right/a/b"); return !!keys[k]; };
+  API.btnp = function(k) { if(!VALID_KEYS[k]) console.warn("GrayBox: invalid key \""+k+"\". Use: up/down/left/right/a/b"); return !!keys[k] && !keysPrev[k]; };
 
   // --- Sound ---
   API.note = function(ch, noteStr, dur) {
