@@ -43,7 +43,7 @@
   <canvas id="screen"></canvas>
 </div>
 <div id="controls">
-  <span>Z</span> FLAP &nbsp;&nbsp; <span>ENTER</span> START
+  <span>A</span> FLAP
 </div>
 <script src="../../runtime/engine.js"></script>
 <script>
@@ -533,7 +533,7 @@
       textHugeCenter("FLAPPY", 42 + bobY, 3);
       textBigCenter("BIRD", 59 + bobY, 2);
       drawBird();
-      textCenter("PRESS Z OR ENTER TO START", 150, 2);
+      textCenter("PRESS Z OR A TO START", 150, 2);
       if (bestScore > 0) { textCenter("BEST: " + bestScore, 169, 1); }
       textCenter("GRAYBOX DEMO", H - 15, 1);
     }
