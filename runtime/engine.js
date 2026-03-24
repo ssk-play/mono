@@ -19,6 +19,7 @@ const Mono = (() => {
   const W = 320;
   const H = 240;
   const FPS = 30;
+  let SPR_SIZE = 16; // configurable via boot({ spriteSize: N })
   const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
 
   let canvas, ctx, buf, buf32;
@@ -244,10 +245,11 @@ const Mono = (() => {
   };
   API.spr = function(id, x, y, flipX, flipY) {
     const s=sprites[id]; if(!s) return;
+    const SS=SPR_SIZE, SM=SS-1;
     x=Math.floor(x); y=Math.floor(y);
-    for(let py=0;py<16;py++) for(let px=0;px<16;px++){
-      const sx=flipX?15-px:px, sy=flipY?15-py:py;
-      const c=s[sy*16+sx], dx=x+px, dy=y+py;
+    for(let py=0;py<SS;py++) for(let px=0;px<SS;px++){
+      const sx=flipX?SM-px:px, sy=flipY?SM-py:py;
+      const c=s[sy*SS+sx], dx=x+px, dy=y+py;
       if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
     }
     if(debugSprite) debugSprBoxes.push({x:x,y:y});
@@ -255,30 +257,32 @@ const Mono = (() => {
   // Transparent sprite (color 0 = skip)
   API.sprT = function(id, x, y, flipX, flipY) {
     const s=sprites[id]; if(!s) return;
+    const SS=SPR_SIZE, SM=SS-1;
     x=Math.floor(x); y=Math.floor(y);
-    for(let py=0;py<16;py++) for(let px=0;px<16;px++){
-      const sx=flipX?15-px:px, sy=flipY?15-py:py;
-      const c=s[sy*16+sx]; if(c===0) continue;
+    for(let py=0;py<SS;py++) for(let px=0;px<SS;px++){
+      const sx=flipX?SM-px:px, sy=flipY?SM-py:py;
+      const c=s[sy*SS+sx]; if(c===0) continue;
       const dx=x+px, dy=y+py;
       if(dx>=0&&dx<W&&dy>=0&&dy<H) buf32[dy*W+dx]=COLOR_U32[c];
     }
     if(debugSprite) debugSprBoxes.push({x:x,y:y});
   };
-  // Rotated sprite (draws 16x16 sprite rotated by angle in radians)
+  // Rotated sprite (draws sprite rotated by angle in radians)
   API.sprRot = function(id, cx, cy, angle) {
     const s = sprites[id]; if (!s) return;
+    const SS=SPR_SIZE, half=SS/2, range=Math.ceil(half*1.42);
     const cosA = Math.cos(angle), sinA = Math.sin(angle);
-    for (let py = -10; py <= 10; py++) {
-      for (let px = -10; px <= 10; px++) {
-        const srcX = Math.floor(cosA * px + sinA * py + 7.5);
-        const srcY = Math.floor(-sinA * px + cosA * py + 7.5);
-        if (srcX < 0 || srcX >= 16 || srcY < 0 || srcY >= 16) continue;
-        const c = s[srcY * 16 + srcX];
+    for (let py = -range; py <= range; py++) {
+      for (let px = -range; px <= range; px++) {
+        const srcX = Math.floor(cosA * px + sinA * py + half - 0.5);
+        const srcY = Math.floor(-sinA * px + cosA * py + half - 0.5);
+        if (srcX < 0 || srcX >= SS || srcY < 0 || srcY >= SS) continue;
+        const c = s[srcY * SS + srcX];
         const dx = Math.floor(cx + px), dy = Math.floor(cy + py);
         if (dx >= 0 && dx < W && dy >= 0 && dy < H) buf32[dy * W + dx] = COLOR_U32[c];
       }
     }
-    if(debugSprite) debugSprBoxes.push({x:Math.floor(cx)-8,y:Math.floor(cy)-8});
+    if(debugSprite) debugSprBoxes.push({x:Math.floor(cx)-Math.floor(SS/2),y:Math.floor(cy)-Math.floor(SS/2)});
   };
   // Read pixel color index from buffer
   API.gpix = function(x, y) {
@@ -307,7 +311,7 @@ const Mono = (() => {
   API.mset = function(cx,cy,id) { tilemap[cx+","+cy]=id; };
   API.map = function(mx,my,mw,mh,sx,sy) {
     for(let ty=0;ty<mh;ty++) for(let tx=0;tx<mw;tx++){
-      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*16,sy+ty*16); }
+      const id=API.mget(mx+tx,my+ty); if(id>0) API.spr(id,sx+tx*SPR_SIZE,sy+ty*SPR_SIZE); }
   };
 
   // Input
@@ -643,17 +647,18 @@ const Mono = (() => {
     if (debugSprite && debugSprBoxes.length > 0) {
       const scol = 0xFFFF00FF; // magenta (ABGR)
       for (const s of debugSprBoxes) {
-        for (let px = s.x; px < s.x + 16; px++) {
+        const ss = SPR_SIZE;
+        for (let px = s.x; px < s.x + ss; px++) {
           if (px >= 0 && px < W) {
             if (s.y >= 0 && s.y < H) buf32[s.y * W + px] = scol;
-            const by = s.y + 15;
+            const by = s.y + ss - 1;
             if (by >= 0 && by < H) buf32[by * W + px] = scol;
           }
         }
-        for (let py = s.y; py < s.y + 16; py++) {
+        for (let py = s.y; py < s.y + ss; py++) {
           if (py >= 0 && py < H) {
             if (s.x >= 0 && s.x < W) buf32[py * W + s.x] = scol;
-            const bx = s.x + 15;
+            const bx = s.x + ss - 1;
             if (bx >= 0 && bx < W) buf32[py * W + bx] = scol;
           }
         }
@@ -830,7 +835,8 @@ const Mono = (() => {
   }
 
   // --- Boot ---
-  API.boot = function(canvasId) {
+  API.boot = function(canvasId, opts) {
+    if (opts && opts.spriteSize) SPR_SIZE = opts.spriteSize;
     canvas = document.getElementById(canvasId || "screen");
     canvas.width = W;
     canvas.height = H;
@@ -890,6 +896,7 @@ const Mono = (() => {
   API._sprites = sprites;
   API._COLOR_U32 = COLOR_U32;
   Object.defineProperty(API, '_buf32', { get() { return buf32; } });
+  Object.defineProperty(API, 'spriteSize', { get() { return SPR_SIZE; } });
 
   return API;
 })();

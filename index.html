@@ -441,13 +441,15 @@
   <input type="text" class="search-box" id="search" placeholder="Search games..." autocomplete="off">
   <button class="filter-btn active" data-genre="all">ALL</button>
   <button class="filter-btn" data-genre="shooter">SHOOTER</button>
-  <button class="filter-btn" data-genre="action">ACTION</button>
-  <button class="filter-btn" data-genre="platformer">PLATFORMER</button>
-  <button class="filter-btn" data-genre="puzzle">PUZZLE</button>
   <button class="filter-btn" data-genre="classic">CLASSIC</button>
+  <button class="filter-btn" data-genre="puzzle">PUZZLE</button>
+  <button class="filter-btn" data-genre="platformer">PLATFORMER</button>
   <button class="filter-btn" data-genre="fighting">FIGHTING</button>
-  <button class="filter-btn" data-genre="other">OTHER</button>
-  <span class="game-count" id="count">60 games</span>
+  <button class="filter-btn" data-genre="racing">RACING</button>
+  <button class="filter-btn" data-genre="strategy">STRATEGY</button>
+  <button class="filter-btn" data-genre="action">ACTION</button>
+  <button class="filter-btn" data-genre="tool">TOOL</button>
+  <span class="game-count" id="count">13 games</span>
 </div>
 
 <div class="grid" id="grid"></div>
@@ -500,67 +502,19 @@
 
 <script>
 const GAMES = [
-  { id: "1942",              name: "1942",              genre: "shooter" },
-  { id: "bgm-audition",      name: "BGM Audition",      genre: "tool" },
   { id: "arkanoid",          name: "Arkanoid",          genre: "classic" },
-  { id: "asteroids",         name: "Asteroids",         genre: "classic" },
-  { id: "balloon-fight",     name: "Balloon Fight",     genre: "platformer" },
-  { id: "battle-city",       name: "Battle City",       genre: "action" },
-  { id: "bomberman",         name: "Bomberman",         genre: "action" },
-  { id: "bosconian",         name: "Bosconian",         genre: "shooter" },
-  { id: "breakout",          name: "Breakout",          genre: "classic" },
-  { id: "bubble-bobble",     name: "Bubble Bobble",     genre: "platformer" },
-  { id: "burger-time",       name: "Burger Time",       genre: "action" },
-  { id: "centipede",         name: "Centipede",         genre: "shooter" },
-  { id: "circus-charlie",    name: "Circus Charlie",    genre: "platformer" },
-  { id: "columns",           name: "Columns",           genre: "puzzle" },
-  { id: "commando",          name: "Commando",          genre: "shooter" },
-  { id: "contra",            name: "Contra",            genre: "shooter" },
-  { id: "defender",          name: "Defender",           genre: "shooter" },
-  { id: "dig-dug",           name: "Dig Dug",           genre: "action" },
   { id: "donkey-kong",       name: "Donkey Kong",       genre: "platformer" },
-  { id: "doodle-jump",       name: "Doodle Jump",       genre: "platformer" },
-  { id: "double-dragon",     name: "Double Dragon",     genre: "fighting" },
-  { id: "elevator-action",   name: "Elevator Action",   genre: "action" },
-  { id: "exerion",           name: "Exerion",           genre: "shooter" },
-  { id: "flappy-bird",       name: "Flappy Bird",       genre: "classic" },
-  { id: "frogger",           name: "Frogger",           genre: "classic" },
   { id: "galaga",            name: "Galaga",            genre: "shooter" },
-  { id: "galaxian",          name: "Galaxian",          genre: "shooter" },
-  { id: "ghosts-n-goblins",  name: "Ghosts 'n Goblins", genre: "platformer" },
-  { id: "ice-climber",       name: "Ice Climber",       genre: "platformer" },
-  { id: "joust",             name: "Joust",             genre: "fighting" },
   { id: "kungfu-master",     name: "Kung-Fu Master",    genre: "fighting" },
-  { id: "lode-runner",       name: "Lode Runner",       genre: "platformer" },
-  { id: "mappy",             name: "Mappy",             genre: "platformer" },
-  { id: "missile-command",   name: "Missile Command",   genre: "other" },
-  { id: "moon-patrol",       name: "Moon Patrol",       genre: "shooter" },
-  { id: "mr-do",             name: "Mr. Do!",           genre: "action" },
-  { id: "nibbler",           name: "Nibbler",           genre: "classic" },
   { id: "pacman",            name: "Pac-Man",           genre: "action" },
-  { id: "paperboy",          name: "Paperboy",          genre: "other" },
-  { id: "pengo",             name: "Pengo",             genre: "action" },
-  { id: "phoenix",           name: "Phoenix",           genre: "shooter" },
-  { id: "pinball",           name: "Pinball",           genre: "other" },
   { id: "pong",              name: "Pong",              genre: "classic" },
-  { id: "ponpoko",           name: "Ponpoko",           genre: "platformer" },
-  { id: "qbert",             name: "Q*bert",            genre: "puzzle" },
-  { id: "rally-x",           name: "Rally-X",           genre: "action" },
-  { id: "road-fighter",      name: "Road Fighter",      genre: "other" },
-  { id: "robotron",          name: "Robotron 2084",     genre: "shooter" },
+  { id: "road-fighter",      name: "Road Fighter",      genre: "racing" },
   { id: "scramble",          name: "Scramble",          genre: "shooter" },
   { id: "simon",             name: "Simon",             genre: "puzzle" },
   { id: "snake",             name: "Snake",             genre: "classic" },
-  { id: "sokoban",           name: "Sokoban",           genre: "puzzle" },
-  { id: "space-invaders",    name: "Space Invaders",    genre: "shooter" },
-  { id: "spy-hunter",        name: "Spy Hunter",        genre: "other" },
-  { id: "star-patrol",       name: "Star Patrol",       genre: "shooter" },
-  { id: "tempest",           name: "Tempest",           genre: "shooter" },
   { id: "tetris",            name: "Tetris",            genre: "puzzle" },
-  { id: "time-pilot",        name: "Time Pilot",        genre: "shooter" },
-  { id: "tower-defense",     name: "Tower Defense",     genre: "other" },
-  { id: "tron",              name: "Tron",              genre: "classic" },
-  { id: "xevious",           name: "Xevious",           genre: "shooter" },
+  { id: "tower-defense",     name: "Tower Defense",     genre: "strategy" },
+  { id: "bgm-audition",      name: "BGM Audition",      genre: "tool" },
 ];
 
 const grid = document.getElementById("grid");
