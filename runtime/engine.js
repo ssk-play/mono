@@ -120,13 +120,57 @@ const GrayBox = (() => {
 
   // --- API ---
   const API = {};
-  API._init = null;
-  API._update = null;
-  API._draw = null;
   API.frame = 0;
   API.WIDTH = W;
   API.HEIGHT = H;
   API.COLORS = COLORS;
+
+  // --- Scene system ---
+  const VALID_SCENES = ["title","play","clear","gameover","win"];
+  const scenes = {};
+  let currentScene = null;
+  let currentSceneName = "";
+
+  API.SCENE = { TITLE:"title", PLAY:"play", CLEAR:"clear", GAMEOVER:"gameover", WIN:"win" };
+
+  API.scene = function(name, handlers) {
+    if (VALID_SCENES.indexOf(name) === -1) {
+      throw new Error('GrayBox: "' + name + '" is not a valid scene. Use: ' + VALID_SCENES.join("/"));
+    }
+    scenes[name] = handlers;
+  };
+
+  API.go = function(name) {
+    if (VALID_SCENES.indexOf(name) === -1) {
+      throw new Error('GrayBox: "' + name + '" is not a valid scene. Use: ' + VALID_SCENES.join("/"));
+    }
+    // Attract mode hooks
+    if (name === "play" && demoState !== "playback") {
+      // Start recording when entering play
+      demoState = "recording";
+      demoRecording = [];
+      demoRecFrame = 0;
+      demoLastBits = 0;
+      demoRecSeed = _seed;
+    }
+    if ((name === "gameover" || name === "win") && demoState === "recording") {
+      // Stop recording & save when leaving play
+      demoRecording.push([demoRecFrame, 0]);
+      saveDemoToStorage();
+      demoState = "idle";
+      demoIdleFrames = 0;
+    }
+    currentSceneName = name;
+    currentScene = scenes[name] || null;
+    if (currentScene && currentScene.init) currentScene.init();
+  };
+
+  API.currentScene = function() { return currentSceneName; };
+
+  // Legacy support: _update/_draw still work for simple games
+  API._init = null;
+  API._update = null;
+  API._draw = null;
 
   // Graphics
   API.cls = function(c) { buf32.fill(COLOR_U32[c || 0]); };
@@ -387,8 +431,8 @@ const GrayBox = (() => {
 
   // --- Game loop ---
   function tick() {
+    // --- Attract mode: playback ---
     if (demoState === "playback") {
-      // Advance to current frame's key state
       while (demoPlayIdx < demoPlaybackData.length &&
              demoPlaybackData[demoPlayIdx][0] <= demoPlayFrame) {
         demoPlayBits = demoPlaybackData[demoPlayIdx][1];
@@ -404,28 +448,22 @@ const GrayBox = (() => {
         demoPlayFrame = 0;
         demoPlayBits = 0;
         API.frame = 0;
-        _seed = (loaded && loaded.seed) || 1; // restore seed for identical loop
+        _seed = (loaded && loaded.seed) || 1;
         unpackKeys(0);
+        // Re-enter title scene for clean loop
+        if (scenes["title"]) {
+          currentSceneName = "title";
+          currentScene = scenes["title"];
+          if (currentScene.init) currentScene.init();
+        }
       }
     } else {
-      // Check real input
+      // --- Attract mode: idle detection & recording ---
       let realKeyActive = false;
       for (const k of KEY_BITS) if (keys[k]) { realKeyActive = true; break; }
+      if (realKeyActive) demoIdleFrames = 0; else demoIdleFrames++;
 
-      if (realKeyActive) {
-        demoIdleFrames = 0;
-        if (demoState === "idle") {
-          demoState = "recording";
-          demoRecording = [];
-          demoRecFrame = 0;
-          demoLastBits = 0;
-          demoRecSeed = _seed; // capture seed at recording start
-        }
-      } else {
-        demoIdleFrames++;
-      }
-
-      // Action-based recording: only store when key state changes
+      // Record key changes during play scene
       if (demoState === "recording") {
         const bits = packKeys();
         if (bits !== demoLastBits) {
@@ -433,12 +471,6 @@ const GrayBox = (() => {
           demoLastBits = bits;
         }
         demoRecFrame++;
-        if (!realKeyActive && demoIdleFrames > 90) {
-          demoRecording.push([demoRecFrame, 0]); // final release
-          saveDemoToStorage();
-          demoState = "idle";
-          demoIdleFrames = 0;
-        }
         if (demoRecFrame >= DEMO_MAX_SECONDS * FPS) {
           demoRecording.push([demoRecFrame, 0]);
           saveDemoToStorage();
@@ -446,25 +478,32 @@ const GrayBox = (() => {
         }
       }
 
-      // Start playback after idle threshold
-      if (demoState === "idle" && demoIdleFrames >= DEMO_IDLE_THRESHOLD) {
+      // Start playback on title scene after idle threshold
+      if (demoState === "idle" && currentSceneName === "title" &&
+          demoIdleFrames >= DEMO_IDLE_THRESHOLD) {
         startDemoPlayback();
       }
     }
 
-    if (API._update) API._update();
-    if (API._draw) API._draw();
+    // --- Update & Draw (scene-based or legacy) ---
+    if (currentScene) {
+      if (currentScene.update) currentScene.update();
+      if (currentScene.draw) currentScene.draw();
+    } else {
+      // Legacy: _update/_draw for non-scene games
+      if (API._update) API._update();
+      if (API._draw) API._draw();
+    }
 
-    // Draw "DEMO" indicator during playback
+    // --- DEMO indicator overlay ---
     if (demoState === "playback") {
       const col = COLOR_U32[API.frame % 40 < 20 ? 3 : 2];
-      const dx = W - 26, dy = 2;
-      let cx = dx;
+      let cx = W - 26;
       for (const ch of "DEMO") {
         const glyph = FONT[ch];
         if (glyph) for (let py = 0; py < FONT_H; py++) for (let px = 0; px < FONT_W; px++)
           if (glyph[py * FONT_W + px]) {
-            const sx = cx + px, sy = dy + py;
+            const sx = cx + px, sy = 2 + py;
             if (sx >= 0 && sx < W && sy >= 0 && sy < H) buf32[sy * W + sx] = col;
           }
         cx += FONT_W + 1;

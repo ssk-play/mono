@@ -66,140 +66,149 @@
   defSprite(10,"3333333331333133333333333311133333333333313331333333333330300303");
   defSprite(11,"0000000001001000122122001222220001222100001210000001000000000000");
 
-  let state = "title";
   let player, bullets, enemies, eBullets, particles, stars, score, lives;
-  let spawnTimer, diffLevel, screenShake, shakeTimer;
-  let dashCooldown, dashTimer;
+  let spawnTimer, diffLevel, shakeTimer, dashCooldown, dashTimer;
+  const { TITLE, PLAY, GAMEOVER } = GrayBox.SCENE;
 
-  function resetGame() {
-    player = { x: 156, y: 200, speed: 3, dashSpeed: 8 };
-    bullets = []; enemies = []; eBullets = []; particles = [];
-    score = 0; lives = 3; spawnTimer = 0; diffLevel = 1;
-    screenShake = 0; shakeTimer = 0; dashCooldown = 0; dashTimer = 0;
+  function initStars() {
     stars = [];
     for (let i = 0; i < 40; i++)
       stars.push({ x: flr(rnd(W)), y: flr(rnd(H)), speed: 0.3 + rnd(1.2), bright: flr(rnd(2)) + 1 });
   }
-
+  function updateStars(spd) { for (const s of stars) { s.y += s.speed * (spd||1); if (s.y > H) { s.y = 0; s.x = flr(rnd(W)); } } }
+  function drawStars(ox, oy) { for (const s of stars) pix(s.x + (ox||0), s.y + (oy||0), s.bright); }
   function shootNote() { note(0, "C6", 0.05); setTimeout(() => note(0, "E6", 0.04), 30); }
   function hitNote() { note(1, "C3", 0.08); setTimeout(() => note(1, "E3", 0.06), 50); }
   function deathNote() { note(0, "C3", 0.15); note(1, "G2", 0.15); setTimeout(() => { note(0, "A2", 0.2); note(1, "E2", 0.2); }, 150); }
-
   function spawnEnemy() {
     const type = rnd(1) < 0.3 ? 3 : 2;
     enemies.push({ x: 8 + flr(rnd(W - 24)), y: -10, type, speed: 0.8 + rnd(0.5) * diffLevel, hp: type === 3 ? 2 : 1, shootTimer: flr(rnd(60)) + 30, wobble: rnd(6.28), wobbleAmp: type === 3 ? 10 : 0 });
   }
-
   function addParticle(x, y, c) {
     for (let i = 0; i < 6; i++)
       particles.push({ x, y, vx: rnd(4) - 2, vy: rnd(4) - 2, life: 8 + flr(rnd(8)), color: c || (flr(rnd(3)) + 1) });
   }
-
-  resetGame();
-
-  GrayBox._update = function() {
-    if (state === "title") {
-      for (const s of stars) { s.y += s.speed; if (s.y > H) { s.y = 0; s.x = flr(rnd(W)); } }
-      if (btnp("a")) { state = "play"; resetGame(); note(0, "C5", 0.1); setTimeout(() => note(0, "E5", 0.1), 100); setTimeout(() => note(0, "G5", 0.15), 200); }
-      return;
-    }
-    if (state === "gameover") {
-      for (const s of stars) { s.y += s.speed * 0.3; if (s.y > H) { s.y = 0; s.x = flr(rnd(W)); } }
-      for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; if (p.life <= 0) particles.splice(i, 1); }
-      if (btnp("a")) state = "title";
-      return;
-    }
-    diffLevel = 1 + flr(score / 200) * 0.3;
-    if (shakeTimer > 0) shakeTimer--;
-    if (dashCooldown > 0) dashCooldown--;
-    let speed = player.speed;
-    if (dashTimer > 0) { speed = player.dashSpeed; dashTimer--; }
-    if (btn("left")) player.x -= speed;
-    if (btn("right")) player.x += speed;
-    if (btn("up")) player.y -= speed;
-    if (btn("down")) player.y += speed;
-    player.x = _max(0, min(W - 8, player.x));
-    player.y = _max(75, min(H - 12, player.y));
-    if (btnp("b") && dashCooldown <= 0) { dashTimer = 6; dashCooldown = 30; note(1, "G5", 0.05); addParticle(player.x + 4, player.y + 8, 1); }
-    if (btnp("a")) { bullets.push({ x: player.x, y: player.y - 2, speed: -6 }); shootNote(); }
-    for (let i = bullets.length - 1; i >= 0; i--) { bullets[i].y += bullets[i].speed; if (bullets[i].y < -8) bullets.splice(i, 1); }
-    spawnTimer--;
-    if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = _max(10, 40 - flr(diffLevel * 5)); }
-    for (let i = enemies.length - 1; i >= 0; i--) {
-      const e = enemies[i]; e.y += e.speed; e.wobble += 0.05;
-      const wx = e.wobbleAmp * Math.sin(e.wobble);
-      e.shootTimer--;
-      if (e.shootTimer <= 0 && e.y > 0 && e.y < H * 0.6) { eBullets.push({ x: e.x + wx, y: e.y + 8, speed: 2 + rnd(1) }); e.shootTimer = 50 + flr(rnd(40)); }
-      if (e.y > H + 10) { enemies.splice(i, 1); continue; }
-      for (let j = bullets.length - 1; j >= 0; j--) {
-        const b = bullets[j];
-        if (b.x + 8 > e.x + wx && b.x < e.x + wx + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
-          bullets.splice(j, 1); e.hp--;
-          if (e.hp <= 0) { addParticle(e.x + wx + 4, e.y + 4); score += e.type === 3 ? 30 : 10; hitNote(); enemies.splice(i, 1); shakeTimer = 4; }
-          else note(1, "A4", 0.03);
-          break;
-        }
-      }
-    }
-    for (let i = eBullets.length - 1; i >= 0; i--) {
-      eBullets[i].y += eBullets[i].speed;
-      if (eBullets[i].y > H + 8) { eBullets.splice(i, 1); continue; }
-      if (dashTimer <= 0) {
-        const b = eBullets[i];
-        if (b && b.x + 8 > player.x && b.x < player.x + 8 && b.y + 8 > player.y && b.y < player.y + 8) {
-          eBullets.splice(i, 1); lives--; shakeTimer = 8; addParticle(player.x + 4, player.y + 4, 2); deathNote();
-          if (lives <= 0) { state = "gameover"; addParticle(player.x + 4, player.y + 4); addParticle(player.x + 4, player.y + 4); }
-        }
-      }
-    }
-    for (let i = enemies.length - 1; i >= 0; i--) {
-      const e = enemies[i]; const wx = e.wobbleAmp * Math.sin(e.wobble);
-      if (dashTimer <= 0 && player.x + 7 > e.x + wx && player.x < e.x + wx + 8 && player.y + 7 > e.y && player.y < e.y + 8) {
-        addParticle(player.x + 4, player.y + 4, 3); enemies.splice(i, 1); lives--; shakeTimer = 10; deathNote();
-        if (lives <= 0) state = "gameover";
-      }
-    }
-    for (const s of stars) { s.y += s.speed; if (s.y > H) { s.y = 0; s.x = flr(rnd(W)); } }
+  function updateParticles() {
     for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--; if (p.life <= 0) particles.splice(i, 1); }
-  };
+  }
 
-  GrayBox._draw = function() {
-    const sx = shakeTimer > 0 ? flr(rnd(5)) - 2 : 0;
-    const sy = shakeTimer > 0 ? flr(rnd(5)) - 2 : 0;
-    cls(0);
-    for (const s of stars) pix(s.x + sx, s.y + sy, s.bright);
-    if (state === "title") {
+  // --- Title Scene ---
+  GrayBox.scene(TITLE, {
+    init() { initStars(); particles = []; },
+    update() {
+      updateStars();
+      if (btnp("a")) { GrayBox.go(PLAY); note(0, "C5", 0.1); setTimeout(() => note(0, "E5", 0.1), 100); setTimeout(() => note(0, "G5", 0.15), 200); }
+    },
+    draw() {
+      cls(0); drawStars();
       const ty = 50 + Math.sin(GrayBox.frame * 0.05) * 5;
-      text("STAR PATROL", 132 + sx, flr(ty) + sy, 3);
-      text("STAR PATROL", 133 + sx, flr(ty) + 1 + sy, 1);
+      text("STAR PATROL", 132, flr(ty), 3);
+      text("STAR PATROL", 133, flr(ty) + 1, 1);
       rectf(90, flr(ty) + 14, 140, 1, 2);
-      spr(1, 156 + sx, flr(ty) + 30 + sy);
+      spr(1, 156, flr(ty) + 30);
       if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A TO START", 120, 150, 3);
       text("ARROWS: MOVE", 130, 172, 2);
       text("Z: SHOOT  X: DASH", 115, 184, 2);
-      text("GRAYBOX DEMO V0.2", 117, 222, 1);
-      return;
+      text("GRAYBOX V0.3", 127, 222, 1);
     }
-    if (state === "gameover") {
-      for (const s of stars) pix(s.x, s.y, s.bright);
+  });
+
+  // --- Play Scene ---
+  GrayBox.scene(PLAY, {
+    init() {
+      player = { x: 156, y: 200, speed: 3, dashSpeed: 8 };
+      bullets = []; enemies = []; eBullets = []; particles = [];
+      score = 0; lives = 3; spawnTimer = 0; diffLevel = 1;
+      shakeTimer = 0; dashCooldown = 0; dashTimer = 0;
+      initStars();
+    },
+    update() {
+      diffLevel = 1 + flr(score / 200) * 0.3;
+      if (shakeTimer > 0) shakeTimer--;
+      if (dashCooldown > 0) dashCooldown--;
+      let speed = player.speed;
+      if (dashTimer > 0) { speed = player.dashSpeed; dashTimer--; }
+      if (btn("left")) player.x -= speed;
+      if (btn("right")) player.x += speed;
+      if (btn("up")) player.y -= speed;
+      if (btn("down")) player.y += speed;
+      player.x = _max(0, min(W - 8, player.x));
+      player.y = _max(75, min(H - 12, player.y));
+      if (btnp("b") && dashCooldown <= 0) { dashTimer = 6; dashCooldown = 30; note(1, "G5", 0.05); addParticle(player.x + 4, player.y + 8, 1); }
+      if (btnp("a")) { bullets.push({ x: player.x, y: player.y - 2, speed: -6 }); shootNote(); }
+      for (let i = bullets.length - 1; i >= 0; i--) { bullets[i].y += bullets[i].speed; if (bullets[i].y < -8) bullets.splice(i, 1); }
+      spawnTimer--;
+      if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = _max(10, 40 - flr(diffLevel * 5)); }
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i]; e.y += e.speed; e.wobble += 0.05;
+        const wx = e.wobbleAmp * Math.sin(e.wobble);
+        e.shootTimer--;
+        if (e.shootTimer <= 0 && e.y > 0 && e.y < H * 0.6) { eBullets.push({ x: e.x + wx, y: e.y + 8, speed: 2 + rnd(1) }); e.shootTimer = 50 + flr(rnd(40)); }
+        if (e.y > H + 10) { enemies.splice(i, 1); continue; }
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if (b.x + 8 > e.x + wx && b.x < e.x + wx + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
+            bullets.splice(j, 1); e.hp--;
+            if (e.hp <= 0) { addParticle(e.x + wx + 4, e.y + 4); score += e.type === 3 ? 30 : 10; hitNote(); enemies.splice(i, 1); shakeTimer = 4; }
+            else note(1, "A4", 0.03);
+            break;
+          }
+        }
+      }
+      for (let i = eBullets.length - 1; i >= 0; i--) {
+        eBullets[i].y += eBullets[i].speed;
+        if (eBullets[i].y > H + 8) { eBullets.splice(i, 1); continue; }
+        if (dashTimer <= 0) {
+          const b = eBullets[i];
+          if (b && b.x + 8 > player.x && b.x < player.x + 8 && b.y + 8 > player.y && b.y < player.y + 8) {
+            eBullets.splice(i, 1); lives--; shakeTimer = 8; addParticle(player.x + 4, player.y + 4, 2); deathNote();
+            if (lives <= 0) { GrayBox.go(GAMEOVER); addParticle(player.x + 4, player.y + 4); addParticle(player.x + 4, player.y + 4); return; }
+          }
+        }
+      }
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i]; const wx = e.wobbleAmp * Math.sin(e.wobble);
+        if (dashTimer <= 0 && player.x + 7 > e.x + wx && player.x < e.x + wx + 8 && player.y + 7 > e.y && player.y < e.y + 8) {
+          addParticle(player.x + 4, player.y + 4, 3); enemies.splice(i, 1); lives--; shakeTimer = 10; deathNote();
+          if (lives <= 0) { GrayBox.go(GAMEOVER); return; }
+        }
+      }
+      updateStars(); updateParticles();
+    },
+    draw() {
+      const sx = shakeTimer > 0 ? flr(rnd(5)) - 2 : 0;
+      const sy = shakeTimer > 0 ? flr(rnd(5)) - 2 : 0;
+      cls(0); drawStars(sx, sy);
+      for (const b of eBullets) spr(9, flr(b.x) + sx, flr(b.y) + sy);
+      for (const e of enemies) { const wx = e.wobbleAmp * Math.sin(e.wobble); spr(e.type, flr(e.x + wx) + sx, flr(e.y) + sy); }
+      for (const b of bullets) spr(4, flr(b.x) + sx, flr(b.y) + sy);
+      if (dashTimer > 0 && flr(GrayBox.frame / 2) % 2 === 0) {} else spr(1, flr(player.x) + sx, flr(player.y) + sy);
+      for (const p of particles) pix(flr(p.x) + sx, flr(p.y) + sy, p.color);
+      rectf(0, 0, W, 12, 0);
+      text("SCORE:" + score, 4, 3, 3);
+      for (let i = 0; i < lives; i++) spr(11, W - 30 + i * 10, 2);
+      if (dashCooldown > 0) { const bw = flr((dashCooldown / 30) * 30); rectf(4, H - 6, 32, 3, 1); rectf(5, H - 5, 30 - bw, 1, 2); }
+      else text("DASH:OK", 4, H - 8, 2);
+    }
+  });
+
+  // --- Game Over Scene ---
+  GrayBox.scene(GAMEOVER, {
+    init() {},
+    update() {
+      updateStars(0.3); updateParticles();
+      if (btnp("a")) GrayBox.go(TITLE);
+    },
+    draw() {
+      cls(0); drawStars();
       for (const p of particles) pix(flr(p.x), flr(p.y), p.color);
       text("GAME OVER", 137, 85, 3);
       text("SCORE: " + score, 130, 105, 2);
       if (flr(GrayBox.frame / 20) % 2 === 0) text("PRESS A TO CONTINUE", 112, 150, 3);
-      return;
     }
-    for (const b of eBullets) spr(9, flr(b.x) + sx, flr(b.y) + sy);
-    for (const e of enemies) { const wx = e.wobbleAmp * Math.sin(e.wobble); spr(e.type, flr(e.x + wx) + sx, flr(e.y) + sy); }
-    for (const b of bullets) spr(4, flr(b.x) + sx, flr(b.y) + sy);
-    if (dashTimer > 0 && flr(GrayBox.frame / 2) % 2 === 0) {} else spr(1, flr(player.x) + sx, flr(player.y) + sy);
-    for (const p of particles) pix(flr(p.x) + sx, flr(p.y) + sy, p.color);
-    rectf(0, 0, W, 12, 0);
-    text("SCORE:" + score, 4, 3, 3);
-    for (let i = 0; i < lives; i++) spr(11, W - 30 + i * 10, 2);
-    if (dashCooldown > 0) { const bw = flr((dashCooldown / 30) * 30); rectf(4, H - 6, 32, 3, 1); rectf(5, H - 5, 30 - bw, 1, 2); }
-    else text("DASH:OK", 4, H - 8, 2);
-  };
+  });
 
+  GrayBox.go(TITLE);
   GrayBox.boot("screen");
 })();
 </script>
