@@ -1,5 +1,5 @@
 /**
- * GrayBox Runtime Engine v0.2
+ * GrayBox Runtime Engine v0.3
  *
  * 320×240, 4-color grayscale, 30fps, 2ch square wave
  * Standalone runtime — no game code included.
@@ -292,10 +292,145 @@ const GrayBox = (() => {
   // Vibration (mobile)
   API.vibrate = function(ms) { if (navigator.vibrate) navigator.vibrate(ms || 0); };
 
+  // --- Attract Mode (input recording & playback) ---
+  const KEY_BITS = ["up","down","left","right","a","b"];
+  let demoState = "idle";       // idle | recording | playback
+  let demoRecording = [];       // array of per-frame 6-bit bitmasks
+  let demoPlaybackData = null;  // loaded recording for playback
+  let demoPlaybackIdx = 0;
+  let demoIdleFrames = 0;       // frames since last real input
+  const DEMO_IDLE_THRESHOLD = 150; // 5 seconds at 30fps
+  const DEMO_MAX_FRAMES = 1800;   // 60 seconds max recording
+  let realKeyActive = false;    // any real key pressed this frame
+  let gameId = "";              // derived from URL path
+
+  function getDemoKey() { return "graybox_demo_" + gameId; }
+
+  function packKeys() {
+    let bits = 0;
+    for (let i = 0; i < 6; i++) if (keys[KEY_BITS[i]]) bits |= (1 << i);
+    return bits;
+  }
+
+  function unpackKeys(bits) {
+    for (let i = 0; i < 6; i++) keys[KEY_BITS[i]] = !!(bits & (1 << i));
+  }
+
+  function saveDemoToStorage() {
+    if (demoRecording.length < 60) return; // too short, skip
+    try {
+      const existing = localStorage.getItem(getDemoKey());
+      if (existing) {
+        const old = JSON.parse(existing);
+        if (old.length >= demoRecording.length) return; // keep longer recording
+      }
+      localStorage.setItem(getDemoKey(), JSON.stringify(demoRecording));
+    } catch(e) {} // localStorage full or unavailable
+  }
+
+  function loadDemoFromStorage() {
+    try {
+      const data = localStorage.getItem(getDemoKey());
+      if (data) return JSON.parse(data);
+    } catch(e) {}
+    return null;
+  }
+
+  function startDemoPlayback() {
+    demoPlaybackData = loadDemoFromStorage();
+    if (!demoPlaybackData || demoPlaybackData.length < 60) {
+      demoPlaybackData = null;
+      return false;
+    }
+    demoState = "playback";
+    demoPlaybackIdx = 0;
+    API.frame = 0;
+    // Reset all keys
+    for (const k of KEY_BITS) { keys[k] = false; keysPrev[k] = false; }
+    return true;
+  }
+
+  function stopDemoPlayback() {
+    demoState = "idle";
+    demoPlaybackData = null;
+    demoPlaybackIdx = 0;
+    demoIdleFrames = 0;
+    // Clear all keys to prevent ghost inputs
+    for (const k of KEY_BITS) { keys[k] = false; keysPrev[k] = false; }
+  }
+
   // --- Game loop ---
   function tick() {
+    // Attract mode logic
+    if (demoState === "playback") {
+      // Playback: inject recorded keys
+      if (demoPlaybackIdx < demoPlaybackData.length) {
+        unpackKeys(demoPlaybackData[demoPlaybackIdx]);
+        demoPlaybackIdx++;
+      } else {
+        // Recording ended, restart from beginning
+        demoPlaybackIdx = 0;
+        API.frame = 0;
+        unpackKeys(0);
+      }
+    } else {
+      // Check if real input happened
+      realKeyActive = false;
+      for (const k of KEY_BITS) if (keys[k]) { realKeyActive = true; break; }
+
+      if (realKeyActive) {
+        demoIdleFrames = 0;
+        if (demoState === "idle") {
+          // Start recording on first real input
+          demoState = "recording";
+          demoRecording = [];
+        }
+      } else {
+        demoIdleFrames++;
+      }
+
+      // Recording: capture frame input
+      if (demoState === "recording") {
+        demoRecording.push(packKeys());
+        if (!realKeyActive && demoIdleFrames > 90) {
+          // 3 seconds idle = stop recording & save
+          saveDemoToStorage();
+          demoState = "idle";
+          demoIdleFrames = 0;
+        }
+        if (demoRecording.length >= DEMO_MAX_FRAMES) {
+          saveDemoToStorage();
+          demoState = "idle";
+        }
+      }
+
+      // Idle: start playback after threshold
+      if (demoState === "idle" && demoIdleFrames >= DEMO_IDLE_THRESHOLD) {
+        startDemoPlayback();
+      }
+    }
+
     if (API._update) API._update();
     if (API._draw) API._draw();
+
+    // Draw "DEMO" indicator during playback
+    if (demoState === "playback") {
+      const col = COLOR_U32[API.frame % 40 < 20 ? 3 : 2];
+      // Draw "DEMO" at top-right corner (small, non-intrusive)
+      const dx = W - 26, dy = 2;
+      const demoText = "DEMO";
+      let cx = dx;
+      for (const ch of demoText) {
+        const glyph = FONT[ch];
+        if (glyph) for (let py = 0; py < FONT_H; py++) for (let px = 0; px < FONT_W; px++)
+          if (glyph[py * FONT_W + px]) {
+            const sx = cx + px, sy = dy + py;
+            if (sx >= 0 && sx < W && sy >= 0 && sy < H) buf32[sy * W + sx] = col;
+          }
+        cx += FONT_W + 1;
+      }
+    }
+
     ctx.putImageData(buf, 0, 0);
     for (const k in keys) keysPrev[k] = keys[k];
     API.frame++;
@@ -320,16 +455,35 @@ const GrayBox = (() => {
     buf = ctx.createImageData(W, H);
     buf32 = new Uint32Array(buf.data.buffer);
 
+    // Derive gameId from URL path
+    const pathParts = window.location.pathname.split("/").filter(Boolean);
+    gameId = pathParts[pathParts.length - 2] || pathParts[pathParts.length - 1] || "unknown";
+
     document.addEventListener("keydown", e => {
       const k = keyMap[e.key];
-      if (k) { keys[k] = true; e.preventDefault(); }
+      if (k) {
+        // If in playback mode, stop it on real input
+        if (demoState === "playback") {
+          stopDemoPlayback();
+          API.frame = 0;
+        }
+        keys[k] = true;
+        e.preventDefault();
+      }
     });
     document.addEventListener("keyup", e => {
       const k = keyMap[e.key];
       if (k) { keys[k] = false; e.preventDefault(); }
     });
     document.addEventListener("keydown", ensureAudio, { once: true });
-    document.addEventListener("click", ensureAudio, { once: true });
+    document.addEventListener("click", e => {
+      ensureAudio();
+      // Touch/click also stops playback
+      if (demoState === "playback") {
+        stopDemoPlayback();
+        API.frame = 0;
+      }
+    }, { once: false });
 
     if (API._init) API._init();
     setInterval(tick, 1000 / FPS);
