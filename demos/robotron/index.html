@@ -19,21 +19,45 @@
   "use strict";
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos, dbg, dbgC, overlap } = Mono;
+
+  // --- 8->16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Circle collision helper ---
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    return Math.sqrt(dx * dx + dy * dy) < r1 + r2;
+  }
+
+  // --- Font metrics ---
+  const FONT_W = 4, FONT_H = 7;
 
   // --- Play area bounds ---
-  const ARENA_X = 11;
-  const ARENA_Y = 12;
-  const ARENA_W = W - 22;
-  const ARENA_H = H - 24;
+  // 16x16 sprites, arena sized to fit 320x240 with HUD room
+  const ARENA_X = 12;
+  const ARENA_Y = 14;
+  const ARENA_W = W - 24;   // 296
+  const ARENA_H = H - 28;   // 212
   const ARENA_R = ARENA_X + ARENA_W;
   const ARENA_B = ARENA_Y + ARENA_H;
 
-  // --- Sprites ---
+  // --- Sprites (all 16x16 via up() upscale) ---
 
   // 1: Player - humanoid figure
-  defSprite(1,
+  defSprite(1, up(
     "00033000" +
     "00033000" +
     "00322300" +
@@ -42,10 +66,10 @@
     "00033000" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 2: Grunt - basic robot enemy
-  defSprite(2,
+  defSprite(2, up(
     "02222200" +
     "02311200" +
     "02311200" +
@@ -54,10 +78,10 @@
     "02222200" +
     "02002000" +
     "02002000"
-  );
+  ));
 
   // 3: Hulk - indestructible tank
-  defSprite(3,
+  defSprite(3, up(
     "22222220" +
     "21111120" +
     "21322120" +
@@ -66,10 +90,10 @@
     "02222200" +
     "02200220" +
     "02200220"
-  );
+  ));
 
   // 4: Brain - reprograms humans
-  defSprite(4,
+  defSprite(4, up(
     "00222200" +
     "02333200" +
     "23132320" +
@@ -78,10 +102,10 @@
     "02333200" +
     "00222200" +
     "00020000"
-  );
+  ));
 
   // 5: Enforcer (spawned by brains) - projectile enemy
-  defSprite(5,
+  defSprite(5, up(
     "00011000" +
     "00122100" +
     "01233210" +
@@ -90,10 +114,10 @@
     "00122100" +
     "00011000" +
     "00000000"
-  );
+  ));
 
   // 6: Human - Dad
-  defSprite(6,
+  defSprite(6, up(
     "00033000" +
     "00033000" +
     "00033000" +
@@ -102,10 +126,10 @@
     "00033000" +
     "00300300" +
     "03000030"
-  );
+  ));
 
   // 7: Human - Mom
-  defSprite(7,
+  defSprite(7, up(
     "00033000" +
     "00033000" +
     "00033000" +
@@ -114,10 +138,10 @@
     "00333300" +
     "00300300" +
     "00300300"
-  );
+  ));
 
   // 8: Human - Kid
-  defSprite(8,
+  defSprite(8, up(
     "00330000" +
     "00330000" +
     "00330000" +
@@ -126,10 +150,10 @@
     "00300000" +
     "03030000" +
     "00000000"
-  );
+  ));
 
   // 9: Electrode barrier
-  defSprite(9,
+  defSprite(9, up(
     "01221200" +
     "12112120" +
     "21221210" +
@@ -138,10 +162,10 @@
     "12112120" +
     "01221200" +
     "00000000"
-  );
+  ));
 
   // 10: Player bullet (small dot)
-  defSprite(10,
+  defSprite(10, up(
     "00000000" +
     "00000000" +
     "00000000" +
@@ -150,10 +174,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 11: Explosion frame 1
-  defSprite(11,
+  defSprite(11, up(
     "00000000" +
     "00200100" +
     "01003000" +
@@ -162,10 +186,10 @@
     "02000010" +
     "00100000" +
     "00000000"
-  );
+  ));
 
   // 12: Explosion frame 2
-  defSprite(12,
+  defSprite(12, up(
     "30010020" +
     "01000010" +
     "00203200" +
@@ -174,10 +198,10 @@
     "01000300" +
     "20001002" +
     "00200010"
-  );
+  ));
 
   // 13: Prog (reprogrammed human - zombie)
-  defSprite(13,
+  defSprite(13, up(
     "00011000" +
     "00011000" +
     "00111100" +
@@ -186,10 +210,10 @@
     "00011000" +
     "00100100" +
     "01000010"
-  );
+  ));
 
   // 14: Life icon
-  defSprite(14,
+  defSprite(14, up(
     "00000000" +
     "00033000" +
     "00322300" +
@@ -198,10 +222,10 @@
     "00300300" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 15: Enemy bullet (enforcer spark)
-  defSprite(15,
+  defSprite(15, up(
     "00000000" +
     "00000000" +
     "00010000" +
@@ -210,10 +234,10 @@
     "00000000" +
     "00000000" +
     "00000000"
-  );
+  ));
 
   // 16: Spheroid (spawns enforcers)
-  defSprite(16,
+  defSprite(16, up(
     "00111100" +
     "01233210" +
     "12322321" +
@@ -222,7 +246,16 @@
     "01233210" +
     "00111100" +
     "00000000"
-  );
+  ));
+
+  // --- Hitbox radii (for 16x16 sprites) ---
+  const R_PLAYER   = 6;
+  const R_ENEMY    = 6;
+  const R_BULLET   = 3;
+  const R_EBULLET  = 3;
+  const R_HUMAN    = 5;
+  const R_ELEC     = 6;
+  const S = 16;  // sprite size
 
   // --- Game state ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
@@ -236,8 +269,10 @@
   let screenShake = 0;
   let bonusTextList = [];
 
+  function ensureAudio() { try { note(0, "C1", 0.001); } catch(e){} }
+
   function resetGame() {
-    player = { x: W / 2 - 4, y: H / 2 - 4, speed: 2.5 };
+    player = { x: W / 2 - 8, y: H / 2 - 8, speed: 2.5 };
     bullets = [];
     enemies = [];
     humans = [];
@@ -258,6 +293,10 @@
     spawnWave();
   }
 
+  // Center of a 16x16 entity
+  function cx(o) { return o.x + 8; }
+  function cy(o) { return o.y + 8; }
+
   function spawnWave() {
     wave++;
     waveMessage = 90;
@@ -266,8 +305,8 @@
     electrodes = [];
     eBullets = [];
     invincible = 45;
-    player.x = W / 2 - 4;
-    player.y = H / 2 - 4;
+    player.x = W / 2 - 8;
+    player.y = H / 2 - 8;
 
     // Grunt count scales with wave
     const gruntCount = min(10 + wave * 4, 50);
@@ -303,10 +342,10 @@
     const humanCount = min(3 + wave, 12);
     for (let i = 0; i < humanCount; i++) {
       const htype = flr(rnd(3)); // 0=dad, 1=mom, 2=kid
-      const hx = ARENA_X + 20 + rnd(ARENA_W - 40);
-      const hy = ARENA_Y + 22 + rnd(ARENA_H - 44);
+      const hx = ARENA_X + 20 + rnd(ARENA_W - 56);
+      const hy = ARENA_Y + 20 + rnd(ARENA_H - 56);
       // Don't spawn too close to player
-      if (_abs(hx - player.x) < 34 && _abs(hy - player.y) < 38) continue;
+      if (_abs(hx - player.x) < 40 && _abs(hy - player.y) < 40) continue;
       humans.push({
         x: hx, y: hy, type: htype,
         dx: (rnd(1) - 0.5) * 0.5, dy: (rnd(1) - 0.5) * 0.5,
@@ -317,9 +356,9 @@
     // Electrodes
     const elecCount = min(2 + wave, 10);
     for (let i = 0; i < elecCount; i++) {
-      const ex = ARENA_X + 14 + rnd(ARENA_W - 28);
-      const ey = ARENA_Y + 15 + rnd(ARENA_H - 30);
-      if (_abs(ex - player.x) < 27 && _abs(ey - player.y) < 30) continue;
+      const ex = ARENA_X + 20 + rnd(ARENA_W - 56);
+      const ey = ARENA_Y + 20 + rnd(ARENA_H - 56);
+      if (_abs(ex - player.x) < 36 && _abs(ey - player.y) < 36) continue;
       electrodes.push({ x: ex, y: ey });
     }
   }
@@ -327,10 +366,10 @@
   function spawnEnemyFromEdge(type) {
     let x, y;
     const side = flr(rnd(4));
-    if (side === 0) { x = ARENA_X + rnd(ARENA_W); y = ARENA_Y; }
-    else if (side === 1) { x = ARENA_X + rnd(ARENA_W); y = ARENA_B - 8; }
-    else if (side === 2) { x = ARENA_X; y = ARENA_Y + rnd(ARENA_H); }
-    else { x = ARENA_R - 8; y = ARENA_Y + rnd(ARENA_H); }
+    if (side === 0)      { x = ARENA_X + rnd(ARENA_W - S); y = ARENA_Y; }
+    else if (side === 1) { x = ARENA_X + rnd(ARENA_W - S); y = ARENA_B - S; }
+    else if (side === 2) { x = ARENA_X; y = ARENA_Y + rnd(ARENA_H - S); }
+    else                 { x = ARENA_R - S; y = ARENA_Y + rnd(ARENA_H - S); }
 
     const e = { x, y, type, hp: 1, timer: 0, dx: 0, dy: 0, spawnTimer: 0 };
     if (type === "hulk") { e.hp = 999; e.dx = (rnd(1) - 0.5); e.dy = (rnd(1) - 0.5); }
@@ -355,7 +394,7 @@
       const a = rnd(Math.PI * 2);
       const sp = 0.5 + rnd(2);
       particles.push({
-        x: x + 4, y: y + 4,
+        x: x + 8, y: y + 8,
         dx: Math.cos(a) * sp, dy: Math.sin(a) * sp,
         life: 10 + flr(rnd(15)),
         c: 1 + flr(rnd(3))
@@ -367,22 +406,12 @@
     bonusTextList.push({ x, y, txt, timer: 45 });
   }
 
-  function dist(a, b) {
-    const dx = (a.x + 4) - (b.x + 4);
-    const dy = (a.y + 4) - (b.y + 4);
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  function collides(a, b, r) {
-    return dist(a, b) < (r || 7);
-  }
-
   // --- Title Scene ---
   Mono.scene(TITLE, {
     init() { titlePulse = 0; },
     update() {
       titlePulse++;
-      if (btnp("a")) {
+      if (btnp("a") || btnp("start")) {
         ensureAudio();
         resetGame();
         note(0, "C4", 0.1);
@@ -393,23 +422,23 @@
     draw() {
       cls(0);
       const blink = (titlePulse % 40) < 25;
-      text("ROBOTRON", W / 2 - 20, 45, 3);
-      text("2084", W / 2 - 10, 56, 2);
+      text("ROBOTRON", W / 2 - 20, 40, 3);
+      text("2084", W / 2 - 10, 51, 2);
       if ((titlePulse % 20) < 10) {
-        spr(2, W / 2 - 33, 75); spr(3, W / 2 - 24, 75); spr(4, W / 2 - 15, 75);
-        spr(16, W / 2 + 7, 75); spr(5, W / 2 + 16, 75); spr(13, W / 2 + 25, 75);
+        sprT(2, W / 2 - 40, 68); sprT(3, W / 2 - 24, 68); sprT(4, W / 2 - 8, 68);
+        sprT(16, W / 2 + 8, 68); sprT(5, W / 2 + 24, 68); sprT(13, W / 2 + 40, 68);
       } else {
-        spr(6, W / 2 - 27, 75); spr(7, W / 2 - 13, 75); spr(8, W / 2, 75); spr(1, W / 2 + 13, 75);
+        sprT(6, W / 2 - 32, 68); sprT(7, W / 2 - 16, 68); sprT(8, W / 2, 68); sprT(1, W / 2 + 16, 68);
       }
-      text("SAVE THE LAST HUMAN FAMILY", W / 2 - 65, 98, 2);
-      if (blink) text("PRESS START", W / 2 - 50, 128, 3);
-      text("ARROWS  MOVE", W / 2 - 34, 150, 1);
-      text("A  SHOOT IN MOVE DIR", W / 2 - 34, 159, 1);
-      text("HOLD A + ARROWS  AIM", W / 2 - 34, 168, 1);
-      text("GRUNT 100  BRAIN 500", W / 2 - 50, 186, 2);
-      text("ENFORCER 150  SPHEROID 1000", W / 2 - 67, 195, 2);
-      text("RESCUE HUMANS FOR BONUS!", W / 2 - 60, 210, 3);
-      if (hiScore > 0) { text("HI " + hiScore, W / 2 - 15, 225, 1); }
+      text("SAVE THE LAST HUMAN FAMILY", W / 2 - 65, 96, 2);
+      if (blink) text("PRESS START", W / 2 - 27, 120, 3);
+      text("ARROWS  MOVE", W / 2 - 34, 140, 1);
+      text("A  SHOOT IN MOVE DIR", W / 2 - 50, 149, 1);
+      text("HOLD A + ARROWS  AIM", W / 2 - 50, 158, 1);
+      text("GRUNT 100  BRAIN 500", W / 2 - 50, 176, 2);
+      text("ENFORCER 150  SPHEROID 1000", W / 2 - 67, 185, 2);
+      text("RESCUE HUMANS FOR BONUS!", W / 2 - 60, 202, 3);
+      if (hiScore > 0) { text("HI " + hiScore, W / 2 - 15, 220, 1); }
     }
   });
 
@@ -460,8 +489,8 @@
     player.y += mdy * player.speed;
 
     // Clamp to arena
-    player.x = _max(ARENA_X + 2, min(ARENA_R - 10, player.x));
-    player.y = _max(ARENA_Y + 2, min(ARENA_B - 10, player.y));
+    player.x = _max(ARENA_X + 2, min(ARENA_R - S - 2, player.x));
+    player.y = _max(ARENA_Y + 2, min(ARENA_B - S - 2, player.y));
 
     // Shooting
     if (shootCooldown > 0) shootCooldown--;
@@ -473,7 +502,7 @@
       const len = Math.sqrt(sdx * sdx + sdy * sdy);
       sdx /= len; sdy /= len;
       bullets.push({
-        x: player.x + 2, y: player.y + 2,
+        x: player.x + 4, y: player.y + 4,
         dx: sdx * 6, dy: sdy * 6, life: 60
       });
       note(0, "C5", 0.03);
@@ -490,11 +519,12 @@
         continue;
       }
 
-      // Check electrode collision
+      // Check electrode collision (circle)
       let hitElectrode = false;
       for (let j = electrodes.length - 1; j >= 0; j--) {
-        if (collides(b, electrodes[j], 6)) {
-          spawnExplosion(electrodes[j].x, electrodes[j].y, false);
+        const el = electrodes[j];
+        if (circCollide(cx(b), cy(b), R_BULLET, cx(el), cy(el), R_ELEC)) {
+          spawnExplosion(el.x, el.y, false);
           electrodes.splice(j, 1);
           bullets.splice(i, 1);
           score += 25;
@@ -505,11 +535,11 @@
       }
       if (hitElectrode) continue;
 
-      // Check enemy collision
+      // Check enemy collision (circle)
       let hitEnemy = false;
       for (let j = enemies.length - 1; j >= 0; j--) {
         const e = enemies[j];
-        if (collides(b, e, 6)) {
+        if (circCollide(cx(b), cy(b), R_BULLET, cx(e), cy(e), R_ENEMY)) {
           if (e.type === "hulk") {
             // Hulk is indestructible, bullet bounces off
             bullets.splice(i, 1);
@@ -565,14 +595,14 @@
         e.x += e.dx;
         e.y += e.dy;
         // Bounce off walls
-        if (e.x < ARENA_X + 4) { e.x = ARENA_X + 4; e.dx = _abs(e.dx); }
-        if (e.x > ARENA_R - 12) { e.x = ARENA_R - 12; e.dx = -_abs(e.dx); }
-        if (e.y < ARENA_Y + 4) { e.y = ARENA_Y + 4; e.dy = _abs(e.dy); }
-        if (e.y > ARENA_B - 12) { e.y = ARENA_B - 12; e.dy = -_abs(e.dy); }
+        if (e.x < ARENA_X + 2) { e.x = ARENA_X + 2; e.dx = _abs(e.dx); }
+        if (e.x > ARENA_R - S - 2) { e.x = ARENA_R - S - 2; e.dx = -_abs(e.dx); }
+        if (e.y < ARENA_Y + 2) { e.y = ARENA_Y + 2; e.dy = _abs(e.dy); }
+        if (e.y > ARENA_B - S - 2) { e.y = ARENA_B - S - 2; e.dy = -_abs(e.dy); }
 
-        // Hulks kill humans they touch
+        // Hulks kill humans they touch (circle collision)
         for (let j = humans.length - 1; j >= 0; j--) {
-          if (humans[j].alive && collides(e, humans[j], 7)) {
+          if (humans[j].alive && circCollide(cx(e), cy(e), R_ENEMY, cx(humans[j]), cy(humans[j]), R_HUMAN)) {
             humans[j].alive = false;
             spawnExplosion(humans[j].x, humans[j].y, false);
             note(1, "C3", 0.1);
@@ -584,16 +614,17 @@
         let closest = null, closestD = 9999;
         for (const h of humans) {
           if (!h.alive) continue;
-          const dd = dist(e, h);
+          const dx = cx(e) - cx(h), dy = cy(e) - cy(h);
+          const dd = Math.sqrt(dx * dx + dy * dy);
           if (dd < closestD) { closestD = dd; closest = h; }
         }
-        if (closest && closestD > 8) {
+        if (closest && closestD > 12) {
           const dx = closest.x - e.x;
           const dy = closest.y - e.y;
           const d = Math.sqrt(dx * dx + dy * dy) || 1;
           e.x += (dx / d) * 0.8;
           e.y += (dy / d) * 0.8;
-        } else if (closest && closestD <= 8) {
+        } else if (closest && closestD <= 12) {
           // Convert human to prog
           closest.alive = false;
           closest.converting = 0;
@@ -616,10 +647,10 @@
         // Float around, spawn enforcers periodically
         e.x += sin(e.timer * 0.05) * 0.8;
         e.y += cos(e.timer * 0.07) * 0.6;
-        if (e.x < ARENA_X + 4) e.x = ARENA_X + 4;
-        if (e.x > ARENA_R - 12) e.x = ARENA_R - 12;
-        if (e.y < ARENA_Y + 4) e.y = ARENA_Y + 4;
-        if (e.y > ARENA_B - 12) e.y = ARENA_B - 12;
+        if (e.x < ARENA_X + 2) e.x = ARENA_X + 2;
+        if (e.x > ARENA_R - S - 2) e.x = ARENA_R - S - 2;
+        if (e.y < ARENA_Y + 2) e.y = ARENA_Y + 2;
+        if (e.y > ARENA_B - S - 2) e.y = ARENA_B - S - 2;
 
         e.spawnTimer++;
         if (e.spawnTimer >= 120 + flr(rnd(90))) {
@@ -644,10 +675,10 @@
           e.dx = _max(-2, min(2, e.dx));
           e.dy = _max(-2, min(2, e.dy));
         }
-        if (e.x < ARENA_X + 4) { e.x = ARENA_X + 4; e.dx = _abs(e.dx); }
-        if (e.x > ARENA_R - 12) { e.x = ARENA_R - 12; e.dx = -_abs(e.dx); }
-        if (e.y < ARENA_Y + 4) { e.y = ARENA_Y + 4; e.dy = _abs(e.dy); }
-        if (e.y > ARENA_B - 12) { e.y = ARENA_B - 12; e.dy = -_abs(e.dy); }
+        if (e.x < ARENA_X + 2) { e.x = ARENA_X + 2; e.dx = _abs(e.dx); }
+        if (e.x > ARENA_R - S - 2) { e.x = ARENA_R - S - 2; e.dx = -_abs(e.dx); }
+        if (e.y < ARENA_Y + 2) { e.y = ARENA_Y + 2; e.dy = _abs(e.dy); }
+        if (e.y > ARENA_B - S - 2) { e.y = ARENA_B - S - 2; e.dy = -_abs(e.dy); }
 
         e.shootTimer = (e.shootTimer || 60) - 1;
         if (e.shootTimer <= 0) {
@@ -656,7 +687,7 @@
           const dy = player.y - e.y;
           const d = Math.sqrt(dx * dx + dy * dy) || 1;
           eBullets.push({
-            x: e.x + 2, y: e.y + 2,
+            x: e.x + 4, y: e.y + 4,
             dx: (dx / d) * 2.5, dy: (dy / d) * 2.5,
             life: 90
           });
@@ -673,8 +704,8 @@
       }
 
       // Clamp enemies to arena
-      e.x = _max(ARENA_X, min(ARENA_R - 8, e.x));
-      e.y = _max(ARENA_Y, min(ARENA_B - 8, e.y));
+      e.x = _max(ARENA_X, min(ARENA_R - S, e.x));
+      e.y = _max(ARENA_Y, min(ARENA_B - S, e.y));
     }
 
     // Update enemy bullets
@@ -687,8 +718,8 @@
         eBullets.splice(i, 1);
         continue;
       }
-      // Hit player
-      if (invincible <= 0 && _abs(b.x - player.x) < 6 && _abs(b.y - player.y) < 6) {
+      // Hit player (circle)
+      if (invincible <= 0 && circCollide(cx(b), cy(b), R_EBULLET, cx(player), cy(player), R_PLAYER)) {
         playerDie();
         eBullets.splice(i, 1);
         break;
@@ -701,10 +732,10 @@
       h.x += h.dx;
       h.y += h.dy;
       // Bounce off walls
-      if (h.x < ARENA_X + 4) { h.x = ARENA_X + 4; h.dx = _abs(h.dx); }
-      if (h.x > ARENA_R - 12) { h.x = ARENA_R - 12; h.dx = -_abs(h.dx); }
-      if (h.y < ARENA_Y + 4) { h.y = ARENA_Y + 4; h.dy = _abs(h.dy); }
-      if (h.y > ARENA_B - 12) { h.y = ARENA_B - 12; h.dy = -_abs(h.dy); }
+      if (h.x < ARENA_X + 2) { h.x = ARENA_X + 2; h.dx = _abs(h.dx); }
+      if (h.x > ARENA_R - S - 2) { h.x = ARENA_R - S - 2; h.dx = -_abs(h.dx); }
+      if (h.y < ARENA_Y + 2) { h.y = ARENA_Y + 2; h.dy = _abs(h.dy); }
+      if (h.y > ARENA_B - S - 2) { h.y = ARENA_B - S - 2; h.dy = -_abs(h.dy); }
 
       // Random direction changes
       if (flr(rnd(60)) === 0) {
@@ -712,8 +743,8 @@
         h.dy = (rnd(1) - 0.5) * 0.6;
       }
 
-      // Player rescues human by touching
-      if (collides(player, h, 8)) {
+      // Player rescues human by touching (circle)
+      if (circCollide(cx(player), cy(player), R_PLAYER, cx(h), cy(h), R_HUMAN)) {
         h.alive = false;
         const pts = [1000, 2000, 4000, 5000];
         const humansSaved = wave; // more points as game goes on
@@ -726,17 +757,17 @@
       }
     }
 
-    // Enemy - player collision
+    // Enemy - player collision (circle)
     if (invincible <= 0) {
       for (const e of enemies) {
-        if (collides(player, e, 6)) {
+        if (circCollide(cx(player), cy(player), R_PLAYER, cx(e), cy(e), R_ENEMY)) {
           playerDie();
           break;
         }
       }
-      // Electrode - player collision
+      // Electrode - player collision (circle)
       for (const el of electrodes) {
-        if (collides(player, el, 5)) {
+        if (circCollide(cx(player), cy(player), R_PLAYER, cx(el), cy(el), R_ELEC)) {
           playerDie();
           break;
         }
@@ -772,27 +803,9 @@
 
     // High score
     if (score > hiScore) hiScore = score;
-  };
+  },
 
-  function playerDie() {
-    spawnExplosion(player.x, player.y, true);
-    screenShake = 12;
-    lives--;
-    note(0, "C3", 0.15);
-    note(1, "E2", 0.2);
-    if (lives <= 0) {
-      if (score > hiScore) hiScore = score;
-      Mono.go(GAMEOVER); return;
-    } else {
-      invincible = 90;
-      player.x = W / 2 - 4;
-      player.y = H / 2 - 4;
-      eBullets = [];
-    }
-  }
-
-    },
-    draw() {
+  draw() {
     cls(0);
 
     // --- PLAY state draw ---
@@ -817,18 +830,19 @@
     // Electrodes
     for (const el of electrodes) {
       const flicker = (Mono.frame + flr(el.x)) % 8 < 4;
-      spr(9, el.x + sx, el.y + sy);
+      sprT(9, el.x + sx, el.y + sy);
       if (flicker) {
-        pix(el.x + 3 + sx, el.y + 3 + sy, 3);
+        pix(el.x + 8 + sx, el.y + 8 + sy, 3);
       }
+      dbgC(cx(el) + sx, cy(el) + sy, R_ELEC);
     }
 
     // Humans
     for (const h of humans) {
       if (!h.alive) continue;
       const sprId = 6 + h.type; // 6=dad, 7=mom, 8=kid
-      // Humans flash gently
-      spr(sprId, h.x + sx, h.y + sy);
+      sprT(sprId, h.x + sx, h.y + sy);
+      dbgC(cx(h) + sx, cy(h) + sy, R_HUMAN);
     }
 
     // Enemies
@@ -840,28 +854,32 @@
       else if (e.type === "enforcer") sprId = 5;
       else if (e.type === "spheroid") sprId = 16;
       else if (e.type === "prog") sprId = 13;
-      spr(sprId, e.x + sx, e.y + sy);
+      sprT(sprId, e.x + sx, e.y + sy);
+      dbgC(cx(e) + sx, cy(e) + sy, R_ENEMY);
     }
 
     // Player
     if (invincible <= 0 || (Mono.frame % 4) < 2) {
-      spr(1, player.x + sx, player.y + sy);
+      sprT(1, player.x + sx, player.y + sy);
     }
+    dbgC(cx(player) + sx, cy(player) + sy, R_PLAYER);
 
     // Bullets
     for (const b of bullets) {
-      spr(10, b.x + sx, b.y + sy);
+      sprT(10, b.x + sx, b.y + sy);
+      dbgC(cx(b) + sx, cy(b) + sy, R_BULLET);
     }
 
     // Enemy bullets
     for (const b of eBullets) {
-      spr(15, b.x + sx, b.y + sy);
+      sprT(15, b.x + sx, b.y + sy);
+      dbgC(cx(b) + sx, cy(b) + sy, R_EBULLET);
     }
 
     // Explosions
     for (const ex of explosions) {
-      if (ex.timer < 6) spr(11, ex.x + sx, ex.y + sy);
-      else if (ex.timer < 12) spr(12, ex.x + sx, ex.y + sy);
+      if (ex.timer < 6) sprT(11, ex.x + sx, ex.y + sy);
+      else if (ex.timer < 12) sprT(12, ex.x + sx, ex.y + sy);
     }
 
     // Particles
@@ -896,19 +914,36 @@
     }
   });
 
+  function playerDie() {
+    spawnExplosion(player.x, player.y, true);
+    screenShake = 12;
+    lives--;
+    note(0, "C3", 0.15);
+    note(1, "E2", 0.2);
+    if (lives <= 0) {
+      if (score > hiScore) hiScore = score;
+      Mono.go(GAMEOVER); return;
+    } else {
+      invincible = 90;
+      player.x = W / 2 - 8;
+      player.y = H / 2 - 8;
+      eBullets = [];
+    }
+  }
+
   function drawHUD(sx, sy) {
     // Score
-    text("SCORE " + score, 4 + sx, 4 + sy, 3);
+    text("SCORE " + score, 4 + sx, 3 + sy, 3);
     // Wave
-    text("WAVE " + wave, W / 2 - 15 + sx, 4 + sy, 2);
+    text("WAVE " + wave, W / 2 - 15 + sx, 3 + sy, 2);
     // Lives
     for (let i = 0; i < lives; i++) {
-      spr(14, W - 28 + i * 10 + sx, 2 + sy);
+      sprT(14, W - 56 + i * 18 + sx, 0 + sy);
     }
     // Human count
     const aliveHumans = humans.filter(h => h.alive).length;
     if (aliveHumans > 0) {
-      text("HUMANS " + aliveHumans, W / 2 - 20 + sx, H - 10 + sy, 2);
+      text("HUMANS " + aliveHumans, W / 2 - 22 + sx, H - 10 + sy, 2);
     }
   }
 

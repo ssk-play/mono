@@ -17,56 +17,226 @@
 <script>
 (() => {
   "use strict";
-  const W = Mono.WIDTH, H = Mono.HEIGHT;
+  const W = Mono.WIDTH, H = Mono.HEIGHT;              // 320 x 240
+  const SS = 16;                                        // sprite size
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, mget, mset, map: drawMap,
           rnd, flr, abs: _abs, min, max: _max, sin, cos, overlap, vibrate,
-          bgm, bgmStop } = Mono;
+          bgm, bgmStop, dbg, dbgC } = Mono;
 
-  defSprite(1, "0003000000030000003330000033300003333300331133303330333001000010");
-  defSprite(2, "0100001033303330331133300333330000333000003330000003000000030000");
-  defSprite(3, "0011100001333100133133101333331013033010013331000011100000000000");
-  defSprite(4, "0003000000030000000200000002000000010000000000000000000000000000");
-  defSprite(5, "0000000000200000000230000203302000320200030020000002000000000000");
-  defSprite(6, "0200002000310000010331003003303001330100000312000300001000020000");
-  defSprite(7, "0000000000000000000000000001000000000000000000000000000000000000");
-  defSprite(8, "0011100001222100122322101233321012232210012221000011100000000000");
-  defSprite(9, "0000000000000000000100000002000000020000000300000003000000000000");
-  defSprite(10,"3333333331333133333333333311133333333333313331333333333330300303");
-  defSprite(11,"0000000001001000122122001222220001222100001210000001000000000000");
+  // --- 8x8 → 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;         // double each row vertically
+    }
+    return o;
+  }
+
+  // --- Sprites (8x8 art upscaled to 16x16) ---
+  // 1: Player ship
+  defSprite(1, up(
+    "00030000" +
+    "00030000" +
+    "00333000" +
+    "00333000" +
+    "03333300" +
+    "33113330" +
+    "33303330" +
+    "01000010"
+  ));
+  // 2: Enemy type A (fighter)
+  defSprite(2, up(
+    "01000010" +
+    "33303330" +
+    "33113330" +
+    "03333300" +
+    "00333000" +
+    "00333000" +
+    "00030000" +
+    "00030000"
+  ));
+  // 3: Enemy type B (tough, wobbler)
+  defSprite(3, up(
+    "00111000" +
+    "01333100" +
+    "13313310" +
+    "13333310" +
+    "13033010" +
+    "01333100" +
+    "00111000" +
+    "00000000"
+  ));
+  // 4: Player bullet
+  defSprite(4, up(
+    "00030000" +
+    "00030000" +
+    "00020000" +
+    "00020000" +
+    "00010000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  ));
+  // 5: Small explosion frame 1
+  defSprite(5, up(
+    "00000000" +
+    "00200000" +
+    "00023000" +
+    "02033020" +
+    "00320200" +
+    "03002000" +
+    "00020000" +
+    "00000000"
+  ));
+  // 6: Large explosion frame
+  defSprite(6, up(
+    "02000020" +
+    "00310000" +
+    "01033100" +
+    "30033030" +
+    "01330100" +
+    "00031200" +
+    "03000010" +
+    "00020000"
+  ));
+  // 7: Tiny dot (unused but kept for compat)
+  defSprite(7, up(
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00010000" +
+    "00000000" +
+    "00000000" +
+    "00000000" +
+    "00000000"
+  ));
+  // 8: Powerup orb
+  defSprite(8, up(
+    "00111000" +
+    "01222100" +
+    "12232210" +
+    "12333210" +
+    "12232210" +
+    "01222100" +
+    "00111000" +
+    "00000000"
+  ));
+  // 9: Enemy bullet
+  defSprite(9, up(
+    "00000000" +
+    "00000000" +
+    "00010000" +
+    "00020000" +
+    "00020000" +
+    "00030000" +
+    "00030000" +
+    "00000000"
+  ));
+  // 10: Unused tile
+  defSprite(10, up(
+    "33333333" +
+    "31333133" +
+    "33333333" +
+    "33111333" +
+    "33333333" +
+    "31333133" +
+    "33333333" +
+    "30300303"
+  ));
+  // 11: Heart / life icon
+  defSprite(11, up(
+    "00000000" +
+    "01001000" +
+    "12212200" +
+    "12222200" +
+    "01222100" +
+    "00121000" +
+    "00010000" +
+    "00000000"
+  ));
+
+  // --- Collision radii (circle-based) ---
+  const PLAYER_R = 5;         // player hitbox radius
+  const BULLET_R = 2;         // player bullet radius
+  const ENEMY_A_R = 6;        // enemy type A radius
+  const ENEMY_B_R = 7;        // enemy type B radius
+  const EBULLET_R = 2;        // enemy bullet radius
+
+  // Circle-circle collision
+  function circHit(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    const dist = r1 + r2;
+    return dx * dx + dy * dy < dist * dist;
+  }
 
   let player, bullets, enemies, eBullets, particles, stars, score, lives;
   let spawnTimer, diffLevel, shakeTimer, dashCooldown, dashTimer;
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
 
+  // --- Stars ---
   function initStars() {
     stars = [];
     for (let i = 0; i < 40; i++)
       stars.push({ x: flr(rnd(W)), y: flr(rnd(H)), speed: 0.3 + rnd(1.2), bright: flr(rnd(2)) + 1 });
   }
-  function updateStars(spd) { for (const s of stars) { s.y += s.speed * (spd||1); if (s.y > H) { s.y = 0; s.x = flr(rnd(W)); } } }
-  function drawStars(ox, oy) { for (const s of stars) pix(s.x + (ox||0), s.y + (oy||0), s.bright); }
+  function updateStars(spd) {
+    for (const s of stars) { s.y += s.speed * (spd || 1); if (s.y > H) { s.y = 0; s.x = flr(rnd(W)); } }
+  }
+  function drawStars(ox, oy) {
+    for (const s of stars) pix(s.x + (ox || 0), s.y + (oy || 0), s.bright);
+  }
+
+  // --- SFX ---
   function shootNote() { note(0, "C6", 0.05); setTimeout(() => note(0, "E6", 0.04), 30); }
-  function hitNote() { note(1, "C3", 0.08); setTimeout(() => note(1, "E3", 0.06), 50); }
-  function deathNote() { note(0, "C3", 0.15); note(1, "G2", 0.15); setTimeout(() => { note(0, "A2", 0.2); note(1, "E2", 0.2); }, 150); }
+  function hitNote()   { note(1, "C3", 0.08); setTimeout(() => note(1, "E3", 0.06), 50); }
+  function deathNote() {
+    note(0, "C3", 0.15); note(1, "G2", 0.15);
+    setTimeout(() => { note(0, "A2", 0.2); note(1, "E2", 0.2); }, 150);
+  }
+
+  // --- Helpers ---
+  function enemyR(e) { return e.type === 3 ? ENEMY_B_R : ENEMY_A_R; }
+
   function spawnEnemy() {
     const type = rnd(1) < 0.3 ? 3 : 2;
-    enemies.push({ x: 8 + flr(rnd(W - 24)), y: -10, type, speed: 0.8 + rnd(0.5) * diffLevel, hp: type === 3 ? 2 : 1, shootTimer: flr(rnd(60)) + 30, wobble: rnd(6.28), wobbleAmp: type === 3 ? 10 : 0 });
+    enemies.push({
+      x: SS / 2 + flr(rnd(W - SS * 2)), y: -SS,
+      type, speed: 0.8 + rnd(0.5) * diffLevel,
+      hp: type === 3 ? 2 : 1,
+      shootTimer: flr(rnd(60)) + 30,
+      wobble: rnd(6.28), wobbleAmp: type === 3 ? 10 : 0
+    });
   }
+
   function addParticle(x, y, c) {
     for (let i = 0; i < 6; i++)
       particles.push({ x, y, vx: rnd(4) - 2, vy: rnd(4) - 2, life: 8 + flr(rnd(8)), color: c || (flr(rnd(3)) + 1) });
   }
   function updateParticles() {
-    for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--; if (p.life <= 0) particles.splice(i, 1); }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.life--;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
   }
 
-  // --- Title Scene ---
+  // ================================================================
+  //  TITLE SCENE
+  // ================================================================
   Mono.scene(TITLE, {
     init() { initStars(); particles = []; },
     update() {
       updateStars();
-      if (btnp("a") || btnp("start")) { Mono.go(PLAY); note(0, "C5", 0.1); setTimeout(() => note(0, "E5", 0.1), 100); setTimeout(() => note(0, "G5", 0.15), 200); }
+      if (btnp("a") || btnp("start")) {
+        Mono.go(PLAY);
+        note(0, "C5", 0.1); setTimeout(() => note(0, "E5", 0.1), 100);
+        setTimeout(() => note(0, "G5", 0.15), 200);
+      }
     },
     draw() {
       cls(0); drawStars();
@@ -74,18 +244,20 @@
       text("STAR PATROL", 132, flr(ty), 3);
       text("STAR PATROL", 133, flr(ty) + 1, 1);
       rectf(90, flr(ty) + 14, 140, 1, 2);
-      spr(1, 156, flr(ty) + 30);
+      spr(1, 152, flr(ty) + 26);
       if (flr(Mono.frame / 20) % 2 === 0) text("PRESS START", 120, 150, 3);
       text("ARROWS: MOVE", 130, 172, 2);
       text("A: SHOOT  B: DASH", 115, 184, 2);
-      text("MONO V0.3", 127, 222, 1);
+      text("MONO V1.0", 127, 222, 1);
     }
   });
 
-  // --- Play Scene ---
+  // ================================================================
+  //  PLAY SCENE
+  // ================================================================
   Mono.scene(PLAY, {
     init() {
-      player = { x: 156, y: 200, speed: 3, dashSpeed: 8 };
+      player = { x: W / 2 - SS / 2, y: H - SS * 2.5, speed: 3, dashSpeed: 8 };
       bullets = []; enemies = []; eBullets = []; particles = [];
       score = 0; lives = 3; spawnTimer = 0; diffLevel = 1;
       shakeTimer = 0; dashCooldown = 0; dashTimer = 0;
@@ -99,73 +271,165 @@
       diffLevel = 1 + flr(score / 200) * 0.3;
       if (shakeTimer > 0) shakeTimer--;
       if (dashCooldown > 0) dashCooldown--;
+
+      // Movement
       let speed = player.speed;
       if (dashTimer > 0) { speed = player.dashSpeed; dashTimer--; }
-      if (btn("left")) player.x -= speed;
+      if (btn("left"))  player.x -= speed;
       if (btn("right")) player.x += speed;
-      if (btn("up")) player.y -= speed;
-      if (btn("down")) player.y += speed;
-      player.x = _max(0, min(W - 8, player.x));
-      player.y = _max(75, min(H - 12, player.y));
-      if (btnp("b") && dashCooldown <= 0) { dashTimer = 6; dashCooldown = 30; note(1, "G5", 0.05); addParticle(player.x + 4, player.y + 8, 1); }
-      if (btnp("a")) { bullets.push({ x: player.x, y: player.y - 2, speed: -6 }); shootNote(); }
-      for (let i = bullets.length - 1; i >= 0; i--) { bullets[i].y += bullets[i].speed; if (bullets[i].y < -8) bullets.splice(i, 1); }
+      if (btn("up"))    player.y -= speed;
+      if (btn("down"))  player.y += speed;
+      player.x = _max(0, min(W - SS, player.x));
+      player.y = _max(SS * 4, min(H - SS - 4, player.y));
+
+      // Dash
+      if (btnp("b") && dashCooldown <= 0) {
+        dashTimer = 6; dashCooldown = 30;
+        note(1, "G5", 0.05);
+        addParticle(player.x + SS / 2, player.y + SS, 1);
+      }
+
+      // Shoot
+      if (btnp("a")) {
+        bullets.push({ x: player.x + SS / 2, y: player.y - 2, speed: -6 });
+        shootNote();
+      }
+
+      // Update bullets
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        bullets[i].y += bullets[i].speed;
+        if (bullets[i].y < -SS) bullets.splice(i, 1);
+      }
+
+      // Spawn enemies
       spawnTimer--;
       if (spawnTimer <= 0) { spawnEnemy(); spawnTimer = _max(10, 40 - flr(diffLevel * 5)); }
+
+      // Update enemies & bullet-enemy collision (circle)
       for (let i = enemies.length - 1; i >= 0; i--) {
-        const e = enemies[i]; e.y += e.speed; e.wobble += 0.05;
+        const e = enemies[i];
+        e.y += e.speed; e.wobble += 0.05;
         const wx = e.wobbleAmp * Math.sin(e.wobble);
+        const ecx = e.x + wx + SS / 2;
+        const ecy = e.y + SS / 2;
+        const er = enemyR(e);
+
+        // Enemy shoot
         e.shootTimer--;
-        if (e.shootTimer <= 0 && e.y > 0 && e.y < H * 0.6) { eBullets.push({ x: e.x + wx, y: e.y + 8, speed: 2 + rnd(1) }); e.shootTimer = 50 + flr(rnd(40)); }
-        if (e.y > H + 10) { enemies.splice(i, 1); continue; }
+        if (e.shootTimer <= 0 && e.y > 0 && e.y < H * 0.6) {
+          eBullets.push({ x: ecx, y: e.y + SS, speed: 2 + rnd(1) });
+          e.shootTimer = 50 + flr(rnd(40));
+        }
+        if (e.y > H + SS) { enemies.splice(i, 1); continue; }
+
+        // Bullet vs enemy (circle collision)
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
-          if (b.x + 8 > e.x + wx && b.x < e.x + wx + 8 && b.y + 8 > e.y && b.y < e.y + 8) {
+          if (circHit(b.x, b.y, BULLET_R, ecx, ecy, er)) {
             bullets.splice(j, 1); e.hp--;
-            if (e.hp <= 0) { addParticle(e.x + wx + 4, e.y + 4); score += e.type === 3 ? 30 : 10; hitNote(); enemies.splice(i, 1); shakeTimer = 4; }
-            else note(1, "A4", 0.03);
+            if (e.hp <= 0) {
+              addParticle(ecx, ecy);
+              score += e.type === 3 ? 30 : 10;
+              hitNote(); enemies.splice(i, 1); shakeTimer = 4;
+            } else {
+              note(1, "A4", 0.03);
+            }
             break;
           }
         }
       }
+
+      // Enemy bullets vs player (circle collision)
+      const pcx = player.x + SS / 2;
+      const pcy = player.y + SS / 2;
       for (let i = eBullets.length - 1; i >= 0; i--) {
         eBullets[i].y += eBullets[i].speed;
-        if (eBullets[i].y > H + 8) { eBullets.splice(i, 1); continue; }
+        if (eBullets[i].y > H + SS) { eBullets.splice(i, 1); continue; }
         if (dashTimer <= 0) {
           const b = eBullets[i];
-          if (b && b.x + 8 > player.x && b.x < player.x + 8 && b.y + 8 > player.y && b.y < player.y + 8) {
-            eBullets.splice(i, 1); lives--; shakeTimer = 8; addParticle(player.x + 4, player.y + 4, 2); deathNote();
-            if (lives <= 0) { Mono.go(GAMEOVER); addParticle(player.x + 4, player.y + 4); addParticle(player.x + 4, player.y + 4); return; }
+          if (b && circHit(b.x, b.y, EBULLET_R, pcx, pcy, PLAYER_R)) {
+            eBullets.splice(i, 1); lives--; shakeTimer = 8;
+            addParticle(pcx, pcy, 2); deathNote();
+            if (lives <= 0) { Mono.go(GAMEOVER); addParticle(pcx, pcy); addParticle(pcx, pcy); return; }
           }
         }
       }
+
+      // Enemy body vs player (circle collision)
       for (let i = enemies.length - 1; i >= 0; i--) {
-        const e = enemies[i]; const wx = e.wobbleAmp * Math.sin(e.wobble);
-        if (dashTimer <= 0 && player.x + 7 > e.x + wx && player.x < e.x + wx + 8 && player.y + 7 > e.y && player.y < e.y + 8) {
-          addParticle(player.x + 4, player.y + 4, 3); enemies.splice(i, 1); lives--; shakeTimer = 10; deathNote();
+        const e = enemies[i];
+        const wx = e.wobbleAmp * Math.sin(e.wobble);
+        const ecx = e.x + wx + SS / 2;
+        const ecy = e.y + SS / 2;
+        if (dashTimer <= 0 && circHit(pcx, pcy, PLAYER_R, ecx, ecy, enemyR(e))) {
+          addParticle(pcx, pcy, 3); enemies.splice(i, 1); lives--; shakeTimer = 10; deathNote();
           if (lives <= 0) { Mono.go(GAMEOVER); return; }
         }
       }
+
       updateStars(); updateParticles();
     },
+
     draw() {
       const sx = shakeTimer > 0 ? flr(rnd(5)) - 2 : 0;
       const sy = shakeTimer > 0 ? flr(rnd(5)) - 2 : 0;
       cls(0); drawStars(sx, sy);
-      for (const b of eBullets) spr(9, flr(b.x) + sx, flr(b.y) + sy);
-      for (const e of enemies) { const wx = e.wobbleAmp * Math.sin(e.wobble); spr(e.type, flr(e.x + wx) + sx, flr(e.y) + sy); }
-      for (const b of bullets) spr(4, flr(b.x) + sx, flr(b.y) + sy);
-      if (dashTimer > 0 && flr(Mono.frame / 2) % 2 === 0) {} else spr(1, flr(player.x) + sx, flr(player.y) + sy);
+
+      // Enemy bullets
+      for (const b of eBullets) spr(9, flr(b.x) - SS / 2 + sx, flr(b.y) - SS / 2 + sy);
+
+      // Enemies
+      for (const e of enemies) {
+        const wx = e.wobbleAmp * Math.sin(e.wobble);
+        const dx = flr(e.x + wx) + sx;
+        const dy = flr(e.y) + sy;
+        spr(e.type, dx, dy);
+        // Debug: enemy hitbox circle
+        const er = enemyR(e);
+        dbgC(dx + SS / 2, dy + SS / 2, er);
+      }
+
+      // Player bullets
+      for (const b of bullets) {
+        spr(4, flr(b.x) - SS / 2 + sx, flr(b.y) - SS / 2 + sy);
+        dbgC(flr(b.x) + sx, flr(b.y) + sy, BULLET_R);
+      }
+
+      // Player
+      if (dashTimer > 0 && flr(Mono.frame / 2) % 2 === 0) {
+        // blink during dash — skip draw
+      } else {
+        spr(1, flr(player.x) + sx, flr(player.y) + sy);
+      }
+      // Debug: player hitbox
+      const pcx = flr(player.x) + SS / 2 + sx;
+      const pcy = flr(player.y) + SS / 2 + sy;
+      dbgC(pcx, pcy, PLAYER_R);
+
+      // Particles
       for (const p of particles) pix(flr(p.x) + sx, flr(p.y) + sy, p.color);
-      rectf(0, 0, W, 12, 0);
-      text("SCORE:" + score, 4, 3, 3);
-      for (let i = 0; i < lives; i++) spr(11, W - 30 + i * 10, 2);
-      if (dashCooldown > 0) { const bw = flr((dashCooldown / 30) * 30); rectf(4, H - 6, 32, 3, 1); rectf(5, H - 5, 30 - bw, 1, 2); }
-      else text("DASH:OK", 4, H - 8, 2);
+
+      // Enemy bullet debug
+      for (const b of eBullets) dbgC(flr(b.x) + sx, flr(b.y) + sy, EBULLET_R);
+
+      // --- HUD (drawn last, no shake) ---
+      rectf(0, 0, W, 14, 0);
+      text("SCORE:" + score, 4, 4, 3);
+      for (let i = 0; i < lives; i++) spr(11, W - 56 + i * 18, 0);
+      // Dash cooldown bar
+      if (dashCooldown > 0) {
+        const bw = flr((dashCooldown / 30) * 30);
+        rectf(4, H - 8, 34, 5, 1);
+        rectf(5, H - 7, 32 - bw, 3, 2);
+      } else {
+        text("DASH:OK", 4, H - 10, 2);
+      }
     }
   });
 
-  // --- Game Over Scene ---
+  // ================================================================
+  //  GAME OVER SCENE
+  // ================================================================
   Mono.scene(GAMEOVER, {
     init() {},
     update() {

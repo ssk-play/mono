@@ -19,62 +19,15 @@
   "use strict";
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Game constants ---
-  const CX = W / 2;   // 160 center
-  const CY = 112;     // center of quadrant area (shifted up for HUD)
-  const QS = 53;      // quadrant size
-  const GAP = 4;      // gap between quadrants
+  // --- 8->16 upscaler ---
+  function up(d){let o="";for(let r=0;r<8;r++){let row="";for(let c=0;c<8;c++){const ch=d[r*8+c];row+=ch+ch;}o+=row+row;}return o;}
 
-  // Quadrant definitions: 0=up, 1=down, 2=left, 3=right
-  // Positions relative to center cross
-  const QUADS = [
-    { key: "up",    note: "E4",  baseColor: 1, litColor: 3, label: "UP",
-      x: CX - QS - GAP/2, y: CY - QS - GAP/2 - QS, w: QS*2 + GAP, h: QS },
-    { key: "down",  note: "C4",  baseColor: 1, litColor: 3, label: "DOWN",
-      x: CX - QS - GAP/2, y: CY + GAP/2, w: QS*2 + GAP, h: QS },
-    { key: "left",  note: "G4",  baseColor: 1, litColor: 3, label: "LEFT",
-      x: CX - QS - GAP/2 - QS - GAP, y: CY - QS/2, w: QS, h: QS },
-    { key: "right", note: "A4",  baseColor: 1, litColor: 3, label: "RIGHT",
-      x: CX + QS + GAP/2 + GAP, y: CY - QS/2, w: QS, h: QS },
-  ];
-
-  // Assign distinct shade per quadrant for visual distinction
-  // 0=up(lightest), 1=down(medium-dark), 2=left(dark), 3=right(medium)
-  const QUAD_SHADES = [
-    { dim: 2, lit: 3 },  // up: medium -> bright
-    { dim: 1, lit: 2 },  // down: dark-medium -> medium
-    { dim: 1, lit: 3 },  // left: dark-medium -> bright
-    { dim: 2, lit: 3 },  // right: medium -> bright
-  ];
-
-  // Quadrant layout: 4 panels in a diamond/cross pattern
-  const PAD = 13;
-  const QW = 67;   // quadrant width
-  const QH = 60;   // quadrant height
-  const QGAP = 6;
-
-  const quadPos = [
-    // 0: UP - top center
-    { x: CX - QW/2, y: CY - QH - QGAP/2 },
-    // 1: DOWN - bottom center
-    { x: CX - QW/2, y: CY + QGAP/2 },
-    // 2: LEFT - center left
-    { x: CX - QW - QGAP/2, y: CY - QH/2 },
-    // 3: RIGHT - center right
-    { x: CX + QGAP/2, y: CY - QH/2 },
-  ];
-
-  // Quadrant tones (distinct pitches)
-  const QUAD_NOTES = ["E5", "C4", "G4", "A4"];
-  const QUAD_KEYS = ["up", "down", "left", "right"];
-  const QUAD_LABELS = ["UP", "DOWN", "LEFT", "RIGHT"];
-
-  // Sprites for arrows on quadrants
-  // Up arrow
-  defSprite(1,
+  // --- Sprites (8x8 art, upscaled to 16x16) ---
+  // 1: Up arrow
+  defSprite(1, up(
     "00030000" +
     "00333000" +
     "03333300" +
@@ -83,9 +36,9 @@
     "00030000" +
     "00030000" +
     "00000000"
-  );
-  // Down arrow
-  defSprite(2,
+  ));
+  // 2: Down arrow
+  defSprite(2, up(
     "00000000" +
     "00030000" +
     "00030000" +
@@ -94,9 +47,9 @@
     "03333300" +
     "00333000" +
     "00030000"
-  );
-  // Left arrow
-  defSprite(3,
+  ));
+  // 3: Left arrow
+  defSprite(3, up(
     "00000000" +
     "00030000" +
     "00300000" +
@@ -105,9 +58,9 @@
     "00030000" +
     "00000000" +
     "00000000"
-  );
-  // Right arrow
-  defSprite(4,
+  ));
+  // 4: Right arrow
+  defSprite(4, up(
     "00000000" +
     "00030000" +
     "00003000" +
@@ -116,34 +69,121 @@
     "00030000" +
     "00000000" +
     "00000000"
-  );
+  ));
+  // 5: Center circle decoration
+  defSprite(5, up(
+    "00111100" +
+    "01222210" +
+    "12233221" +
+    "12332321" +
+    "12323221" +
+    "12222210" +
+    "01222100" +
+    "00111100"
+  ));
+  // 6: Star/sparkle for success
+  defSprite(6, up(
+    "00030000" +
+    "00030000" +
+    "03000300" +
+    "00333000" +
+    "03000300" +
+    "00030000" +
+    "00030000" +
+    "00000000"
+  ));
+  // 7: X mark for failure
+  defSprite(7, up(
+    "00000000" +
+    "30000030" +
+    "03000300" +
+    "00333000" +
+    "03000300" +
+    "30000030" +
+    "00000000" +
+    "00000000"
+  ));
+
+  // --- Game constants ---
+  const CX = W / 2;       // 160 center
+  const CY = 110;         // center of quadrant area
+  const QRAD = 38;        // quadrant circle radius
+  const QDIST = 52;       // distance from center to quadrant center
+
+  // Quadrant definitions: 0=up, 1=down, 2=left, 3=right
+  // Positions as circle centers relative to CX,CY
+  const QUADS = [
+    { key: "up",    note: "E5",  label: "UP",    dx: 0,      dy: -QDIST },
+    { key: "down",  note: "C4",  label: "DOWN",  dx: 0,      dy:  QDIST },
+    { key: "left",  note: "G4",  label: "LEFT",  dx: -QDIST, dy: 0      },
+    { key: "right", note: "A4",  label: "RIGHT", dx:  QDIST, dy: 0      },
+  ];
+
+  // Quadrant shade pairs [dim, lit]
+  const QUAD_SHADES = [
+    { dim: 1, lit: 3 },  // up:    dark -> bright
+    { dim: 1, lit: 2 },  // down:  dark -> medium
+    { dim: 2, lit: 3 },  // left:  medium -> bright
+    { dim: 1, lit: 2 },  // right: dark -> medium
+  ];
+
+  const QUAD_KEYS = ["up", "down", "left", "right"];
 
   // --- Game state ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
-  let sequence = [];      // array of quadrant indices (0-3)
-  let seqIndex = 0;       // current position in sequence playback/input
+  let sequence = [];
+  let seqIndex = 0;
   let round = 0;
   let bestScore = 0;
   let phase = "idle";     // "showing" | "input" | "success" | "fail" | "idle"
 
   // Timing
-  let showTimer = 0;      // timer for showing current sequence element
-  let showIndex = 0;      // which element in sequence we're showing
-  let showGap = 0;        // gap between flashes
-  let litQuad = -1;       // which quadrant is currently lit (-1 = none)
-  let litTimer = 0;       // how long the lit quadrant stays lit
-  let successTimer = 0;   // pause after successful round
-  let failTimer = 0;      // pause after failure
-  let inputLitTimer = 0;  // flash when player presses
+  let showTimer = 0;
+  let showIndex = 0;
+  let showGap = 0;
+  let litQuad = -1;
+  let litTimer = 0;
+  let successTimer = 0;
+  let failTimer = 0;
+  let inputLitTimer = 0;
   let inputLitQuad = -1;
+
+  // Animation
+  let titlePulse = 0;
+  let pulsePhase = 0;     // for circle pulse effect
 
   // Speed: frames per flash (decreases with level)
   function flashDuration() { return _max(6, 15 - flr(round / 3)); }
-  function gapDuration() { return _max(4, 10 - flr(round / 4)); }
+  function gapDuration()   { return _max(4, 10 - flr(round / 4)); }
 
-  // Title animation
-  let titlePulse = 0;
+  // Font metrics
+  const FONT_W = 4, FONT_H = 7;
 
+  // Center text helper
+  function textCentered(str, y, c) {
+    const w = str.length * (FONT_W + 1) - 1;
+    text(str, flr(CX - w / 2), y, c);
+  }
+
+  // --- Circle collision: check if point is inside quadrant circle ---
+  function pointInQuadCircle(px, py, q) {
+    const qx = CX + QUADS[q].dx;
+    const qy = CY + QUADS[q].dy;
+    const dx = px - qx;
+    const dy = py - qy;
+    return dx * dx + dy * dy <= QRAD * QRAD;
+  }
+
+  // --- Circle-circle collision (for future extensibility) ---
+  function circlesOverlap(x1, y1, r1, x2, y2, r2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist2 = dx * dx + dy * dy;
+    const rSum = r1 + r2;
+    return dist2 <= rSum * rSum;
+  }
+
+  // --- Reset / Rounds ---
   function resetGame() {
     sequence = [];
     seqIndex = 0;
@@ -153,17 +193,16 @@
     litTimer = 0;
     inputLitQuad = -1;
     inputLitTimer = 0;
+    pulsePhase = 0;
     nextRound();
   }
 
   function nextRound() {
     round++;
-    // Add a random quadrant to the sequence
     sequence.push(flr(rnd(4)));
-    // Start showing the sequence
     phase = "showing";
     showIndex = 0;
-    showTimer = 20; // initial pause before showing
+    showTimer = 20;
     showGap = 0;
     litQuad = -1;
     litTimer = 0;
@@ -171,7 +210,7 @@
   }
 
   function playQuadTone(q) {
-    note(0, QUAD_NOTES[q], 0.15);
+    note(0, QUADS[q].note, 0.15);
   }
 
   function playErrorTone() {
@@ -185,10 +224,159 @@
     setTimeout(() => note(0, "G5", 0.12), 160);
   }
 
-  // Center text helper
-  function textCentered(str, y, c) {
-    const w = str.length * (FONT_W + 1) - 1;
-    text(str, flr(CX - w / 2), y, c);
+  // --- Draw quadrant as filled circle ---
+  function drawQuad(q, isLit) {
+    const qx = CX + QUADS[q].dx;
+    const qy = CY + QUADS[q].dy;
+    const shade = isLit ? QUAD_SHADES[q].lit : QUAD_SHADES[q].dim;
+    const borderC = isLit ? 3 : 2;
+
+    // Pulse effect when lit
+    let r = QRAD;
+    if (isLit) {
+      r = QRAD + 2;
+    }
+
+    // Filled circle for quadrant
+    circf(qx, qy, r, shade);
+    circ(qx, qy, r, borderC);
+
+    // Debug: circle hitbox for each quadrant
+    dbgC(qx, qy, QRAD);
+
+    // Arrow sprite centered in quadrant
+    const arrowX = qx - 8;
+    const arrowY = qy - 8;
+    sprT(q + 1, arrowX, arrowY - 3);
+
+    // Label below arrow
+    const lbl = QUADS[q].label;
+    const lblW = lbl.length * (FONT_W + 1) - 1;
+    text(lbl, flr(qx - lblW / 2), qy + 8, isLit ? 3 : 2);
+  }
+
+  // --- Draw all quadrants ---
+  function drawQuadrants() {
+    for (let q = 0; q < 4; q++) {
+      const isLit = (litQuad === q) || (inputLitQuad === q);
+      drawQuad(q, isLit);
+    }
+    // Center decoration
+    sprT(5, CX - 8, CY - 8);
+  }
+
+  // --- HUD ---
+  function drawHUD() {
+    // Top bar background
+    rectf(0, 0, W, 16, 0);
+    line(0, 16, W, 16, 1);
+
+    // Round number - top left
+    text("ROUND " + round, 6, 5, 3);
+
+    // Best score - top right
+    const bStr = "BEST " + bestScore;
+    const bW = bStr.length * (FONT_W + 1) - 1;
+    text(bStr, W - 6 - bW, 5, 2);
+
+    // Bottom bar
+    rectf(0, H - 18, W, 18, 0);
+    line(0, H - 18, W, H - 18, 1);
+
+    // Sequence length indicator - bottom center
+    const seqStr = "LENGTH " + sequence.length;
+    const seqW = seqStr.length * (FONT_W + 1) - 1;
+    text(seqStr, flr(CX - seqW / 2), H - 14, 2);
+
+    // Progress dots during input phase
+    if (phase === "input") {
+      const dotY = H - 7;
+      const totalDots = sequence.length;
+      const dotSpacing = 6;
+      const totalW = totalDots * dotSpacing;
+      const startX = flr(CX - totalW / 2);
+      for (let i = 0; i < totalDots; i++) {
+        const c = i < seqIndex ? 3 : 1;
+        circf(startX + i * dotSpacing + 2, dotY, 2, c);
+        // Debug: progress dot hitboxes
+        dbgC(startX + i * dotSpacing + 2, dotY, 2);
+      }
+    }
+  }
+
+  // --- Title screen ---
+  function drawTitle() {
+    const pulse = flr(titlePulse / 15) % 2;
+
+    // Title text
+    textCentered("SIMON", 30, 3);
+
+    // Decorative quadrants - mini version
+    const miniCX = CX;
+    const miniCY = 82;
+    const miniR = 18;
+    const miniDist = 26;
+    const activeQ = flr(titlePulse / 20) % 4;
+
+    const miniDirs = [
+      { dx: 0, dy: -miniDist },
+      { dx: 0, dy:  miniDist },
+      { dx: -miniDist, dy: 0 },
+      { dx:  miniDist, dy: 0 },
+    ];
+
+    for (let q = 0; q < 4; q++) {
+      const mx = miniCX + miniDirs[q].dx;
+      const my = miniCY + miniDirs[q].dy;
+      const isActive = (q === activeQ);
+      const shade = isActive ? QUAD_SHADES[q].lit : QUAD_SHADES[q].dim;
+      const border = isActive ? 3 : 2;
+
+      circf(mx, my, miniR + (isActive ? 1 : 0), shade);
+      circ(mx, my, miniR + (isActive ? 1 : 0), border);
+
+      // Mini arrow
+      sprT(q + 1, mx - 8, my - 10);
+    }
+
+    // Center decoration on title
+    sprT(5, miniCX - 8, miniCY - 8);
+
+    // Instructions
+    textCentered("REPEAT THE PATTERN", 126, 2);
+    textCentered("USE ARROW KEYS", 138, 2);
+
+    if (pulse === 0) {
+      textCentered("PRESS START", 166, 3);
+    }
+
+    // Best score
+    if (bestScore > 0) {
+      textCentered("BEST: " + bestScore, 190, 2);
+    }
+  }
+
+  // --- Game Over screen ---
+  function drawGameOver() {
+    // Dimmed quadrants
+    for (let q = 0; q < 4; q++) {
+      const qx = CX + QUADS[q].dx;
+      const qy = CY + QUADS[q].dy;
+      circf(qx, qy, QRAD, 0);
+      circ(qx, qy, QRAD, 1);
+    }
+
+    // X mark in center
+    sprT(7, CX - 8, CY - 8);
+
+    textCentered("GAME OVER", 28, 3);
+    textCentered("ROUND REACHED: " + round, 198, 2);
+    textCentered("BEST: " + bestScore, 210, 2);
+
+    const pulse = flr(titlePulse / 15) % 2;
+    if (pulse === 0) {
+      textCentered("PRESS START", 224, 3);
+    }
   }
 
   // --- Title Scene ---
@@ -200,7 +388,7 @@
         resetGame();
         note(0, "C5", 0.08);
         setTimeout(() => note(0, "E5", 0.08), 80);
-        Mono.go(PLAY); return;
+        Mono.go(PLAY);
       }
     },
     draw() {
@@ -214,6 +402,7 @@
     init() { resetGame(); },
     update() {
       titlePulse++;
+      pulsePhase += 0.1;
 
       // Decay input flash
       if (inputLitTimer > 0) {
@@ -279,7 +468,7 @@
         failTimer--;
         if (failTimer <= 0) {
           failTimer = 30;
-          Mono.go(GAMEOVER); return;
+          Mono.go(GAMEOVER);
         }
         return;
       }
@@ -288,11 +477,27 @@
       cls(0);
       drawQuadrants();
       drawHUD();
-      if (phase === "showing") { textCentered("WATCH", CY - 4, 3); }
-      else if (phase === "input") { textCentered("YOUR TURN", CY - 4, 2); }
-      else if (phase === "success") { textCentered("CORRECT!", CY - 4, 3); }
-      else if (phase === "fail") {
-        if (flr(titlePulse / 4) % 2 === 0) { textCentered("WRONG!", CY - 4, 3); }
+
+      // Phase overlay text in center
+      if (phase === "showing") {
+        textCentered("WATCH", CY + QDIST + QRAD + 8, 3);
+      } else if (phase === "input") {
+        textCentered("YOUR TURN", CY + QDIST + QRAD + 8, 2);
+      } else if (phase === "success") {
+        // Sparkle sprites around center
+        const t = flr(titlePulse / 3) % 4;
+        const sparkleR = 20;
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + pulsePhase;
+          const sx = CX + flr(cos(a) * sparkleR) - 8;
+          const sy = CY + flr(sin(a) * sparkleR) - 8;
+          sprT(6, sx, sy);
+        }
+        textCentered("CORRECT!", CY + QDIST + QRAD + 8, 3);
+      } else if (phase === "fail") {
+        if (flr(titlePulse / 4) % 2 === 0) {
+          textCentered("WRONG!", CY + QDIST + QRAD + 8, 3);
+        }
       }
     }
   });
@@ -304,7 +509,7 @@
       titlePulse++;
       failTimer--;
       if (failTimer <= 0 && (btnp("start") || btnp("a"))) {
-        Mono.go(TITLE); return;
+        Mono.go(TITLE);
       }
     },
     draw() {
@@ -312,134 +517,6 @@
       drawGameOver();
     }
   });
-
-  function drawQuadrants() {
-    for (let q = 0; q < 4; q++) {
-      const pos = quadPos[q];
-      const isLit = (litQuad === q) || (inputLitQuad === q);
-      let shade;
-
-      // Each quadrant gets a unique shade pair
-      if (q === 0) shade = isLit ? 3 : 1;       // UP: dark -> bright
-      else if (q === 1) shade = isLit ? 2 : 0;   // DOWN: black -> medium
-      else if (q === 2) shade = isLit ? 3 : 2;   // LEFT: medium -> bright
-      else shade = isLit ? 2 : 1;                 // RIGHT: dark-med -> medium
-
-      // Draw filled quadrant
-      rectf(pos.x, pos.y, QW, QH, shade);
-
-      // Draw border
-      const borderColor = isLit ? 3 : 2;
-      rect(pos.x, pos.y, QW, QH, borderColor);
-
-      // Draw arrow sprite in center of quadrant
-      const arrowX = pos.x + flr(QW / 2) - 4;
-      const arrowY = pos.y + flr(QH / 2) - 4;
-      spr(q + 1, arrowX, arrowY);
-
-      // Draw label below arrow
-      const lbl = QUAD_LABELS[q];
-      const lblW = lbl.length * (FONT_W + 1) - 1;
-      const lblX = pos.x + flr(QW / 2 - lblW / 2);
-      const lblY = pos.y + flr(QH / 2) + 10;
-      text(lbl, lblX, lblY, isLit ? 3 : 2);
-    }
-  }
-
-  function drawHUD() {
-    // Round number - top left
-    text("ROUND " + round, 7, 8, 3);
-
-    // Best score - top right
-    const bStr = "BEST " + bestScore;
-    const bW = bStr.length * (FONT_W + 1) - 1;
-    text(bStr, W - 7 - bW, 8, 2);
-
-    // Sequence length indicator - bottom
-    const seqStr = "LENGTH " + sequence.length;
-    const seqW = seqStr.length * (FONT_W + 1) - 1;
-    text(seqStr, flr(CX - seqW / 2), H - 22, 2);
-
-    // Progress dots during input phase
-    if (phase === "input") {
-      const dotY = H - 14;
-      const totalDots = sequence.length;
-      const dotSpacing = 6;
-      const totalW = totalDots * dotSpacing;
-      const startX = flr(CX - totalW / 2);
-      for (let i = 0; i < totalDots; i++) {
-        const c = i < seqIndex ? 3 : 1;
-        rectf(startX + i * dotSpacing, dotY, 4, 4, c);
-      }
-    }
-  }
-
-  function drawTitle() {
-    // Title
-    const pulse = flr(titlePulse / 15) % 2;
-
-    textCentered("SIMON", 45, 3);
-
-    // Decorative quadrants on title screen
-    const demoY = 82;
-    const demoSize = 27;
-    const demoGap = 6;
-    const demoX = CX - demoSize - demoGap / 2;
-
-    // Animate: cycle through quadrants
-    const activeQ = flr(titlePulse / 20) % 4;
-
-    // Draw mini quadrant preview
-    for (let q = 0; q < 4; q++) {
-      let mx, my;
-      if (q === 0) { mx = CX - demoSize/2; my = demoY - demoSize - demoGap/2; }
-      else if (q === 1) { mx = CX - demoSize/2; my = demoY + demoGap/2; }
-      else if (q === 2) { mx = CX - demoSize - demoGap/2 - demoSize/2; my = demoY - demoSize/2; }
-      else { mx = CX + demoGap/2 + demoSize/2; my = demoY - demoSize/2; }
-
-      const isActive = (q === activeQ);
-      let shade;
-      if (q === 0) shade = isActive ? 3 : 1;
-      else if (q === 1) shade = isActive ? 2 : 0;
-      else if (q === 2) shade = isActive ? 3 : 2;
-      else shade = isActive ? 2 : 1;
-
-      rectf(mx, my, demoSize, demoSize, shade);
-      rect(mx, my, demoSize, demoSize, isActive ? 3 : 2);
-    }
-
-    // Instructions
-    textCentered("REPEAT THE PATTERN", 150, 2);
-    textCentered("USE ARROW KEYS", 161, 2);
-
-    if (pulse === 0) {
-      textCentered("PRESS START", 188, 3);
-    }
-
-    // Best score
-    if (bestScore > 0) {
-      textCentered("BEST: " + bestScore, 210, 2);
-    }
-  }
-
-  function drawGameOver() {
-    // Draw the quadrants dimmed
-    for (let q = 0; q < 4; q++) {
-      const pos = quadPos[q];
-      rectf(pos.x, pos.y, QW, QH, 0);
-      rect(pos.x, pos.y, QW, QH, 1);
-    }
-
-    textCentered("GAME OVER", 60, 3);
-
-    textCentered("ROUND REACHED: " + round, 90, 2);
-    textCentered("BEST: " + bestScore, 105, 2);
-
-    const pulse = flr(titlePulse / 15) % 2;
-    if (pulse === 0) {
-      textCentered("PRESS START", 150, 3);
-    }
-  }
 
   Mono.go(TITLE);
   Mono.boot("screen");

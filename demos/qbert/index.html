@@ -23,7 +23,7 @@
           rnd, flr, abs: _abs, min, max: _max, sin, cos,
           dbg, dbgC } = Mono;
 
-  // --- 8→16 upscale helper ---
+  // --- 8->16 upscale helper ---
   function up(d) {
     let o = "";
     for (let r = 0; r < 8; r++) {
@@ -139,100 +139,84 @@
   ));
 
   // --- Sprite size constant ---
-  const SS = 16;  // sprite render size (16x16 after upscale)
+  const SS = 16;
 
-  // --- Isometric Cube Geometry ---
-  const CUBE_W = 26;   // wider cubes for 320x240 screen
-  const CUBE_H = 20;   // top diamond height
-  const CUBE_DEPTH = 14; // side face depth
-  const PYR_TOP_X = W / 2; // top center of pyramid
-  const PYR_TOP_Y = 42;    // top of pyramid y
+  // --- Isometric Cube Geometry (tuned for 320x240) ---
+  const CUBE_W = 26;
+  const CUBE_H = 20;
+  const CUBE_DEPTH = 14;
+  const PYR_TOP_X = W / 2;
+  const PYR_TOP_Y = 42;
   const ROWS = 7;
 
-  // Get pixel position for grid position (row, col)
+  // Max Y of bottom row cubes (for layout overflow check)
+  // row 6: PYR_TOP_Y + 6 * (10 + 14) = 42 + 144 = 186, plus CUBE_H/2 + CUBE_DEPTH = 24 => 210
+  // Leaves 30px for HUD at top. Fits in 240.
+
   function cubePos(row, col) {
     const x = PYR_TOP_X + (col - row / 2) * CUBE_W;
     const y = PYR_TOP_Y + row * (CUBE_H / 2 + CUBE_DEPTH);
     return { x: x, y: y };
   }
 
-  // Pre-compute pixel buffer reference (set in boot)
-  let buf32;
-
-  // Draw an isometric cube at pixel position (cx, cy) with given colors
+  // Draw an isometric cube using public API (pix/line calls)
   function drawCube(cx, cy, topC, leftC, rightC) {
-    if (!buf32) {
-      // Get buf32 from engine internals (accessed via closure from cls)
-      return;
-    }
-    const hw = CUBE_W / 2;
-    const hh = CUBE_H / 2;
+    const hw = flr(CUBE_W / 2);
+    const hh = flr(CUBE_H / 2);
     const sd = CUBE_DEPTH;
 
-    // Top face (diamond)
+    // Top face (diamond) - scanline fill via pix
     for (let dy = -hh; dy <= hh; dy++) {
       const w = hw * (1 - _abs(dy) / hh);
-      const y = cy + dy;
-      if (y >= 0 && y < H) {
-        const col = COLOR_U32[topC] || COLOR_U32[0];
-        const x0 = _max(0, Math.floor(cx - w));
-        const x1 = min(W - 1, Math.floor(cx + w));
-        for (let x = x0; x <= x1; x++) buf32[Math.floor(y) * W + x] = col;
-      }
+      const y = flr(cy + dy);
+      if (y < 0 || y >= H) continue;
+      const x0 = _max(0, flr(cx - w));
+      const x1 = min(W - 1, flr(cx + w));
+      for (let x = x0; x <= x1; x++) pix(x, y, topC);
     }
 
-    // Left face
+    // Left face (parallelogram)
     for (let dy = 0; dy < sd; dy++) {
-      const topY = cy + hh + dy;
-      if (topY < 0 || topY >= H) continue;
-      const leftEdge = cx - hw + (dy * hw / sd);
-      const rightEdge = cx;
-      const col = COLOR_U32[leftC] || COLOR_U32[0];
-      const x0 = _max(0, Math.floor(leftEdge));
-      const x1 = min(W - 1, Math.floor(rightEdge));
-      for (let x = x0; x <= x1; x++) buf32[Math.floor(topY) * W + x] = col;
+      const y = flr(cy + hh + dy);
+      if (y < 0 || y >= H) continue;
+      const le = cx - hw + (dy * hw / sd);
+      const re = cx;
+      const x0 = _max(0, flr(le));
+      const x1 = min(W - 1, flr(re));
+      for (let x = x0; x <= x1; x++) pix(x, y, leftC);
     }
 
-    // Right face
+    // Right face (parallelogram)
     for (let dy = 0; dy < sd; dy++) {
-      const topY = cy + hh + dy;
-      if (topY < 0 || topY >= H) continue;
-      const leftEdge = cx;
-      const rightEdge = cx + hw - (dy * hw / sd);
-      const col = COLOR_U32[rightC] || COLOR_U32[0];
-      const x0 = _max(0, Math.floor(leftEdge));
-      const x1 = min(W - 1, Math.floor(rightEdge));
-      for (let x = x0; x <= x1; x++) buf32[Math.floor(topY) * W + x] = col;
+      const y = flr(cy + hh + dy);
+      if (y < 0 || y >= H) continue;
+      const le = cx;
+      const re = cx + hw - (dy * hw / sd);
+      const x0 = _max(0, flr(le));
+      const x1 = min(W - 1, flr(re));
+      for (let x = x0; x <= x1; x++) pix(x, y, rightC);
     }
 
     // Outline edges
-    line(Math.floor(cx - hw), Math.floor(cy), Math.floor(cx), Math.floor(cy - hh), 0);
-    line(Math.floor(cx + hw), Math.floor(cy), Math.floor(cx), Math.floor(cy - hh), 0);
-    line(Math.floor(cx - hw), Math.floor(cy), Math.floor(cx), Math.floor(cy + hh), 0);
-    line(Math.floor(cx + hw), Math.floor(cy), Math.floor(cx), Math.floor(cy + hh), 0);
-    line(Math.floor(cx - hw), Math.floor(cy), Math.floor(cx), Math.floor(cy + hh + sd), 0);
-    line(Math.floor(cx), Math.floor(cy + hh), Math.floor(cx), Math.floor(cy + hh + sd), 0);
-    line(Math.floor(cx + hw), Math.floor(cy), Math.floor(cx), Math.floor(cy + hh + sd), 0);
+    const fcx = flr(cx), fcy = flr(cy);
+    // Top diamond
+    line(fcx - hw, fcy, fcx, fcy - hh, 0);
+    line(fcx + hw, fcy, fcx, fcy - hh, 0);
+    line(fcx - hw, fcy, fcx, fcy + hh, 0);
+    line(fcx + hw, fcy, fcx, fcy + hh, 0);
+    // Left face
+    line(fcx - hw, fcy, fcx, fcy + hh + sd, 0);
+    line(fcx, fcy + hh, fcx, fcy + hh + sd, 0);
+    // Right face
+    line(fcx + hw, fcy, fcx, fcy + hh + sd, 0);
   }
-
-  // Direct pixel buffer access for cube drawing (engine exposes COLOR_U32 globally)
-  const COLOR_U32 = Mono.COLORS.map(hex => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return (255 << 24) | (b << 16) | (g << 8) | r;
-  });
 
   // --- Collision helpers ---
-  // Circle-circle collision
   function circCollide(ax, ay, ar, bx, by, br) {
     const dx = ax - bx, dy = ay - by;
-    const dist = dx * dx + dy * dy;
-    const rr = ar + br;
-    return dist < rr * rr;
+    return dx * dx + dy * dy < (ar + br) * (ar + br);
   }
 
-  // Player and enemy hit radii
   const PLAYER_R = 6;
   const ENEMY_R = 5;
   const BALL_R = 4;
@@ -244,7 +228,6 @@
   let targetColor;
   let startColor;
 
-  // Player state
   let pRow, pCol;
   let pPx, pPy;
   let pTargetPx, pTargetPy;
@@ -258,15 +241,12 @@
   let invulnTimer;
   let speechTimer;
 
-  // Enemies
   let enemies;
   let enemySpawnTimer;
   let coilyActive;
 
-  // Discs
   let discs;
 
-  // Level transition
   let levelClearTimer;
   let flashTimer;
   let deathPause;
@@ -287,13 +267,10 @@
     cubeColors = [];
     for (let r = 0; r < ROWS; r++) {
       cubeColors[r] = [];
-      for (let c = 0; c <= r; c++) {
-        cubeColors[r][c] = 0;
-      }
+      for (let c = 0; c <= r; c++) cubeColors[r][c] = 0;
     }
     startColor = 1;
     targetColor = level <= 2 ? 2 : 3;
-
     for (let r = 0; r < ROWS; r++)
       for (let c = 0; c <= r; c++)
         cubeColors[r][c] = startColor;
@@ -316,7 +293,6 @@
     enemySpawnTimer = 60 + flr(rnd(60));
     coilyActive = false;
 
-    // Place discs
     discs = [];
     const discRow1 = 1 + flr(rnd(3));
     const discRow2 = 1 + flr(rnd(3));
@@ -405,26 +381,23 @@
     if (type === "coily_egg") coilyActive = true;
   }
 
-  // --- Player center for collision ---
+  // --- Center positions for circle collision ---
   function playerCenter() {
-    let px = pPx;
     let py = pPy - CUBE_H / 2;
     if (pHopping > 0 && pFalling === 0 && pOnDisc === 0) {
       const t = pHopping / HOP_FRAMES;
       py -= sin(t * 3.14159) * 14;
     }
-    return { cx: px, cy: py };
+    return { cx: pPx, cy: py };
   }
 
-  // --- Enemy center for collision ---
   function enemyCenter(e) {
-    let ex = e.px;
     let ey = e.py - CUBE_H / 2;
     if (e.hopping > 0) {
       const t = e.hopping / ENEMY_HOP_FRAMES;
       ey -= sin(t * 3.14159) * 12;
     }
-    return { cx: ex, cy: ey };
+    return { cx: e.px, cy: ey };
   }
 
   // --- Title Scene ---
@@ -433,7 +406,6 @@
     update() {
       titleBlink = (Mono.frame % 40) < 25;
       if (btnp("a")) {
-        ensureAudio();
         resetGame();
         note(0, "C5", 0.1);
         setTimeout(() => note(0, "E5", 0.1), 100);
@@ -444,9 +416,9 @@
     draw() {
       cls(0);
       text("Q*BERT", W / 2 - 15, 40, 3);
-      text("MONO EDITION", W / 2 - 37, 54, 2);
+      text("MONO EDITION", W / 2 - 30, 54, 2);
 
-      // Draw a small preview pyramid
+      // Small preview pyramid
       for (let r = 0; r < 4; r++) {
         for (let c = 0; c <= r; c++) {
           const p = cubePos(r, c);
@@ -456,10 +428,10 @@
       }
 
       if (titleBlink) {
-        text("PRESS START", W / 2 - 30, 188, 3);
+        text("PRESS START", W / 2 - 30, 190, 3);
       }
-      text("ARROWS TO HOP", W / 2 - 32, 208, 1);
-      text("CHANGE ALL CUBES", W / 2 - 40, 220, 1);
+      text("ARROWS TO HOP", W / 2 - 32, 210, 1);
+      text("CHANGE ALL CUBES", W / 2 - 40, 222, 1);
     }
   });
 
@@ -472,9 +444,7 @@
     if (levelClearTimer > 0) {
       levelClearTimer--;
       flashTimer++;
-      if (levelClearTimer === 0) {
-        nextLevel();
-      }
+      if (levelClearTimer === 0) nextLevel();
       return;
     }
 
@@ -482,11 +452,8 @@
       deathPause--;
       if (speechTimer > 0) speechTimer--;
       if (deathPause === 0) {
-        if (lives <= 0) {
-          Mono.go(GAMEOVER); return;
-        } else {
-          respawnPlayer();
-        }
+        if (lives <= 0) { Mono.go(GAMEOVER); return; }
+        else respawnPlayer();
       }
       return;
     }
@@ -496,8 +463,8 @@
     // --- Player hopping ---
     if (pHopping > 0) {
       pHopping--;
-      pPx = pPx + (pTargetPx - pPx) * 0.2;
-      pPy = pPy + (pTargetPy - pPy) * 0.2;
+      pPx += (pTargetPx - pPx) * 0.2;
+      pPy += (pTargetPy - pPy) * 0.2;
       if (pHopping === 0) {
         pPx = pTargetPx;
         pPy = pTargetPy;
@@ -518,7 +485,7 @@
             setTimeout(() => note(0, "C6", 0.12), 240);
           }
         } else if (pFalling > 0) {
-          // falling off edge
+          // already falling
         } else {
           landOnCube(pRow, pCol);
           if (checkLevelClear()) {
@@ -535,15 +502,13 @@
       pFallVy += 0.5;
       pPy += pFallVy;
       pFalling--;
-      if (pFalling === 0) {
-        killPlayer();
-      }
+      if (pFalling === 0) killPlayer();
     } else if (!pDead && pOnDisc === 0) {
       let dr = 0, dc = 0;
       let moved = false;
-      if (btnp("right")) { dr = 1; dc = 1; pDir = 0; moved = true; }
+      if (btnp("right"))     { dr = 1; dc = 1; pDir = 0; moved = true; }
       else if (btnp("down")) { dr = 1; dc = 0; pDir = 1; moved = true; }
-      else if (btnp("up")) { dr = -1; dc = 0; pDir = 3; moved = true; }
+      else if (btnp("up"))   { dr = -1; dc = 0; pDir = 3; moved = true; }
       else if (btnp("left")) { dr = -1; dc = -1; pDir = 2; moved = true; }
 
       if (moved) {
@@ -556,26 +521,20 @@
             if (disc.active && !disc.used) {
               if (disc.side === -1 && newRow === disc.row && newCol < 0) {
                 hitDisc = true;
-                disc.used = true;
-                disc.active = false;
-                pOnDisc = 20;
-                pDiscSide = -1;
+                disc.used = true; disc.active = false;
+                pOnDisc = 20; pDiscSide = -1;
                 const tp = cubePos(0, 0);
-                pTargetPx = tp.x;
-                pTargetPy = tp.y;
+                pTargetPx = tp.x; pTargetPy = tp.y;
                 pHopping = 20;
                 note(1, "G5", 0.1);
                 break;
               }
               if (disc.side === 1 && newRow === disc.row && newCol > newRow) {
                 hitDisc = true;
-                disc.used = true;
-                disc.active = false;
-                pOnDisc = 20;
-                pDiscSide = 1;
+                disc.used = true; disc.active = false;
+                pOnDisc = 20; pDiscSide = 1;
                 const tp = cubePos(0, 0);
-                pTargetPx = tp.x;
-                pTargetPy = tp.y;
+                pTargetPx = tp.x; pTargetPy = tp.y;
                 pHopping = 20;
                 note(1, "G5", 0.1);
                 break;
@@ -586,16 +545,13 @@
 
         if (!hitDisc) {
           if (isValidCube(newRow, newCol)) {
-            pRow = newRow;
-            pCol = newCol;
+            pRow = newRow; pCol = newCol;
             const p = cubePos(pRow, pCol);
-            pTargetPx = p.x;
-            pTargetPy = p.y;
+            pTargetPx = p.x; pTargetPy = p.y;
             pHopping = HOP_FRAMES;
             note(1, "A4", 0.03);
           } else {
-            pRow = newRow;
-            pCol = newCol;
+            pRow = newRow; pCol = newCol;
             pTargetPx = pPx + (dc * CUBE_W);
             pTargetPy = pPy + (dr * (CUBE_H / 2 + CUBE_DEPTH));
             pHopping = HOP_FRAMES;
@@ -611,9 +567,7 @@
     if (!pDead && levelClearTimer === 0) {
       enemySpawnTimer--;
       if (enemySpawnTimer <= 0) {
-        if (enemies.length < 3 + level) {
-          spawnEnemy();
-        }
+        if (enemies.length < 3 + level) spawnEnemy();
         enemySpawnTimer = _max(30, 90 - level * 8) + flr(rnd(40));
       }
     }
@@ -627,15 +581,12 @@
         e.px += (e.targetPx - e.px) * 0.2;
         e.py += (e.targetPy - e.py) * 0.2;
         if (e.hopping === 0) {
-          e.px = e.targetPx;
-          e.py = e.targetPy;
-
+          e.px = e.targetPx; e.py = e.targetPy;
           if (e.row >= ROWS) {
             if (e.type === "coily") coilyActive = false;
             enemies.splice(i, 1);
             continue;
           }
-
           if (e.type === "coily_egg" && e.row >= ROWS - 1) {
             e.type = "coily";
             e.state = "chasing";
@@ -644,23 +595,15 @@
         continue;
       }
 
-      // Decide next hop
       if (e.type === "ball" || e.type === "coily_egg") {
         const goRight = rnd(1) < 0.5;
         const newRow = e.row + 1;
         const newCol = goRight ? e.col + 1 : e.col;
-
-        if (newRow >= ROWS) {
-          enemies.splice(i, 1);
-          continue;
-        }
-
-        e.row = newRow;
-        e.col = newCol;
+        if (newRow >= ROWS) { enemies.splice(i, 1); continue; }
+        e.row = newRow; e.col = newCol;
         if (isValidCube(e.row, e.col)) {
           const p = cubePos(e.row, e.col);
-          e.targetPx = p.x;
-          e.targetPy = p.y;
+          e.targetPx = p.x; e.targetPy = p.y;
         } else {
           e.targetPx = e.px + (goRight ? CUBE_W : -CUBE_W);
           e.targetPy = e.py + CUBE_H / 2 + CUBE_DEPTH;
@@ -669,25 +612,18 @@
         e.hopping = ENEMY_HOP_FRAMES;
       } else if (e.type === "coily") {
         let dr = 0, dc = 0;
-        if (pRow > e.row) {
-          dr = 1;
-          dc = pCol > e.col ? 1 : 0;
-        } else if (pRow < e.row) {
-          dr = -1;
-          dc = pCol < e.col ? -1 : 0;
-        } else {
+        if (pRow > e.row) { dr = 1; dc = pCol > e.col ? 1 : 0; }
+        else if (pRow < e.row) { dr = -1; dc = pCol < e.col ? -1 : 0; }
+        else {
           if (pCol > e.col) { dr = 1; dc = 1; }
           else if (pCol < e.col) { dr = -1; dc = -1; }
         }
-
         const newRow = e.row + dr;
         const newCol = e.col + dc;
         if (isValidCube(newRow, newCol)) {
-          e.row = newRow;
-          e.col = newCol;
+          e.row = newRow; e.col = newCol;
           const p = cubePos(e.row, e.col);
-          e.targetPx = p.x;
-          e.targetPy = p.y;
+          e.targetPx = p.x; e.targetPy = p.y;
         } else {
           e.targetPx = e.px + dc * CUBE_W;
           e.targetPy = e.py + 45;
@@ -700,7 +636,7 @@
       }
     }
 
-    // --- Collision: circle-based, enemies vs player ---
+    // --- Collision: circle-based enemies vs player ---
     if (!pDead && invulnTimer === 0 && pFalling === 0) {
       const pc = playerCenter();
       for (const e of enemies) {
@@ -722,13 +658,13 @@
     text(lvlStr, W - lvlStr.length * 5 - 4, 3, 2);
 
     // Lives icons (capped at 5 to prevent overflow)
-    const maxLivesShown = min(lives, 5);
-    for (let i = 0; i < maxLivesShown; i++) {
-      sprT(1, 4 + i * 14, 12);
+    const maxLives = min(lives, 5);
+    for (let i = 0; i < maxLives; i++) {
+      sprT(1, 4 + i * 18, 12);
     }
 
     // Target indicator
-    text("TARGET:", W - 58, 13, 1);
+    text("TARGET:", W - 58, 14, 1);
     rectf(W - 16, 13, 10, 8, targetColor);
     rect(W - 16, 13, 10, 8, 0);
 
@@ -736,8 +672,8 @@
     for (const disc of discs) {
       if (!disc.active) continue;
       const dp = getDiscPos(disc);
-      const dsx = dp.x - SS / 2;
-      const dsy = dp.y - SS / 2;
+      const dsx = flr(dp.x - SS / 2);
+      const dsy = flr(dp.y - SS / 2);
       if (Mono.frame % 8 < 4) {
         sprT(8, dsx, dsy);
       } else {
@@ -750,80 +686,77 @@
       for (let c = 0; c <= r; c++) {
         const p = cubePos(r, c);
         let topC = cubeColors[r][c];
-        let leftC = topC > 0 ? topC - 1 : 0;
-        let rightC = topC > 0 ? topC - 1 : 0;
+        let leftC, rightC;
         if (topC === 1) { leftC = 0; rightC = 0; }
         else if (topC === 2) { leftC = 1; rightC = 1; }
         else if (topC === 3) { leftC = 2; rightC = 1; }
+        else { leftC = 0; rightC = 0; }
 
         if (levelClearTimer > 0 && flashTimer % 8 < 4) {
           topC = 3; leftC = 2; rightC = 1;
         }
-
         drawCube(p.x, p.y, topC, leftC, rightC);
       }
     }
 
     // Draw enemies
     for (const e of enemies) {
-      let ex = e.px - SS / 2;
-      let ey = e.py - CUBE_H / 2 - SS / 2;
+      const ec = enemyCenter(e);
+      const ex = flr(e.px - SS / 2);
+      let ey = flr(e.py - CUBE_H / 2 - SS / 2);
       if (e.hopping > 0) {
         const t = e.hopping / ENEMY_HOP_FRAMES;
-        ey -= sin(t * 3.14159) * 12;
+        ey -= flr(sin(t * 3.14159) * 12);
       }
 
       if (e.type === "ball" || e.type === "coily_egg") {
-        sprT(e.type === "ball" ? 7 : 5, flr(ex), flr(ey));
+        sprT(e.type === "ball" ? 7 : 5, ex, ey);
       } else if (e.type === "coily") {
-        sprT(6, flr(ex), flr(ey));
+        sprT(6, ex, ey);
       }
 
-      // Debug: circle hitbox for enemies
-      const ec = enemyCenter(e);
+      // Debug: circle hitbox
       const er = (e.type === "ball" || e.type === "coily_egg") ? BALL_R : ENEMY_R;
       dbgC(flr(ec.cx), flr(ec.cy), er);
     }
 
     // Draw player
     if (!pDead) {
-      let px = pPx - SS / 2;
-      let py = pPy - CUBE_H / 2 - SS / 2;
+      let px = flr(pPx - SS / 2);
+      let py = flr(pPy - CUBE_H / 2 - SS / 2);
 
       if (pHopping > 0 && pFalling === 0 && pOnDisc === 0) {
         const t = pHopping / HOP_FRAMES;
-        py -= sin(t * 3.14159) * 14;
+        py -= flr(sin(t * 3.14159) * 14);
       }
 
-      // Blink during invulnerability
       if (invulnTimer > 0 && Mono.frame % 4 < 2) {
-        // blink - don't draw
+        // blink
       } else {
         let sprId = 1;
         if (pDir === 0) sprId = 1;
         else if (pDir === 1) sprId = 2;
         else if (pDir === 2) sprId = 3;
         else if (pDir === 3) sprId = 4;
-        sprT(sprId, flr(px), flr(py));
+        sprT(sprId, px, py);
       }
 
       // Debug: circle hitbox for player
       const pc = playerCenter();
       dbgC(flr(pc.cx), flr(pc.cy), PLAYER_R);
 
-      // Speech bubble when falling
+      // Speech bubble
       if (speechTimer > 0) {
-        sprT(9, flr(px) - 2, flr(py) - SS + 2);
+        sprT(9, px - 2, py - SS + 2);
         speechTimer--;
       }
     }
 
     // Level clear message
     if (levelClearTimer > 0) {
-      const msgW = 80;
-      const msgH = 18;
-      rectf(W / 2 - msgW / 2, H / 2 - msgH / 2, msgW, msgH, 0);
-      rect(W / 2 - msgW / 2, H / 2 - msgH / 2, msgW, msgH, 3);
+      const mw = 80, mh = 18;
+      rectf(W / 2 - mw / 2, H / 2 - mh / 2, mw, mh, 0);
+      rect(W / 2 - mw / 2, H / 2 - mh / 2, mw, mh, 3);
       text("LEVEL CLEAR!", W / 2 - 30, H / 2 - 4, 3);
     }
     }
@@ -834,9 +767,7 @@
     init() {},
     update() {
       titleBlink = (Mono.frame % 40) < 25;
-      if (btnp("a")) {
-        Mono.go(TITLE); return;
-      }
+      if (btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
@@ -849,30 +780,7 @@
   });
 
   Mono.go(TITLE);
-
-  // Boot and grab pixel buffer reference
-  const _canvas = document.getElementById("screen");
   Mono.boot("screen");
-
-  // Grab buf32 after boot by hooking into the render cycle
-  // The engine exposes canvas context; we can read from imageData
-  // Actually, we need to access the internal buffer. Let's use a frame hook.
-  const origDraw = Mono._draw;
-  // We'll draw cubes via pix-level access through the cls trick:
-  // After cls(), we can write to the shared buffer via the ImageData
-  // Instead, let's get the buffer from the canvas context
-  const _ctx = _canvas.getContext("2d");
-  const _imgData = _ctx.createImageData(W, H);
-  buf32 = new Uint32Array(_imgData.data.buffer);
-
-  // Actually, the engine manages its own buf32 internally.
-  // We need to hook into the engine's buffer. Let's patch cls to capture it.
-  // The simplest approach: read the canvas pixel data each frame and
-  // draw cubes using line/rectf/pix calls instead.
-
-  // REVISED: Draw cubes using the public API (line, pix) instead of
-  // direct buffer access. Let's redefine drawCube properly.
-
 })();
 </script>
 </body>

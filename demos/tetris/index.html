@@ -11,7 +11,7 @@
   <canvas id="screen"></canvas>
 </div>
 <div id="controls">
-  <span>←→</span> MOVE &nbsp;&nbsp; <span>↓</span> SOFT DROP &nbsp;&nbsp; <span>↑</span> HARD DROP &nbsp;&nbsp; <span>A</span> ROT CW &nbsp;&nbsp; <span>B</span> ROT CCW
+  <span>&#x2190;&#x2192;</span> MOVE &nbsp;&nbsp; <span>&#x2193;</span> SOFT DROP &nbsp;&nbsp; <span>&#x2191;</span> HARD DROP &nbsp;&nbsp; <span>A</span> ROT CW &nbsp;&nbsp; <span>B</span> ROT CCW
 </div>
 <script src="../../runtime/engine.js"></script>
 <script>
@@ -20,19 +20,96 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
+
+  // --- 8->16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- 16x16 Sprites ---
+
+  // 1: Block style A — solid with highlight/shadow bevel
+  defSprite(1, up(
+    "33333333" +
+    "32222223" +
+    "32222223" +
+    "32222223" +
+    "32222223" +
+    "32222223" +
+    "32222223" +
+    "31111111"
+  ));
+
+  // 2: Block style B — lighter tone bevel
+  defSprite(2, up(
+    "33333333" +
+    "31111113" +
+    "31111113" +
+    "31111113" +
+    "31111113" +
+    "31111113" +
+    "31111113" +
+    "30000000"
+  ));
+
+  // 3: Block style C — dark tone
+  defSprite(3, up(
+    "22222222" +
+    "21111112" +
+    "21111112" +
+    "21111112" +
+    "21111112" +
+    "21111112" +
+    "21111112" +
+    "20000000"
+  ));
+
+  // 4: Ghost block — dotted outline
+  defSprite(4, up(
+    "10101010" +
+    "00000001" +
+    "10000000" +
+    "00000001" +
+    "10000000" +
+    "00000001" +
+    "10000000" +
+    "01010101"
+  ));
+
+  // 5: Title deco block — ornamental
+  defSprite(5, up(
+    "33333333" +
+    "30333303" +
+    "33333333" +
+    "33322333" +
+    "33322333" +
+    "33333333" +
+    "30333303" +
+    "33333333"
+  ));
 
   // --- Constants ---
   const COLS = 10;
   const ROWS = 20;
-  const CELL = 11; // pixel size per block
+  const CELL = 11;  // pixel size per block
   const FIELD_W = COLS * CELL;
   const FIELD_H = ROWS * CELL;
-  const FIELD_X = Math.floor((W - FIELD_W) / 2) - 30; // shifted left for side panel
-  const FIELD_Y = Math.floor((H - FIELD_H) / 2);
+  // Center the field with room for side panel, clamped to screen
+  const FIELD_X = min(_max(flr((W - FIELD_W) / 2) - 36, 2), W - FIELD_W - 60);
+  const FIELD_Y = min(_max(flr((H - FIELD_H) / 2), 2), H - FIELD_H - 2);
 
   // Panel positions (right side)
-  const PANEL_X = FIELD_X + FIELD_W + 14;
+  const PANEL_X = min(FIELD_X + FIELD_W + 14, W - 50);
 
   // Tetromino definitions: each piece has 4 rotation states
   // Stored as array of [row, col] offsets
@@ -44,7 +121,7 @@
         [[0,0],[0,1],[0,2],[0,3]],
         [[0,0],[1,0],[2,0],[3,0]],
       ],
-      color: 3, // WHITE
+      color: 3, sprId: 1,
     },
     O: {
       shape: [
@@ -53,7 +130,7 @@
         [[0,0],[0,1],[1,0],[1,1]],
         [[0,0],[0,1],[1,0],[1,1]],
       ],
-      color: 3,
+      color: 3, sprId: 1,
     },
     T: {
       shape: [
@@ -62,7 +139,7 @@
         [[1,0],[1,1],[1,2],[0,1]],
         [[0,0],[1,0],[2,0],[1,-1]],
       ],
-      color: 2, // LIGHT
+      color: 2, sprId: 2,
     },
     S: {
       shape: [
@@ -71,7 +148,7 @@
         [[0,1],[0,2],[1,0],[1,1]],
         [[0,0],[1,0],[1,1],[2,1]],
       ],
-      color: 2,
+      color: 2, sprId: 2,
     },
     Z: {
       shape: [
@@ -80,7 +157,7 @@
         [[0,0],[0,1],[1,1],[1,2]],
         [[0,1],[1,0],[1,1],[2,0]],
       ],
-      color: 3,
+      color: 3, sprId: 1,
     },
     J: {
       shape: [
@@ -89,7 +166,7 @@
         [[0,0],[0,1],[0,2],[1,2]],
         [[0,0],[1,0],[2,0],[2,-1]],
       ],
-      color: 2,
+      color: 2, sprId: 3,
     },
     L: {
       shape: [
@@ -98,20 +175,43 @@
         [[0,0],[0,1],[0,2],[1,0]],
         [[0,0],[0,1],[1,1],[2,1]],
       ],
-      color: 3,
+      color: 3, sprId: 1,
     },
   };
   const PIECE_NAMES = ["I","O","T","S","Z","J","L"];
 
+  // SRS wall-kick data (standard for J, L, S, T, Z)
+  const KICK_JLSTZ = {
+    "0>1": [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+    "1>0": [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+    "1>2": [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+    "2>1": [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+    "2>3": [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+    "3>2": [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+    "3>0": [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+    "0>3": [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+  };
+  const KICK_I = {
+    "0>1": [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
+    "1>0": [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
+    "1>2": [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
+    "2>1": [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
+    "2>3": [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
+    "3>2": [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
+    "3>0": [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
+    "0>3": [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
+  };
+
   // --- Scenes ---
   const { TITLE, PLAY, GAMEOVER } = Mono.SCENE;
 
-  let board; // 2D array [row][col], 0=empty, 1-3=color
+  let board; // 2D array [row][col], 0=empty, otherwise sprId
+  let boardColor; // parallel array storing color index
   let curPiece, curRot, curX, curY;
   let nextPiece;
   let score, level, linesCleared, totalLines;
   let fallTimer, fallSpeed;
-  let lockTimer;
+  let lockTimer, lockMoves;
   let clearLines; // array of row indices being cleared
   let clearTimer;
   let gameOverTimer;
@@ -135,9 +235,14 @@
 
   function resetGame() {
     board = [];
+    boardColor = [];
     for (let r = 0; r < ROWS; r++) {
       board[r] = [];
-      for (let c = 0; c < COLS; c++) board[r][c] = 0;
+      boardColor[r] = [];
+      for (let c = 0; c < COLS; c++) {
+        board[r][c] = 0;
+        boardColor[r][c] = 0;
+      }
     }
     score = 0;
     level = 1;
@@ -147,6 +252,7 @@
     clearTimer = 0;
     gameOverTimer = 0;
     lockTimer = 0;
+    lockMoves = 0;
     dasTimer = 0;
     dasDir = 0;
     bag = [];
@@ -162,6 +268,7 @@
     curY = 0;
     fallTimer = 0;
     lockTimer = 0;
+    lockMoves = 0;
 
     // Check if spawn position is blocked -> game over
     if (!canPlace(curPiece, curRot, curX, curY)) {
@@ -188,14 +295,37 @@
     return true;
   }
 
+  // SRS wall-kick rotation
+  function tryRotate(dir) {
+    const oldRot = curRot;
+    const newRot = (curRot + dir + 4) % 4;
+    const key = oldRot + ">" + newRot;
+    const kicks = (curPiece === "I") ? KICK_I[key] : (curPiece === "O" ? [[0,0]] : KICK_JLSTZ[key]);
+    if (!kicks) return false;
+    for (const [kx, ky] of kicks) {
+      if (canPlace(curPiece, newRot, curX + kx, curY - ky)) {
+        curX += kx;
+        curY -= ky;
+        curRot = newRot;
+        rotateSound();
+        lockTimer = 0;
+        lockMoves++;
+        return true;
+      }
+    }
+    return false;
+  }
+
   function lockPiece() {
     const blocks = getBlocks(curPiece, curRot);
+    const sprId = PIECES[curPiece].sprId;
     const color = PIECES[curPiece].color;
     for (const [dr, dc] of blocks) {
       const r = curY + dr;
       const c = curX + dc;
       if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-        board[r][c] = color;
+        board[r][c] = sprId;
+        boardColor[r][c] = color;
       }
     }
     dropSound();
@@ -224,9 +354,12 @@
     clearLines.sort((a, b) => b - a);
     for (const row of clearLines) {
       board.splice(row, 1);
+      boardColor.splice(row, 1);
       const emptyRow = [];
-      for (let c = 0; c < COLS; c++) emptyRow.push(0);
+      const emptyColorRow = [];
+      for (let c = 0; c < COLS; c++) { emptyRow.push(0); emptyColorRow.push(0); }
       board.unshift(emptyRow);
+      boardColor.unshift(emptyColorRow);
     }
     const n = clearLines.length;
     const pts = [0, 100, 300, 500, 800];
@@ -268,26 +401,22 @@
   }
 
   // --- Drawing helpers ---
-  function drawBlock(x, y, color, ghost) {
+  function drawBlock(x, y, sprId, color, ghost) {
     if (ghost) {
-      // Ghost: just outline
-      rect(x, y, CELL - 1, CELL - 1, 1);
+      // Ghost: dotted outline via sprite 4
+      spr(4, x, y);
     } else {
-      rectf(x, y, CELL - 1, CELL - 1, color);
-      // Highlight on top-left
-      line(x, y, x + CELL - 2, y, min(color + 1, 3));
-      line(x, y, x, y + CELL - 2, min(color + 1, 3));
-      // Shadow on bottom-right
-      if (color > 1) {
-        line(x + CELL - 2, y + 1, x + CELL - 2, y + CELL - 2, color - 1);
-        line(x + 1, y + CELL - 2, x + CELL - 2, y + CELL - 2, color - 1);
-      }
+      // Use the piece's sprite for styled blocks
+      spr(sprId, x, y);
     }
   }
 
   function drawSmallBlock(x, y, color) {
     const sz = 6;
     rectf(x, y, sz - 1, sz - 1, color);
+    // mini highlight
+    line(x, y, x + sz - 2, y, min(color + 1, 3));
+    line(x, y, x, y + sz - 2, min(color + 1, 3));
   }
 
   function drawField() {
@@ -297,33 +426,22 @@
     rect(FIELD_X - 2, FIELD_Y - 2, FIELD_W + 3, FIELD_H + 3, 1);
     rect(FIELD_X - 3, FIELD_Y - 3, FIELD_W + 5, FIELD_H + 5, 1);
 
-    // Grid dots
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (board[r][c] === 0) {
-          // subtle grid dot
-          const gx = FIELD_X + c * CELL + flr(CELL / 2);
-          const gy = FIELD_Y + r * CELL + flr(CELL / 2);
-          // Only every other intersection for subtlety
-          if ((r + c) % 2 === 0) {
-            // too subtle, skip
-          }
-        }
-      }
-    }
-
     // Board blocks
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         if (board[r][c] !== 0) {
+          const bx = FIELD_X + c * CELL;
+          const by = FIELD_Y + r * CELL;
           // Check if this row is being cleared (flash effect)
           if (clearLines.includes(r)) {
             if (flr(clearTimer / 3) % 2 === 0) {
-              drawBlock(FIELD_X + c * CELL, FIELD_Y + r * CELL, 3, false);
+              rectf(bx, by, CELL - 1, CELL - 1, 3);
             }
           } else {
-            drawBlock(FIELD_X + c * CELL, FIELD_Y + r * CELL, board[r][c], false);
+            drawBlock(bx, by, board[r][c], boardColor[r][c], false);
           }
+          // hitbox debug for each board block
+          dbg(bx, by, CELL - 1, CELL - 1);
         }
       }
     }
@@ -332,6 +450,7 @@
   function drawCurrentPiece() {
     if (!curPiece || clearTimer > 0) return;
     const blocks = getBlocks(curPiece, curRot);
+    const sprId = PIECES[curPiece].sprId;
     const color = PIECES[curPiece].color;
 
     // Ghost piece
@@ -341,7 +460,7 @@
         const r = ghostY + dr;
         const c = curX + dc;
         if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-          drawBlock(FIELD_X + c * CELL, FIELD_Y + r * CELL, 1, true);
+          drawBlock(FIELD_X + c * CELL, FIELD_Y + r * CELL, sprId, 1, true);
         }
       }
     }
@@ -351,7 +470,11 @@
       const r = curY + dr;
       const c = curX + dc;
       if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-        drawBlock(FIELD_X + c * CELL, FIELD_Y + r * CELL, color, false);
+        const bx = FIELD_X + c * CELL;
+        const by = FIELD_Y + r * CELL;
+        drawBlock(bx, by, sprId, color, false);
+        // hitbox debug for active piece blocks
+        dbg(bx, by, CELL - 1, CELL - 1);
       }
     }
   }
@@ -360,9 +483,11 @@
     const px = PANEL_X;
     const py = FIELD_Y + 10;
     text("NEXT", px, py - 10, 3);
-    // Box
-    rect(px - 2, py - 2, 32, 28, 1);
-    rectf(px - 1, py - 1, 30, 26, 0);
+    // Box — clamp dimensions to stay on screen
+    const boxW = min(32, W - px + 1);
+    const boxH = 28;
+    rect(px - 2, py - 2, boxW, boxH, 1);
+    rectf(px - 1, py - 1, boxW - 2, boxH - 2, 0);
 
     const blocks = getBlocks(nextPiece, 0);
     const color = PIECES[nextPiece].color;
@@ -374,7 +499,7 @@
     }
     const pw = (maxC - minC + 1) * 6;
     const ph = (maxR - minR + 1) * 6;
-    const ox = px + flr((28 - pw) / 2);
+    const ox = px + flr((min(28, boxW - 4) - pw) / 2);
     const oy = py + flr((24 - ph) / 2);
     for (const [dr, dc] of blocks) {
       drawSmallBlock(ox + (dc - minC) * 6, oy + (dr - minR) * 6, color);
@@ -384,7 +509,7 @@
   function drawPanel() {
     const px = PANEL_X;
 
-    // Score
+    // Score — clamp text to not overflow right edge
     text("SCORE", px, FIELD_Y + 48, 2);
     text(String(score), px, FIELD_Y + 58, 3);
 
@@ -412,36 +537,30 @@
   function drawTitle() {
     cls(0);
 
-    // Title with big blocky letters
-    const tx = W / 2;
-    const ty = 30;
-
-    // Draw decorative tetromino blocks around title
+    // Falling deco blocks animation using sprite 5
     const t = titleAnim;
-    // Falling blocks animation
     for (let i = 0; i < 6; i++) {
-      const bx = 20 + i * 52;
+      const bx = min(20 + i * 50, W - 16);
       const by = ((t * (1 + i * 0.3)) % (H + 40)) - 20;
-      const c = (i % 2 === 0) ? 2 : 3;
-      drawBlock(bx, by, c, false);
+      spr(5, flr(bx), flr(by));
     }
 
-    // Title
+    // Title — big block letters
     const title = "TETRIS";
-    // Draw each letter big (3x scale using rectf)
+    const FONT_W_L = 4, FONT_H_L = 7;
     const letterW = 15;
-    const totalW = title.length * letterW + (title.length - 1) * 4;
-    const sx = flr((W - totalW) / 2);
+    const totalTitleW = title.length * letterW + (title.length - 1) * 4;
+    const sx = flr((W - totalTitleW) / 2);
+    const ty = 30;
     for (let i = 0; i < title.length; i++) {
       const lx = sx + i * (letterW + 4);
       const ly = ty;
-      // Draw letter as big block text
       const ch = title[i];
       const glyph = FONT[ch];
       if (glyph) {
-        for (let py = 0; py < FONT_H; py++) {
-          for (let px = 0; px < FONT_W; px++) {
-            if (glyph[py * FONT_W + px]) {
+        for (let py = 0; py < FONT_H_L; py++) {
+          for (let px = 0; px < FONT_W_L; px++) {
+            if (glyph[py * FONT_W_L + px]) {
               const c = ((i + flr(t / 8)) % 2 === 0) ? 3 : 2;
               rectf(lx + px * 3, ly + py * 3, 3, 3, c);
             }
@@ -459,14 +578,15 @@
     }
 
     // Controls
-    text("LEFT/RIGHT  MOVE", flr(W / 2) - 45, 150, 1);
-    text("DOWN  SOFT DROP", flr(W / 2) - 45, 162, 1);
-    text("UP  HARD DROP", flr(W / 2) - 45, 174, 1);
-    text("A  ROTATE CW", flr(W / 2) - 45, 186, 1);
-    text("B  ROTATE CCW", flr(W / 2) - 45, 198, 1);
+    const cx = flr(W / 2) - 45;
+    text("LEFT/RIGHT  MOVE", cx, 150, 1);
+    text("DOWN  SOFT DROP", cx, 162, 1);
+    text("UP  HARD DROP", cx, 174, 1);
+    text("A  ROTATE CW", cx, 186, 1);
+    text("B  ROTATE CCW", cx, 198, 1);
 
     // Bottom
-    text("(C) MONO 2026", flr(W / 2) - 40, H - 16, 1);
+    text("(C) MONO 2026", flr(W / 2) - 40, min(H - 16, 224), 1);
   }
 
   // --- Gameplay ---
@@ -486,6 +606,7 @@
         curX--;
         moveSound();
         lockTimer = 0;
+        lockMoves++;
       }
       dasTimer = 0;
       dasDir = -1;
@@ -494,6 +615,7 @@
         curX++;
         moveSound();
         lockTimer = 0;
+        lockMoves++;
       }
       dasTimer = 0;
       dasDir = 1;
@@ -506,6 +628,7 @@
         if (canPlace(curPiece, curRot, curX - 1, curY)) {
           curX--;
           lockTimer = 0;
+          lockMoves++;
         }
       }
     } else if (btn("right") && dasDir === 1) {
@@ -514,6 +637,7 @@
         if (canPlace(curPiece, curRot, curX + 1, curY)) {
           curX++;
           lockTimer = 0;
+          lockMoves++;
         }
       }
     } else {
@@ -521,54 +645,12 @@
       dasDir = 0;
     }
 
-    // Rotation
+    // Rotation via SRS wall-kick
     if (btnp("a")) {
-      // Clockwise
-      const newRot = (curRot + 1) % 4;
-      if (canPlace(curPiece, newRot, curX, curY)) {
-        curRot = newRot;
-        rotateSound();
-        lockTimer = 0;
-      } else if (canPlace(curPiece, newRot, curX - 1, curY)) {
-        curX--;
-        curRot = newRot;
-        rotateSound();
-        lockTimer = 0;
-      } else if (canPlace(curPiece, newRot, curX + 1, curY)) {
-        curX++;
-        curRot = newRot;
-        rotateSound();
-        lockTimer = 0;
-      } else if (canPlace(curPiece, newRot, curX, curY - 1)) {
-        curY--;
-        curRot = newRot;
-        rotateSound();
-        lockTimer = 0;
-      }
+      tryRotate(1); // clockwise
     }
     if (btnp("b")) {
-      // Counter-clockwise
-      const newRot = (curRot + 3) % 4;
-      if (canPlace(curPiece, newRot, curX, curY)) {
-        curRot = newRot;
-        rotateSound();
-        lockTimer = 0;
-      } else if (canPlace(curPiece, newRot, curX - 1, curY)) {
-        curX--;
-        curRot = newRot;
-        rotateSound();
-        lockTimer = 0;
-      } else if (canPlace(curPiece, newRot, curX + 1, curY)) {
-        curX++;
-        curRot = newRot;
-        rotateSound();
-        lockTimer = 0;
-      } else if (canPlace(curPiece, newRot, curX, curY - 1)) {
-        curY--;
-        curRot = newRot;
-        rotateSound();
-        lockTimer = 0;
-      }
+      tryRotate(-1); // counter-clockwise
     }
 
     // Hard drop
@@ -601,9 +683,9 @@
         curY++;
         lockTimer = 0;
       } else {
-        // On ground - lock delay
+        // On ground — lock delay with move limit
         lockTimer++;
-        if (lockTimer >= 15) {
+        if (lockTimer >= 15 || lockMoves >= 15) {
           lockPiece();
         }
       }
@@ -612,7 +694,7 @@
     // Also lock if can't move down and not falling
     if (!canPlace(curPiece, curRot, curX, curY + 1)) {
       lockTimer++;
-      if (lockTimer >= 20) {
+      if (lockTimer >= 20 || lockMoves >= 15) {
         lockPiece();
       }
     }
@@ -620,26 +702,19 @@
 
   function drawPlay() {
     cls(0);
-
-    // Decorative background pattern
-    for (let y = 0; y < H; y += 32) {
-      for (let x = 0; x < W; x += 32) {
-        if ((x + y) % 64 === 0) {
-          // very subtle dot pattern - skip for cleaner look
-        }
-      }
-    }
-
     drawField();
     drawCurrentPiece();
     drawNextPiece();
     drawPanel();
+
+    // Debug: show field bounding box
+    dbg(FIELD_X, FIELD_Y, FIELD_W, FIELD_H);
   }
 
   // --- Game Over ---
   function updateGameOver() {
     gameOverTimer++;
-    if (gameOverTimer > 60 && btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+    if (gameOverTimer > 60 && (btnp("a") || btnp("start"))) { Mono.go(TITLE); return; }
   }
 
   function drawGameOver() {
@@ -656,12 +731,13 @@
       }
     }
 
-    // Game over text box
-    const bx = flr(W / 2) - 60;
-    const by = flr(H / 2) - 30;
-    rectf(bx, by, 120, 60, 0);
-    rect(bx, by, 120, 60, 2);
-    rect(bx + 1, by + 1, 118, 58, 1);
+    // Game over text box — clamped to screen
+    const bw = 120, bh = 60;
+    const bx = min(_max(flr(W / 2) - 60, 2), W - bw - 2);
+    const by = min(_max(flr(H / 2) - 30, 2), H - bh - 2);
+    rectf(bx, by, bw, bh, 0);
+    rect(bx, by, bw, bh, 2);
+    rect(bx + 1, by + 1, bw - 2, bh - 2, 1);
 
     text("GAME OVER", bx + 22, by + 8, 3);
     text("SCORE " + String(score), bx + 14, by + 22, 2);

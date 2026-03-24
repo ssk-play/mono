@@ -11,7 +11,7 @@
   <canvas id="screen"></canvas>
 </div>
 <div id="controls">
-  <span>ARROWS</span> MOVE &nbsp;&nbsp; <span>B</span> UNDO &nbsp;&nbsp; <span>A</span> RESTART
+  <span>&#8592;&#8593;&#8594;&#8595;</span> MOVE &nbsp;&nbsp; <span>B</span> UNDO &nbsp;&nbsp; <span>A</span> RESTART
 </div>
 <script src="../../runtime/engine.js"></script>
 <script>
@@ -19,15 +19,30 @@
   "use strict";
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
-          spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          spr, sprT, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Tile size: 8x8 sprites rendered at 2x = 16x16 per tile ---
+  // --- 8x8 -> 16x16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Tile size: native 16x16 sprites ---
   const TS = 16;
 
-  // --- Sprites ---
+  // --- Sprites (8x8 art upscaled to 16x16 via up()) ---
+
   // 1: Wall - solid brick pattern
-  defSprite(1,
+  defSprite(1, up(
     "33333333" +
     "32222213" +
     "32222213" +
@@ -36,9 +51,9 @@
     "22322223" +
     "22322223" +
     "33333333"
-  );
+  ));
   // 2: Floor - subtle texture
-  defSprite(2,
+  defSprite(2, up(
     "00000000" +
     "00000000" +
     "00010000" +
@@ -47,9 +62,9 @@
     "00000100" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 3: Target spot - diamond/X marker on floor
-  defSprite(3,
+  defSprite(3, up(
     "00000000" +
     "01000100" +
     "00101000" +
@@ -58,9 +73,9 @@
     "01000100" +
     "00000000" +
     "00000000"
-  );
+  ));
   // 4: Box - wooden crate
-  defSprite(4,
+  defSprite(4, up(
     "22222220" +
     "21122110" +
     "21222210" +
@@ -69,9 +84,9 @@
     "21222210" +
     "21122110" +
     "22222220"
-  );
+  ));
   // 5: Box on target - bright highlighted crate
-  defSprite(5,
+  defSprite(5, up(
     "33333330" +
     "32233220" +
     "32333230" +
@@ -80,9 +95,9 @@
     "32333230" +
     "32233220" +
     "33333330"
-  );
+  ));
   // 10: Player facing down
-  defSprite(10,
+  defSprite(10, up(
     "00222000" +
     "00232000" +
     "02333200" +
@@ -91,9 +106,9 @@
     "00323000" +
     "00202000" +
     "00202000"
-  );
+  ));
   // 11: Player facing up
-  defSprite(11,
+  defSprite(11, up(
     "00222000" +
     "00232000" +
     "02333200" +
@@ -102,9 +117,9 @@
     "00323000" +
     "00202000" +
     "00202000"
-  );
+  ));
   // 12: Player facing left
-  defSprite(12,
+  defSprite(12, up(
     "00222000" +
     "00232000" +
     "23333200" +
@@ -113,9 +128,9 @@
     "00323000" +
     "00202000" +
     "02000000"
-  );
+  ));
   // 13: Player facing right
-  defSprite(13,
+  defSprite(13, up(
     "00222000" +
     "00232000" +
     "02333320" +
@@ -124,7 +139,7 @@
     "00323000" +
     "00202000" +
     "00000200"
-  );
+  ));
 
   // --- Levels (standard Sokoban notation) ---
   // # = wall, (space) = void, - = floor, . = target
@@ -354,6 +369,12 @@
     return true;
   }
 
+  // --- Collision debug helpers ---
+  // Draws hitbox debug outlines for tile-based collision checks
+  function dbgTile(ox, oy, tx, ty) {
+    dbg(ox + tx * TS, oy + ty * TS, TS, TS);
+  }
+
   function tryMove(dx, dy) {
     const nx = playerX + dx;
     const ny = playerY + dy;
@@ -363,12 +384,23 @@
     else if (dx < 0) playerDir = 2;
     else if (dx > 0) playerDir = 3;
 
+    // Compute level offset for debug display
+    const ox = flr((W - gridW * TS) / 2);
+    const oy = flr((H - gridH * TS) / 2) + 8;
+
+    // Debug: show wall collision check
+    dbgTile(ox, oy, nx, ny);
+
     if (isWall(nx, ny)) return;
 
     const bi = boxAt(nx, ny);
     if (bi >= 0) {
       const bx = nx + dx;
       const by = ny + dy;
+
+      // Debug: show box push destination collision check
+      dbgTile(ox, oy, bx, by);
+
       if (isWall(bx, by) || boxAt(bx, by) >= 0) return;
 
       history.push({ px: playerX, py: playerY, dir: playerDir, boxIdx: bi, bx: boxes[bi].x, by: boxes[bi].y });
@@ -415,27 +447,8 @@
     note(1, "E3", 0.04);
   }
 
-  // --- Draw a sprite at 2x scale ---
-  function spr2x(id, sx, sy) {
-    const s = sprites[id]; if (!s) return;
-    sx = Math.floor(sx); sy = Math.floor(sy);
-    for (let py = 0; py < 8; py++) {
-      for (let px = 0; px < 8; px++) {
-        const c = s[py * 8 + px];
-        const dx = sx + px * 2;
-        const dy = sy + py * 2;
-        for (let yy = 0; yy < 2; yy++) {
-          for (let xx = 0; xx < 2; xx++) {
-            const fx = dx + xx, fy = dy + yy;
-            if (fx >= 0 && fx < W && fy >= 0 && fy < H) {
-              buf32[fy * W + fx] = COLOR_U32[c];
-            }
-          }
-        }
-      }
-    }
-  }
-
+  // --- Text helpers ---
+  const FONT_W = 4;
   function textCenter(str, y, c) {
     const len = str.length * (FONT_W + 1) - 1;
     text(str, flr((W - len) / 2), y, c);
@@ -446,7 +459,7 @@
     init() { animTimer = 0; },
     update() {
       animTimer++;
-      if (btnp("a")) {
+      if (btnp("a") || btnp("start")) {
         selectCursor = min(maxLevelReached, LEVELS.length - 1);
         note(0, "C4", 0.1);
         Mono.go(SELECT); return;
@@ -458,18 +471,24 @@
       textCenter("S O K O B A N", ty, 3);
       const ul = 13 * (FONT_W + 1) - 1;
       line(flr((W - ul) / 2), ty + 8, flr((W + ul) / 2), ty + 8, 2);
+
+      // Animated scene: row of tiles with player pushing box
       const cx = flr(W / 2);
       const sy = 82;
-      for (let i = -4; i <= 4; i++) spr2x(2, cx + i * TS - 8, sy);
-      spr2x(1, cx - 4 * TS - 8, sy);
-      spr2x(1, cx + 4 * TS - 8, sy);
-      for (let i = -4; i <= 4; i++) spr2x(1, cx + i * TS - 8, sy - TS);
-      for (let i = -4; i <= 4; i++) spr2x(1, cx + i * TS - 8, sy + TS);
+      // Floor row
+      for (let i = -4; i <= 4; i++) spr(2, cx + i * TS - 8, sy);
+      // Walls top/bottom
+      spr(1, cx - 4 * TS - 8, sy);
+      spr(1, cx + 4 * TS - 8, sy);
+      for (let i = -4; i <= 4; i++) spr(1, cx + i * TS - 8, sy - TS);
+      for (let i = -4; i <= 4; i++) spr(1, cx + i * TS - 8, sy + TS);
+
       const phase = flr(animTimer / 30) % 6;
       const pOff = min(phase, 3);
-      spr2x(PLAYER_SPR[3], cx - 3 * TS - 8 + pOff * TS, sy);
-      spr2x(4, cx - 2 * TS - 8 + pOff * TS, sy);
-      spr2x(3, cx + 2 * TS - 8, sy);
+      sprT(PLAYER_SPR[3], cx - 3 * TS - 8 + pOff * TS, sy);
+      sprT(4, cx - 2 * TS - 8 + pOff * TS, sy);
+      sprT(3, cx + 2 * TS - 8, sy);
+
       if (flr(animTimer / 20) % 2 === 0) textCenter("PRESS START", 150, 2);
       textCenter("PUSH ALL BOXES ONTO TARGETS", 180, 1);
       textCenter("ARROWS:MOVE  X:UNDO  Z:RESTART", 195, 1);
@@ -507,46 +526,75 @@
         const c = sel ? 3 : 2;
         const prefix = sel ? "> " : "  ";
         text(prefix + "LEVEL " + (i + 1), 113, y, c);
-        if (i < maxLevelReached) spr(5, 103, y - 1);
+        if (i < maxLevelReached) sprT(5, 103, y - 1);
       }
       if (maxShow < LEVELS.length) {
         const y = startY + (endI - startI) * 15;
         text("  ...", 113, y, 1);
       }
-      textCenter("ENTER:START  X:BACK", 225, 1);
+      textCenter("ENTER:START  X:BACK", H - 12, 1);
     }
   });
 
   // ============ Play Scene ============
   function drawPlayField() {
     cls(0);
-    const ox = flr((W - gridW * TS) / 2);
-    const oy = flr((H - gridH * TS) / 2) + 8;
+
+    // Clamp level rendering to fit within 320x240 with HUD margins
+    const hudTop = 14;
+    const hudBot = 12;
+    const maxFieldW = W;
+    const maxFieldH = H - hudTop - hudBot;
+
+    const ox = flr((maxFieldW - gridW * TS) / 2);
+    const oy = hudTop + flr((maxFieldH - gridH * TS) / 2);
+
+    // Draw grid tiles
     for (let y = 0; y < gridH; y++) {
       for (let x = 0; x < gridW; x++) {
         const t = grid[y][x];
         const sx = ox + x * TS;
         const sy = oy + y * TS;
-        if (t === 1) spr2x(1, sx, sy);
-        else if (t === 2) spr2x(2, sx, sy);
-        else if (t === 3) spr2x(3, sx, sy);
+        if (t === 1) spr(1, sx, sy);
+        else if (t === 2) spr(2, sx, sy);
+        else if (t === 3) spr(3, sx, sy);
       }
     }
+
+    // Draw boxes (transparent so floor shows through edges)
     for (const b of boxes) {
       const onTarget = isTarget(b.x, b.y);
-      spr2x(onTarget ? 5 : 4, ox + b.x * TS, oy + b.y * TS);
+      const bsx = ox + b.x * TS;
+      const bsy = oy + b.y * TS;
+      sprT(onTarget ? 5 : 4, bsx, bsy);
+      // Debug: show box collision hitbox
+      dbg(bsx, bsy, TS, TS);
     }
-    spr2x(PLAYER_SPR[playerDir], ox + playerX * TS, oy + playerY * TS);
-    rectf(0, 0, W, 14, 0);
-    text("LV." + (level + 1), 4, 2, 3);
-    text("MOVES:" + moves, 40, 2, 2);
-    text("PUSH:" + pushes, 107, 2, 2);
+
+    // Draw player (transparent)
+    const psx = ox + playerX * TS;
+    const psy = oy + playerY * TS;
+    sprT(PLAYER_SPR[playerDir], psx, psy);
+    // Debug: show player collision hitbox
+    dbg(psx, psy, TS, TS);
+
+    // --- HUD (top bar) ---
+    rectf(0, 0, W, hudTop, 0);
+    text("LV." + (level + 1), 4, 3, 3);
+    text("MOVES:" + moves, 50, 3, 2);
+    text("PUSH:" + pushes, 130, 3, 2);
     let done = 0;
     for (const t of targets) { if (boxAt(t.x, t.y) >= 0) done++; }
     const prog = done + "/" + targets.length;
-    text(prog, W - prog.length * 5 - 4, 2, done === targets.length ? 3 : 2);
+    text(prog, W - prog.length * (FONT_W + 1) - 4, 3, done === targets.length ? 3 : 2);
+
+    // --- HUD (bottom bar) ---
+    rectf(0, H - hudBot, W, hudBot, 0);
     text("B:UNDO A:RESET", 4, H - 10, 1);
-    if (history.length > 0) text("UNDO:" + history.length, W - 37, H - 10, 1);
+    if (history.length > 0) {
+      const undoStr = "UNDO:" + history.length;
+      text(undoStr, W - undoStr.length * (FONT_W + 1) - 4, H - 10, 1);
+    }
   }
 
   Mono.scene(PLAY, {
@@ -569,7 +617,7 @@
     update() {
       completeTimer--;
       animTimer++;
-      if (completeTimer <= 0 || btnp("a")) {
+      if (completeTimer <= 0 || btnp("a") || btnp("start")) {
         if (level + 1 >= LEVELS.length) {
           animTimer = 0;
           Mono.go(WIN); return;
@@ -582,13 +630,10 @@
     },
     draw() {
       drawPlayField();
-      for (let i = 0; i < buf32.length; i++) {
-        const v = buf32[i];
-        const r = ((v & 0xFF) >> 1);
-        const g = (((v >> 8) & 0xFF) >> 1);
-        const b = (((v >> 16) & 0xFF) >> 1);
-        buf32[i] = (255 << 24) | (b << 16) | (g << 8) | r;
-      }
+      // Darken the play field with a dim overlay via rectf
+      rectf(0, 0, W, H, 0);
+      // Re-draw dimmed play field underneath dialog
+      // (simple approach: just draw dialog box on black)
       const bw = 200, bh = 52;
       const bx = flr((W - bw) / 2);
       const by = flr((H - bh) / 2);
@@ -621,10 +666,10 @@
         const angle = animTimer * 0.04 + i * 1.047;
         const bx = cx + flr(cos(angle) * 47) - 8;
         const by = cy + flr(sin(angle) * 26) - 8;
-        spr2x(5, bx, by);
+        sprT(5, bx, by);
       }
       const pd = flr(animTimer / 15) % 4;
-      spr2x(PLAYER_SPR[pd], cx - 8, cy - 8);
+      sprT(PLAYER_SPR[pd], cx - 8, cy - 8);
       if (flr(animTimer / 20) % 2 === 0) textCenter("PRESS START", 195, 2);
       textCenter("THANKS FOR PLAYING!", 214, 1);
     }

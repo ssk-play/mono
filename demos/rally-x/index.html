@@ -20,11 +20,32 @@
   const W = Mono.WIDTH, H = Mono.HEIGHT;
   const { cls, pix, line, rect, rectf, circ, circf, sprite: defSprite,
           spr, text, btn, btnp, note, stop, rnd, flr, abs: _abs,
-          min, max: _max, sin, cos } = Mono;
+          min, max: _max, sin, cos, dbg, dbgC } = Mono;
 
-  // --- Sprites ---
+  // --- 8->16 upscale helper ---
+  function up(d) {
+    let o = "";
+    for (let r = 0; r < 8; r++) {
+      let row = "";
+      for (let c = 0; c < 8; c++) {
+        const ch = d[r * 8 + c];
+        row += ch + ch;
+      }
+      o += row + row;
+    }
+    return o;
+  }
+
+  // --- Circle collision helper ---
+  function circCollide(x1, y1, r1, x2, y2, r2) {
+    const dx = x1 - x2, dy = y1 - y2;
+    return dx * dx + dy * dy < (r1 + r2) * (r1 + r2);
+  }
+
+  // --- Sprites (all 16x16 via upscale) ---
+
   // 1: Player car facing up
-  defSprite(1,
+  defSprite(1, up(
     "00333000" +
     "03322300" +
     "03333300" +
@@ -33,9 +54,9 @@
     "33333330" +
     "03333300" +
     "03022030"
-  );
+  ));
   // 2: Player car facing right
-  defSprite(2,
+  defSprite(2, up(
     "00333330" +
     "03332230" +
     "33333330" +
@@ -44,9 +65,9 @@
     "00333330" +
     "00200200" +
     "00000000"
-  );
+  ));
   // 3: Player car facing down
-  defSprite(3,
+  defSprite(3, up(
     "03022030" +
     "03333300" +
     "33333330" +
@@ -55,9 +76,9 @@
     "03333300" +
     "03322300" +
     "00333000"
-  );
+  ));
   // 4: Player car facing left
-  defSprite(4,
+  defSprite(4, up(
     "03333300" +
     "03222330" +
     "03333333" +
@@ -66,9 +87,9 @@
     "03333300" +
     "00200200" +
     "00000000"
-  );
+  ));
   // 5: Enemy car facing up
-  defSprite(5,
+  defSprite(5, up(
     "00111000" +
     "01122100" +
     "01111100" +
@@ -77,9 +98,9 @@
     "11111110" +
     "01111100" +
     "01011010"
-  );
+  ));
   // 6: Enemy car facing right
-  defSprite(6,
+  defSprite(6, up(
     "00111110" +
     "01112210" +
     "11111110" +
@@ -88,9 +109,9 @@
     "00111110" +
     "00100100" +
     "00000000"
-  );
+  ));
   // 7: Enemy car facing down
-  defSprite(7,
+  defSprite(7, up(
     "01011010" +
     "01111100" +
     "11111110" +
@@ -99,9 +120,9 @@
     "01111100" +
     "01122100" +
     "00111000"
-  );
+  ));
   // 8: Enemy car facing left
-  defSprite(8,
+  defSprite(8, up(
     "01111100" +
     "01221110" +
     "01111111" +
@@ -110,9 +131,9 @@
     "01111100" +
     "00100100" +
     "00000000"
-  );
+  ));
   // 9: Flag
-  defSprite(9,
+  defSprite(9, up(
     "03333300" +
     "03333300" +
     "03333300" +
@@ -121,9 +142,9 @@
     "03300000" +
     "03300000" +
     "03300000"
-  );
+  ));
   // 10: Special flag
-  defSprite(10,
+  defSprite(10, up(
     "03333300" +
     "03212300" +
     "03333300" +
@@ -132,9 +153,9 @@
     "03300000" +
     "03300000" +
     "03300000"
-  );
+  ));
   // 11: Smoke puff
-  defSprite(11,
+  defSprite(11, up(
     "00000000" +
     "00110000" +
     "01221100" +
@@ -143,9 +164,9 @@
     "01221100" +
     "00110000" +
     "00000000"
-  );
+  ));
   // 12: Wall tile
-  defSprite(12,
+  defSprite(12, up(
     "22222222" +
     "21111112" +
     "21111112" +
@@ -154,22 +175,36 @@
     "21111112" +
     "21111112" +
     "22222222"
-  );
+  ));
 
   // --- Constants ---
+  const SPR = 16;            // sprite size (was 8)
   const MAZE_W = 32;
   const MAZE_H = 32;
-  const TILE = 8;
+  const TILE = 16;           // tile size matches sprite (was 8)
   const MAZE_PX_W = MAZE_W * TILE;
   const MAZE_PX_H = MAZE_H * TILE;
+
+  // Layout: viewport left, HUD top, radar panel right
+  const HUD_H = 14;          // top HUD bar height
+  const PANEL_W = 52;        // right-side panel width
   const VIEW_X = 0;
-  const VIEW_Y = 9;
-  const VIEW_W = 267;
-  const VIEW_H = 222;
-  const RADAR_X = 273;
-  const RADAR_Y = 14;
-  const RADAR_W = 41;
-  const RADAR_H = 46;
+  const VIEW_Y = HUD_H;
+  const VIEW_W = W - PANEL_W;            // 268
+  const VIEW_H = H - HUD_H;              // 226
+  const RADAR_X = W - PANEL_W + 6;       // 274
+  const RADAR_Y = HUD_H + 6;             // 20
+  const RADAR_W = 40;
+  const RADAR_H = 40;
+
+  // Hitbox constants for cars (circle collision)
+  const CAR_CX = 8;   // center offset inside 16x16 sprite
+  const CAR_CY = 8;
+  const CAR_R  = 6;    // collision radius for cars
+  const FLAG_CX = 8;
+  const FLAG_CY = 8;
+  const FLAG_R  = 5;   // collection radius for flags
+  const SMOKE_R = 7;   // smoke stun radius
 
   // Direction vectors: 0=up, 1=right, 2=down, 3=left
   const DX = [0, 1, 0, -1];
@@ -218,8 +253,8 @@
   }
 
   function canMove(px, py) {
-    const m = 1;
-    const x1 = px + m, y1 = py + m, x2 = px + 7 - m, y2 = py + 7 - m;
+    const m = 2;
+    const x1 = px + m, y1 = py + m, x2 = px + SPR - 1 - m, y2 = py + SPR - 1 - m;
     const tx1 = flr(x1 / TILE), ty1 = flr(y1 / TILE);
     const tx2 = flr(x2 / TILE), ty2 = flr(y2 / TILE);
     for (let ty = ty1; ty <= ty2; ty++)
@@ -270,7 +305,7 @@
       let spot, ok;
       do {
         spot = findRoadSpot(); ok = true;
-        if (_abs(spot.x - player.x) + _abs(spot.y - player.y) < 48) ok = false;
+        if (_abs(spot.x - player.x) + _abs(spot.y - player.y) < 96) ok = false;
         for (const f of flags) if (f.x === spot.x && f.y === spot.y) ok = false;
       } while (!ok);
       flags.push({ x: spot.x, y: spot.y, collected: false });
@@ -284,7 +319,7 @@
     for (let i = 0; i < ne; i++) {
       let spot, ok;
       do { spot = findRoadSpot(); ok = true;
-        if (_abs(spot.x - player.x) + _abs(spot.y - player.y) < 64) ok = false;
+        if (_abs(spot.x - player.x) + _abs(spot.y - player.y) < 128) ok = false;
       } while (!ok);
       enemies.push({ x: spot.x, y: spot.y, dir: flr(rnd(4)), speed: 1.0 + level * 0.1, turnTimer: 0, stunTimer: 0 });
     }
@@ -310,8 +345,8 @@
   }
 
   function canTurn(ent, d) {
-    const nx = ent.x + DX[d] * 2;
-    const ny = ent.y + DY[d] * 2;
+    const nx = ent.x + DX[d] * 3;
+    const ny = ent.y + DY[d] * 3;
     return canMove(nx, ny);
   }
 
@@ -332,23 +367,21 @@
     draw() {
       cls(0);
       const ty = 41 + sin(Mono.frame*0.05)*4;
-      text("RALLY-X", 142, flr(ty), 3);
-      rectf(112, flr(ty)+10, 96, 1, 2);
-      const cx = W/2-30;
-      spr(1, cx, flr(ty)+20 + sin(Mono.frame*0.1)*3);
-      spr(5, cx+20, flr(ty)+22 + sin(Mono.frame*0.1+1)*3);
-      spr(2, cx+40, flr(ty)+20 + sin(Mono.frame*0.1+2)*3);
-      spr(9, cx+60, flr(ty)+20);
+      text("RALLY-X", 126, flr(ty), 3);
+      rectf(96, flr(ty)+10, 128, 1, 2);
+      const cx = W/2 - 44;
+      spr(1, cx, flr(ty)+18 + sin(Mono.frame*0.1)*3);
+      spr(5, cx+20, flr(ty)+20 + sin(Mono.frame*0.1+1)*3);
+      spr(2, cx+40, flr(ty)+18 + sin(Mono.frame*0.1+2)*3);
+      spr(9, cx+64, flr(ty)+18);
       if (flr(Mono.frame/20)%2===0) text("PRESS START", 120, 128, 3);
-      text("COLLECT ALL FLAGS", 117, 149, 2);
-      text("AVOID ENEMY CARS", 120, 159, 2);
-      text("A = DEPLOY SMOKE SCREEN", 102, 170, 2);
-      text("ARROWS = STEER CAR", 115, 180, 2);
-      text("-SCORING-", 137, 197, 2);
-      spr(9, 127, 206); text("  FLAG    100 PTS", 133, 207, 2);
-      spr(10, 127, 216); text("  SPECIAL  200 PTS", 133, 218, 2);
-      text("2X PTS AFTER SPECIAL!", 107, 230, 1);
-      text("MONO DEMO V0.1", 117, 236, 1);
+      text("COLLECT ALL FLAGS", 104, 149, 2);
+      text("AVOID ENEMY CARS", 107, 159, 2);
+      text("A = DEPLOY SMOKE SCREEN", 88, 170, 2);
+      text("ARROWS = STEER CAR", 102, 180, 2);
+      text("-SCORING-", 130, 197, 2);
+      spr(9, 110, 206); text("  FLAG    100 PTS", 128, 209, 2);
+      spr(10, 110, 224); text("  SPECIAL  200 PTS", 128, 227, 2);
     }
   });
 
@@ -398,7 +431,7 @@
     if (btn("a") && fuel > 50) {
       fuel -= 1.5;
       if (Mono.frame % 4 === 0) {
-        smokes.push({ x: player.x - DX[player.dir]*6+1, y: player.y - DY[player.dir]*6+1, life: 90 });
+        smokes.push({ x: player.x + CAR_CX - DX[player.dir]*12, y: player.y + CAR_CY - DY[player.dir]*12, life: 90 });
         sfxSmoke();
       }
     }
@@ -406,11 +439,13 @@
     // Update smokes
     for (let i = smokes.length - 1; i >= 0; i--) { smokes[i].life--; if (smokes[i].life <= 0) smokes.splice(i,1); }
 
-    // Flag collection
+    // Flag collection (circle collision)
+    const pcx = player.x + CAR_CX, pcy = player.y + CAR_CY;
     for (let i = 0; i < flags.length; i++) {
       const f = flags[i];
       if (f.collected) continue;
-      if (_abs(player.x - f.x) < 6 && _abs(player.y - f.y) < 6) {
+      const fcx = f.x + FLAG_CX, fcy = f.y + FLAG_CY;
+      if (circCollide(pcx, pcy, CAR_R, fcx, fcy, FLAG_R)) {
         f.collected = true; flagsCollected++;
         if (i === specialFlagIdx) { doublePoints = true; score += 200; sfxSpecial(); }
         else { score += doublePoints ? 200 : 100; sfxCollect(); }
@@ -421,9 +456,10 @@
     // Enemy AI
     for (const e of enemies) {
       if (e.stunTimer > 0) { e.stunTimer--; continue; }
-      // Check smoke collision
+      // Check smoke collision (circle)
+      const ecx = e.x + CAR_CX, ecy = e.y + CAR_CY;
       for (const s of smokes) {
-        if (_abs(e.x - s.x) < 8 && _abs(e.y - s.y) < 8) { e.stunTimer = 60; break; }
+        if (circCollide(ecx, ecy, CAR_R, s.x, s.y, SMOKE_R)) { e.stunTimer = 60; break; }
       }
       if (e.stunTimer > 0) continue;
 
@@ -449,8 +485,8 @@
       }
       moveEnt(e, e.speed);
 
-      // Collision with player
-      if (_abs(player.x - e.x) < 6 && _abs(player.y - e.y) < 6) {
+      // Collision with player (circle)
+      if (circCollide(pcx, pcy, CAR_R, e.x + CAR_CX, e.y + CAR_CY, CAR_R)) {
         lives--; sfxDeath();
         if (lives <= 0) { Mono.go(GAMEOVER); return; }
         else { respawnTimer = 60; fuel = min(fuel + 300, maxFuel); }
@@ -458,24 +494,26 @@
     }
 
     // Camera
-    camX = player.x - VIEW_W/2 + 4;
-    camY = player.y - VIEW_H/2 + 4;
+    camX = player.x - VIEW_W/2 + CAR_CX;
+    camY = player.y - VIEW_H/2 + CAR_CY;
     camX = _max(0, min(MAZE_PX_W - VIEW_W, camX));
     camY = _max(0, min(MAZE_PX_H - VIEW_H, camY));
     },
     draw() {
     cls(0);
 
-    // --- Play ---
-    // Clip view area
+    // --- Maze viewport ---
     drawMaze();
 
     // Smokes
     for (const s of smokes) {
       const a = s.life > 60 ? 2 : (s.life > 30 ? 1 : (Mono.frame%4<2?1:0));
       if (a > 0) {
-        const sx = flr(s.x-camX+VIEW_X), sy = flr(s.y-camY+VIEW_Y);
-        if (sx > -8 && sx < VIEW_X+VIEW_W && sy > -8 && sy < VIEW_Y+VIEW_H) circf(sx+3,sy+3,3,a);
+        const sx = flr(s.x - camX + VIEW_X), sy = flr(s.y - camY + VIEW_Y);
+        if (sx > -SPR && sx < VIEW_X+VIEW_W && sy > -SPR && sy < VIEW_Y+VIEW_H) {
+          circf(sx, sy, 6, a);
+          dbgC(sx, sy, SMOKE_R);
+        }
       }
     }
 
@@ -484,36 +522,46 @@
       const f = flags[i]; if (f.collected) continue;
       if (i === specialFlagIdx) { sprW(Mono.frame%8<5?10:9, f.x, f.y); }
       else sprW(9, f.x, f.y);
+      // Debug hitbox for flags
+      const fsx = flr(f.x - camX + VIEW_X), fsy = flr(f.y - camY + VIEW_Y);
+      dbgC(fsx + FLAG_CX, fsy + FLAG_CY, FLAG_R);
     }
 
     // Enemies
     for (const e of enemies) {
       if (e.stunTimer > 0 && Mono.frame%4 < 2) continue;
-      sprW(dirSpr(5,e.dir), e.x, e.y);
+      sprW(dirSpr(5, e.dir), e.x, e.y);
+      const esx = flr(e.x - camX + VIEW_X), esy = flr(e.y - camY + VIEW_Y);
+      dbgC(esx + CAR_CX, esy + CAR_CY, CAR_R);
     }
 
     // Player
-    if (respawnTimer <= 0 || Mono.frame%4 < 2) sprW(dirSpr(1,player.dir), player.x, player.y);
+    if (respawnTimer <= 0 || Mono.frame%4 < 2) {
+      sprW(dirSpr(1, player.dir), player.x, player.y);
+      const psx = flr(player.x - camX + VIEW_X), psy = flr(player.y - camY + VIEW_Y);
+      dbgC(psx + CAR_CX, psy + CAR_CY, CAR_R);
+    }
 
     // Level clear overlay
     if (levelCompleteTimer > 0) {
-      const ox = VIEW_W/2-38, oy = VIEW_H/2+VIEW_Y-9;
-      rectf(ox,oy,77,18,0); rect(ox,oy,77,18,2);
-      text("LEVEL CLEAR!", ox+8, oy+6, 3);
+      const ox = VIEW_X + VIEW_W/2 - 46, oy = VIEW_Y + VIEW_H/2 - 9;
+      rectf(ox, oy, 92, 18, 0); rect(ox, oy, 92, 18, 2);
+      text("LEVEL CLEAR!", ox+10, oy+6, 3);
     }
 
-    // --- HUD ---
-    rectf(0,0,W,9,0);
-    text("SCORE:"+score, 3, 2, 3);
-    text("LV:"+level, 113, 2, 2);
-    for (let i = 0; i < lives; i++) spr(1, 147+i*10, 1);
+    // --- HUD (top bar) ---
+    rectf(0, 0, W, HUD_H, 0);
+    line(0, HUD_H - 1, W, HUD_H - 1, 1);
+    text("SCORE:"+score, 3, 3, 3);
+    text("LV:"+level, 100, 3, 2);
+    for (let i = 0; i < lives; i++) spr(1, 136 + i*18, 0);
     const fl = totalFlags - flagsCollected;
-    text("FLAGS:"+fl, 200, 2, doublePoints?3:2);
+    text("FLAGS:"+fl, 210, 3, doublePoints ? 3 : 2);
 
-    // Right panel
-    rectf(VIEW_W, VIEW_Y, W-VIEW_W, VIEW_H, 0);
-    line(VIEW_W, VIEW_Y, VIEW_W, VIEW_Y+VIEW_H, 1);
-    line(0, VIEW_Y-1, W, VIEW_Y-1, 1);
+    // --- Right panel ---
+    const panelX = W - PANEL_W;
+    rectf(panelX, VIEW_Y, PANEL_W, VIEW_H, 0);
+    line(panelX, VIEW_Y, panelX, H, 1);
 
     drawRadar();
     drawFuel();
@@ -524,7 +572,11 @@
     if (fuel > 50) text("READY", RADAR_X, smy+10, 3);
     else text("EMPTY", RADAR_X, smy+10, 1);
 
-    if (doublePoints && Mono.frame%10<7) text("2X PTS!", RADAR_X-2, smy+22, 3);
+    if (doublePoints && Mono.frame%10<7) text("2X PTS!", RADAR_X-2, smy+24, 3);
+
+    // Debug hitbox for HUD bounds
+    dbg(0, 0, W, HUD_H);
+    dbg(panelX, VIEW_Y, PANEL_W, VIEW_H);
     }
   });
 
@@ -532,68 +584,68 @@
   Mono.scene(GAMEOVER, {
     init() {},
     update() {
-      if (btnp("start") || btnp("a") || btnp("start")) { Mono.go(TITLE); return; }
+      if (btnp("start") || btnp("a")) { Mono.go(TITLE); return; }
     },
     draw() {
       cls(0);
-      text("GAME OVER", 137, 75, 3);
-      text("SCORE: " + score, 130, 98, 2);
-      text("LEVEL: " + level, 135, 111, 2);
+      text("GAME OVER", 122, 75, 3);
+      text("SCORE: " + score, 118, 98, 2);
+      text("LEVEL: " + level, 123, 111, 2);
       if (flr(Mono.frame/20)%2===0) text("PRESS START", 110, 150, 3);
     }
   });
 
   function sprW(id, wx, wy, fx, fy) {
     const sx = flr(wx - camX + VIEW_X), sy = flr(wy - camY + VIEW_Y);
-    if (sx > -8 && sx < VIEW_X+VIEW_W && sy > -8 && sy < VIEW_Y+VIEW_H) spr(id,sx,sy,fx,fy);
+    if (sx > -SPR && sx < VIEW_X+VIEW_W && sy > -SPR && sy < VIEW_Y+VIEW_H) spr(id, sx, sy, fx, fy);
   }
 
   function drawMaze() {
-    const stx = _max(0, flr(camX/TILE)), sty = _max(0, flr(camY/TILE));
-    const etx = min(MAZE_W, flr((camX+VIEW_W)/TILE)+2);
-    const ety = min(MAZE_H, flr((camY+VIEW_H)/TILE)+2);
+    const stx = _max(0, flr(camX / TILE)), sty = _max(0, flr(camY / TILE));
+    const etx = min(MAZE_W, flr((camX + VIEW_W) / TILE) + 2);
+    const ety = min(MAZE_H, flr((camY + VIEW_H) / TILE) + 2);
     for (let ty = sty; ty < ety; ty++)
       for (let tx = stx; tx < etx; tx++) {
         if (maze[ty][tx] === 1) {
-          const sx = flr(tx*TILE - camX + VIEW_X), sy = flr(ty*TILE - camY + VIEW_Y);
+          const sx = flr(tx * TILE - camX + VIEW_X), sy = flr(ty * TILE - camY + VIEW_Y);
           spr(12, sx, sy);
         }
       }
   }
 
   function drawRadar() {
-    rectf(RADAR_X-1, RADAR_Y-1, RADAR_W+2, RADAR_H+2, 0);
-    rect(RADAR_X-1, RADAR_Y-1, RADAR_W+2, RADAR_H+2, 1);
+    rectf(RADAR_X - 1, RADAR_Y - 1, RADAR_W + 2, RADAR_H + 2, 0);
+    rect(RADAR_X - 1, RADAR_Y - 1, RADAR_W + 2, RADAR_H + 2, 1);
     const sx = RADAR_W / MAZE_PX_W, sy = RADAR_H / MAZE_PX_H;
     // Walls (sampled)
     for (let ty = 0; ty < MAZE_H; ty += 2)
       for (let tx = 0; tx < MAZE_W; tx += 2)
-        if (maze[ty][tx] === 1) pix(flr(RADAR_X+tx*TILE*sx), flr(RADAR_Y+ty*TILE*sy), 1);
+        if (maze[ty][tx] === 1) pix(flr(RADAR_X + tx * TILE * sx), flr(RADAR_Y + ty * TILE * sy), 1);
     // Flags
     for (const f of flags) {
       if (f.collected) continue;
-      const rx = flr(RADAR_X+f.x*sx), ry = flr(RADAR_Y+f.y*sy);
-      pix(rx,ry,3); pix(rx+1,ry,3);
+      const rx = flr(RADAR_X + f.x * sx), ry = flr(RADAR_Y + f.y * sy);
+      pix(rx, ry, 3); pix(rx+1, ry, 3);
     }
     // Enemies
     for (const e of enemies) {
-      const rx = flr(RADAR_X+e.x*sx), ry = flr(RADAR_Y+e.y*sy);
-      if (Mono.frame % 6 < 4) { pix(rx,ry,2); pix(rx+1,ry,2); pix(rx,ry+1,2); }
+      const rx = flr(RADAR_X + e.x * sx), ry = flr(RADAR_Y + e.y * sy);
+      if (Mono.frame % 6 < 4) { pix(rx, ry, 2); pix(rx+1, ry, 2); pix(rx, ry+1, 2); }
     }
     // Player (blink)
     if (Mono.frame % 4 < 3) {
-      const rx = flr(RADAR_X+player.x*sx), ry = flr(RADAR_Y+player.y*sy);
-      pix(rx,ry,3); pix(rx+1,ry,3); pix(rx,ry+1,3); pix(rx+1,ry+1,3);
+      const rx = flr(RADAR_X + player.x * sx), ry = flr(RADAR_Y + player.y * sy);
+      pix(rx, ry, 3); pix(rx+1, ry, 3); pix(rx, ry+1, 3); pix(rx+1, ry+1, 3);
     }
   }
 
   function drawFuel() {
-    const gx = RADAR_X-1, gy = RADAR_Y + RADAR_H + 9;
-    const gw = RADAR_W+2, gh = 5;
+    const gx = RADAR_X - 1, gy = RADAR_Y + RADAR_H + 9;
+    const gw = RADAR_W + 2, gh = 5;
     text("FUEL", gx, gy-8, 2);
     rect(gx, gy, gw, gh, 1);
-    const fw = flr((fuel/maxFuel)*(gw-2));
-    const fc = fuel < maxFuel*0.25 ? (Mono.frame%6<3?2:1) : 2;
+    const fw = flr((fuel / maxFuel) * (gw - 2));
+    const fc = fuel < maxFuel * 0.25 ? (Mono.frame%6<3?2:1) : 2;
     rectf(gx+1, gy+1, fw, gh-2, fc);
   }
 
