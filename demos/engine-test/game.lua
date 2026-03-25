@@ -532,10 +532,22 @@ local function cameraUpdate()
   local spd: number = camSpeed
   if btn("b") then spd = camSpeed * 3 end
 
-  if btn("left") then camPX = camPX - spd end
-  if btn("right") then camPX = camPX + spd end
-  if btn("up") then camPY = camPY - spd end
-  if btn("down") then camPY = camPY + spd end
+  local dx: number = 0
+  local dy: number = 0
+  if btn("left") then dx = dx - 1 end
+  if btn("right") then dx = dx + 1 end
+  if btn("up") then dy = dy - 1 end
+  if btn("down") then dy = dy + 1 end
+
+  -- Normalize diagonal
+  if dx ~= 0 and dy ~= 0 then
+    local inv: number = 0.7071 -- 1/sqrt(2)
+    dx = dx * inv
+    dy = dy * inv
+  end
+
+  camPX = camPX + dx * spd
+  camPY = camPY + dy * spd
 
   -- Clamp to map bounds
   if camPX < 8 then camPX = 8 end
