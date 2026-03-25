@@ -668,21 +668,21 @@ local function spritesDraw()
   -- === Animated demos (right side) ===
   local demoX = 250
 
-  -- 1. Auto-rotation
+  -- 1. Auto-rotation (using unified draw)
   text("ROTATE", demoX - 8, 58, 2)
   local autoAngle = sprTimer * 0.06
-  sprRot(selId, demoX + 8, 82, autoAngle)
+  draw(selId, demoX + 8, 82, autoAngle, 1, 1, 8, 8)
 
-  -- 2. Scale animation
+  -- 2. Scale animation (using unified draw)
   text("SCALE", demoX - 6, 105, 2)
   local sc = 1 + math.sin(sprTimer * 0.08) * 0.8
-  sprScale(selId, demoX + 8, 125, sc)
+  draw(selId, demoX + 8, 125, 0, sc, sc, 8, 8)
   text(tostring(flr(sc * 100) / 100) .. "x", demoX - 4, 142, 1)
 
-  -- 3. Flip animation (alternating flip-x every 15 frames)
-  text("FLIP", demoX - 4, 148, 2)
-  local flipPhase = (flr(sprTimer / 15) % 2 == 1)
-  sprT(selId, demoX, 162, flipPhase, false)
+  -- 3. Rot+Scale combo (using unified draw)
+  text("R+S", demoX - 2, 148, 2)
+  local comboSc = 0.8 + math.sin(sprTimer * 0.1) * 0.4
+  draw(selId, demoX + 8, 168, sprTimer * 0.04, comboSc, comboSc, 8, 8)
 
   -- === Static demos (left side) ===
   local leftX = 20

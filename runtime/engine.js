@@ -425,6 +425,49 @@ const Mono = (() => {
     return -1;
   }
 
+  // Unified draw: draw(id, x, y, [r], [sx], [sy], [ox], [oy])
+  // Like LÖVE2D: rotation, scale, origin offset — all in one call
+  // ox,oy = origin offset (default: 0,0 = topleft; SPR_SIZE/2 = center)
+  function drawSprite(id, x, y, r, sx, sy, ox, oy) {
+    const s = sprites[id]; if (!s) return;
+    const SS = SPR_SIZE;
+    r = r || 0;
+    sx = (sx !== undefined && sx !== null) ? sx : 1;
+    sy = (sy !== undefined && sy !== null) ? sy : 1;
+    ox = ox || 0;
+    oy = oy || 0;
+
+    x = x + camOX;
+    y = y + camOY;
+
+    if (r === 0 && sx === 1 && sy === 1) {
+      // Fast path: simple draw with offset
+      const dx = Math.floor(x - ox), dy = Math.floor(y - oy);
+      for (let py = 0; py < SS; py++) for (let px = 0; px < SS; px++) {
+        const c = s[py * SS + px]; if (c === 0) continue;
+        const fx = dx + px, fy = dy + py;
+        if (fx >= 0 && fx < W && fy >= 0 && fy < H) buf32[fy * W + fx] = COLOR_U32[c];
+      }
+      if (debugSprite) debugSprBoxes.push({x: dx, y: dy});
+    } else {
+      // Full path: rotation + scale
+      const cosA = Math.cos(r), sinA = Math.sin(r);
+      const range = Math.ceil(Math.max(Math.abs(sx), Math.abs(sy)) * SS * 0.72);
+      for (let py = -range; py <= range; py++) {
+        for (let px = -range; px <= range; px++) {
+          // Inverse transform: screen → source
+          const srcX = Math.floor((cosA * px + sinA * py) / sx + ox);
+          const srcY = Math.floor((-sinA * px + cosA * py) / sy + oy);
+          if (srcX < 0 || srcX >= SS || srcY < 0 || srcY >= SS) continue;
+          const c = s[srcY * SS + srcX]; if (c === 0) continue;
+          const fx = Math.floor(x + px), fy = Math.floor(y + py);
+          if (fx >= 0 && fx < W && fy >= 0 && fy < H) buf32[fy * W + fx] = COLOR_U32[c];
+        }
+      }
+      if (debugSprite) debugSprBoxes.push({x: Math.floor(x - ox * sx), y: Math.floor(y - oy * sy)});
+    }
+  }
+
   // --- Text ---
   function drawText(str, x, y, c) {
     str=String(str).toUpperCase(); let cx=Math.floor(x); const cy=Math.floor(y);
@@ -1148,7 +1191,7 @@ const Mono = (() => {
     return {
       cls: (c) => cls(c || 0),
       pix, line, rect, rectf, circ, circf,
-      spr, sprT, sprRot, sprScale, gpix,
+      spr, sprT, sprRot, sprScale, gpix, draw: drawSprite,
       text: drawText,
       mget, mset, map: mapDraw,
       btn, btnp,
