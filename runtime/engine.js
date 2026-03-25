@@ -282,11 +282,11 @@ const Mono = (() => {
   let camShake = 0;
   let camOX = 0, camOY = 0;
 
-  function camSet(x, y) { camX = x; camY = y; }
+  function camSet(x, y) { camX = x; camY = y; camOX = Math.floor(-x); camOY = Math.floor(-y); }
   function camGetX() { return camX; }
   function camGetY() { return camY; }
   function camShakeSet(amt) { camShake = amt; }
-  function camReset() { camX = 0; camY = 0; camShake = 0; }
+  function camReset() { camX = 0; camY = 0; camShake = 0; camOX = 0; camOY = 0; }
 
   function camUpdateFrame() {
     let sx = 0, sy = 0;
