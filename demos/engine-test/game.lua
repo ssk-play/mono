@@ -528,16 +528,14 @@ local function cameraInit()
 end
 
 local function cameraUpdate()
-  if btnp("b") then
-    cam_reset()
-    currentMode = MODE_MENU
-    return
-  end
+  -- B = dash (3x speed while held)
+  local spd: number = camSpeed
+  if btn("b") then spd = camSpeed * 3 end
 
-  if btn("left") then camPX = camPX - camSpeed end
-  if btn("right") then camPX = camPX + camSpeed end
-  if btn("up") then camPY = camPY - camSpeed end
-  if btn("down") then camPY = camPY + camSpeed end
+  if btn("left") then camPX = camPX - spd end
+  if btn("right") then camPX = camPX + spd end
+  if btn("up") then camPY = camPY - spd end
+  if btn("down") then camPY = camPY + spd end
 
   -- Clamp to map bounds
   if camPX < 8 then camPX = 8 end
@@ -607,7 +605,7 @@ local function cameraDraw()
   text("CAMERA TEST", 4, 4, 3)
   text("POS:" .. flr(camPX) .. "," .. flr(camPY), 4, 14, 2)
   text("MAP:" .. CAM_MAP_W .. "x" .. CAM_MAP_H, 4, 24, 1)
-  text("[A] SHAKE  [B] MENU", 4, H - 10, 1)
+  text("[A] SHAKE  [B] DASH  [START] MENU", 4, H - 10, 1)
   text("ARROWS: MOVE", 4, H - 20, 1)
   drawInputMonitor()
 end
