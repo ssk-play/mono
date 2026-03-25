@@ -343,7 +343,7 @@ local function shooterUpdate()
   -- Poll collisions (no async callbacks)
   while true do
     local hit = pollCollision()
-    if hit == nil then break end
+    if not hit then break end
     if hit.tag == "bullet_enemy" then
       spawnExplosion(hit.bx + 7, hit.by + 5)
       shooterScore = shooterScore + 100
