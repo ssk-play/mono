@@ -377,10 +377,12 @@ function ecsKillAll(group) {
   }
 }
 
-function ecsEach(group, fn) {
+async function ecsEach(group, fn) {
   for (let i = 0; i < entities.length; i++) {
     const e = entities[i];
-    if (e._alive && (!group || e.group === group)) fn(e);
+    if (e._alive && (!group || e.group === group)) {
+      try { await fn(e); } catch(err) { /* luau callback error */ }
+    }
   }
 }
 
@@ -425,7 +427,7 @@ function ecsOverlap(a, b) {
   return dx * dx + dy * dy < c.r * c.r;
 }
 
-function ecsUpdate() {
+async function ecsUpdate() {
   for (let i = entities.length - 1; i >= 0; i--) {
     if (!entities[i]._alive) entities.splice(i, 1);
   }
@@ -480,7 +482,7 @@ function ecsUpdate() {
         if (!b._alive || b.group !== handler.groupB || a === b) continue;
         const hb = ecsHitbox(b);
         if (ecsOverlap(ha, hb)) {
-          handler.fn(a, b);
+          try { await handler.fn(a, b); } catch(e) { postMessage({type:"log", msg:"collide err: " + e.message}); }
         }
       }
     }
@@ -852,7 +854,7 @@ async function stepUpdate() {
   if (currentScene && currentScene.update) {
     try { await currentScene.update(); } catch(e) { postMessage({type:"log", msg:"update err: " + e.message}); }
   }
-  ecsUpdate();
+  await ecsUpdate();
 }
 
 async function stepRender() {
