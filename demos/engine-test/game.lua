@@ -936,7 +936,7 @@ function play_update()
       if menuCursor >= #menuItems then menuCursor = 0 end
       note(0, "G5", 0.03)
     end
-    if btnp("a") then
+    if btnp("a") or btnp("start") then
       enterMode(menuCursor + 1)
       note(0, "C5", 0.05)
     end
