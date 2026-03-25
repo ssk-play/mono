@@ -233,37 +233,39 @@ end
 ---------------------------------------------------------------
 -- TILEMAP SETUP (scrolling starfield for shooter)
 ---------------------------------------------------------------
-local TILE_COLS = 20
-local TILE_ROWS = 30
+-- Star background: individual dots falling at different speeds
+local stars = {}
+local STAR_COUNT = 40
 
-local function setupTilemap()
-  local starId = sprite_id("star")
-  local star2Id = sprite_id("star2")
-  for ty = 0, TILE_ROWS - 1 do
-    for tx = 0, TILE_COLS - 1 do
-      local r = rnd(100)
-      if r < 6 then
-        mset(tx, ty, starId)
-      elseif r < 9 then
-        mset(tx, ty, star2Id)
-      else
-        mset(tx, ty, 0)
-      end
+local function initStars()
+  stars = {}
+  for i = 1, STAR_COUNT do
+    stars[i] = {
+      x = flr(rnd(320)),
+      y = flr(rnd(240)),
+      speed = 0.3 + rnd(1.2),
+      bright = flr(rnd(3)) + 1  -- color 1, 2, or 3
+    }
+  end
+end
+
+local function updateStars()
+  for i = 1, #stars do
+    local s = stars[i]
+    s.y = s.y + s.speed
+    if s.y > 240 then
+      s.y = -2
+      s.x = flr(rnd(320))
+      s.speed = 0.3 + rnd(1.2)
+      s.bright = flr(rnd(3)) + 1
     end
   end
 end
 
-local function drawStarfield(offset)
-  local sy = offset % (TILE_ROWS * SS)
-  local tileOffY = flr(sy / SS)
-  local pixOffY = flr(sy) % SS
-  for ty = 0, 16 do
-    for tx = 0, TILE_COLS - 1 do
-      local tile = mget(tx, (ty + tileOffY) % TILE_ROWS)
-      if tile > 0 then
-        sprT(tile, tx * SS, ty * SS + pixOffY)
-      end
-    end
+local function drawStars()
+  for i = 1, #stars do
+    local s = stars[i]
+    pix(flr(s.x), flr(s.y), s.bright)
   end
 end
 
@@ -311,7 +313,7 @@ local function shooterInit()
   killAll("enemy")
   killAll("particle")
   killAll("player")
-  setupTilemap()
+  initStars()
 
   -- Register collision tags (no callbacks — poll in update)
   onCollide("bullet", "enemy", "bullet_enemy")
@@ -362,6 +364,7 @@ local function shooterUpdate()
   end
 
   scrollY = scrollY + 0.5
+  updateStars()
 
   if btn("left") and playerX > 0 then
     playerX = playerX - SHIP_SPEED
@@ -434,7 +437,7 @@ local function shooterDraw()
 
   if shooterLives <= 0 then
     -- Game over sub-screen
-    drawStarfield(scrollY)
+    drawStars()
     text("GAME OVER", 120, 80, 3)
     text("SCORE:" .. shooterScore, 120, 110, 2)
     if flr(frame() / 20) % 2 == 0 then
@@ -445,7 +448,7 @@ local function shooterDraw()
     return
   end
 
-  drawStarfield(scrollY)
+  drawStars()
 
   local shipId = sprite_id("ship")
   if invincible <= 0 or flr(invincible / 3) % 2 == 0 then
@@ -926,11 +929,12 @@ function title_init()
   titleBlink = 0
   menuCursor = 0
   currentMode = MODE_MENU
-  setupTilemap()
+  initStars()
 end
 
 function title_update()
   titleBlink = titleBlink + 1
+  updateStars()
   if btnp("a") or btnp("start") then
     go("play")
   end
@@ -938,7 +942,7 @@ end
 
 function title_draw()
   cls(0)
-  drawStarfield(titleBlink * 0.5)
+  drawStars()
 
   text("ENGINE TEST SUITE", 85, 25, 3)
 
