@@ -892,7 +892,7 @@ const Mono = (() => {
           }
         }
       }
-      labelX = drawDebugLabel("3:FILL", labelX, 0xFFFF8800) + 6;
+      labelX = drawDebugLabel("3:FILL", labelX, 0xFF0088FF) + 6;
     }
 
     // Sprite bounding box overlay (key 2) — magenta, 45% alpha
