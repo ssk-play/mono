@@ -526,13 +526,13 @@ const Mono = (() => {
 
   // --- Debug overlay ---
   function dbg(x, y, w, h) {
-    if (debugMode) debugShapes.push({ t: "r", x: Math.floor(x), y: Math.floor(y), w: Math.floor(w), h: Math.floor(h) });
+    if (debugMode) debugShapes.push({ t: "r", x: Math.floor(x - camX), y: Math.floor(y - camY), w: Math.floor(w), h: Math.floor(h) });
   }
   function dbgC(x, y, r) {
-    if (debugMode) debugShapes.push({ t: "c", x: Math.floor(x), y: Math.floor(y), r: Math.floor(r) });
+    if (debugMode) debugShapes.push({ t: "c", x: Math.floor(x - camX), y: Math.floor(y - camY), r: Math.floor(r) });
   }
   function dbgPt(x, y) {
-    if (debugMode) debugShapes.push({ t: "p", x: Math.floor(x), y: Math.floor(y) });
+    if (debugMode) debugShapes.push({ t: "p", x: Math.floor(x - camX), y: Math.floor(y - camY) });
   }
 
   // --- Sound (direct, no postMessage) ---
