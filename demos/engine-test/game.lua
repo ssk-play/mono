@@ -1946,8 +1946,8 @@ local BS_ENEMY_STATS = {
 }
 
 local bsPlayer = nil
+local bsPlayerEntId = nil
 local bsEnemies = {}
-local bsProjectiles = {}
 local bsFrame = 0
 local bsCamX = 0
 local bsZone = 1
@@ -1968,6 +1968,75 @@ local bsComboWindow = 0
 local bsAttackTimer = 0
 local bsAttackType = ""
 local bsKickTimer = 0
+
+local function bsPlayerSprName(state)
+  if state == "walk" then return "hero_walk"
+  elseif state == "jab" or state == "cross" or state == "uppercut" then return "hero_punch"
+  elseif state == "kick" then return "hero_kick"
+  end
+  return "hero_idle"
+end
+
+local function bsEnemySprName(state)
+  if state == "walk" then return "thug_walk"
+  elseif state == "stagger" or state == "ko" then return "thug_hit"
+  end
+  return "thug_idle"
+end
+
+local function bsSyncPlayerECS()
+  -- Kill old entity and re-spawn (handles invincibility blink)
+  if bsPlayerEntId then kill(bsPlayerEntId); bsPlayerEntId = nil end
+  local p = bsPlayer
+  if not p then return end
+  -- During invincibility blink, skip some frames (no entity = no draw)
+  if p.invincible > 0 and flr(p.invincible / 2) % 2 ~= 0 then
+    return
+  end
+  local bob = 0
+  if p.state == "walk" then
+    bob = flr(math.sin(bsFrame * 0.3) * 2)
+  end
+  bsPlayerEntId = spawn({
+    group = "bsplayer",
+    pos = { x = p.x, y = p.y + bob },
+    sprite = sprite_id(bsPlayerSprName(p.state)),
+    hitbox = { w = 12, h = 16, ox = -6, oy = -8 },
+    anchor_x = 0.5, anchor_y = 0.5,
+    flipX = (p.facing < 0),
+    z = p.y,
+  })._id
+end
+
+local function bsSyncEnemyECS(e, idx)
+  -- Kill old entity and re-spawn
+  if e.entId then kill(e.entId); e.entId = nil end
+  -- Flash: skip draw frames
+  if e.flashTimer > 0 and flr(e.flashTimer / 2) % 2 == 0 then
+    return
+  end
+  local bob = 0
+  if e.state == "walk" then
+    bob = flr(math.sin(bsFrame * 0.25 + idx) * 2)
+  end
+  local drawY = e.y
+  if e.state == "ko" then
+    local koOff = (60 - e.koTimer)
+    if koOff > 8 then koOff = 8 end
+    drawY = e.y + koOff
+  else
+    drawY = e.y + bob
+  end
+  e.entId = spawn({
+    group = "bsenemy",
+    pos = { x = e.x, y = drawY },
+    sprite = sprite_id(bsEnemySprName(e.state)),
+    hitbox = { w = 14, h = 20, ox = -7, oy = -10 },
+    anchor_x = 0.5, anchor_y = 0.5,
+    flipX = (e.facing < 0),
+    z = e.y,
+  })._id
+end
 
 local function bsMakeEnemy(kind, x, y)
   local stats = BS_ENEMY_STATS[kind]
@@ -1995,32 +2064,13 @@ end
 local function bsSpawnZone(zone)
   local z = BS_ZONES[zone]
   if not z then return end
-  for _, sp in ipairs(z.spawns) do
+  for i, sp in ipairs(z.spawns) do
     local e = bsMakeEnemy(sp.kind, sp.x, sp.y)
     bsEnemies[#bsEnemies + 1] = e
-    e.entId = spawn({
-      group = "bsenemy",
-      pos = { x = sp.x, y = sp.y },
-      hitbox = { w = 14, h = 20, ox = -7, oy = -10 },
-      anchor_x = 0.5, anchor_y = 0.5,
-    })
+    bsSyncEnemyECS(e, #bsEnemies)
   end
   bsZoneActive = true
   bsZoneCleared = false
-end
-
-local function bsRebuildEnemyECS()
-  killAll("bsenemy")
-  for j, ee in ipairs(bsEnemies) do
-    if ee.state ~= "ko" then
-      ee.entId = spawn({
-        group = "bsenemy",
-        pos = { x = ee.x, y = ee.y },
-        hitbox = { w = 14, h = 20, ox = -7, oy = -10 },
-        anchor_x = 0.5, anchor_y = 0.5,
-      })
-    end
-  end
 end
 
 -- Pre-generate buildings once (not every frame!)
@@ -2051,8 +2101,8 @@ local function bsInit()
     state = "idle",
     invincible = 60,
   }
+  bsPlayerEntId = nil
   bsEnemies = {}
-  bsProjectiles = {}
   bsFrame = 0
   bsCamX = 0
   bsZone = 1
@@ -2072,12 +2122,58 @@ local function bsInit()
   bsAttackType = ""
   bsKickTimer = 0
 
+  killAll("bsplayer")
   killAll("bsenemy")
   killAll("bsattack")
   killAll("bsknife")
+  killAll("bsfx")
 
-  onCollide("bsattack", "bsenemy", "bs_hit")
-  onCollide("bsknife", "player", "bs_knife_hit")
+  -- Callback mode: entities NOT auto-killed
+  onCollide("bsattack", "bsenemy", function(atk, enemy)
+    -- Find the enemy table matching this entity
+    for i, e in ipairs(bsEnemies) do
+      if e.entId == enemy._id and e.state ~= "ko" and e.state ~= "stagger" then
+        local dmg = atk.dmg or 8
+        e.hp = e.hp - dmg
+        e.flashTimer = 6
+        bsFreezeTimer = 2
+        bsFlashTimer = 3
+        local kb = (atk.dmg and atk.dmg >= 15) and 6 or 3
+        e.vx = bsPlayer.facing * kb
+        if e.hp <= 0 then
+          e.hp = 0
+          e.state = "ko"
+          e.koTimer = 60
+          e.vx = bsPlayer.facing * 5
+          note(1, "C3", 0.1)
+          cam_shake(4)
+          if e.kind == "boss" then bsScore = bsScore + 500
+          elseif e.kind == "knife" then bsScore = bsScore + 200
+          else bsScore = bsScore + 100 end
+          note(2, "G5", 0.05)
+        else
+          e.state = "stagger"
+          e.staggerTimer = 20
+          note(1, "E5", 0.04)
+        end
+        -- Kill the attack hitbox so it only hits once
+        kill(atk)
+        break
+      end
+    end
+  end)
+
+  onCollide("bsknife", "bsplayer", function(knife, player)
+    if bsPlayer.invincible <= 0 then
+      bsPlayer.hp = bsPlayer.hp - 3
+      bsPlayer.invincible = 30
+      note(0, "E3", 0.06)
+      cam_shake(2)
+      bsFlashTimer = 2
+      if bsPlayer.hp < 0 then bsPlayer.hp = 0 end
+    end
+    kill(knife)
+  end)
 
   -- Spawn first zone enemies
   bsSpawnZone(1)
@@ -2089,6 +2185,9 @@ local function bsUpdate()
   -- Freeze frames (hit stop)
   if bsFreezeTimer > 0 then
     bsFreezeTimer = bsFreezeTimer - 1
+    -- Still sync ECS visuals during freeze
+    bsSyncPlayerECS()
+    for i, e in ipairs(bsEnemies) do bsSyncEnemyECS(e, i) end
     return
   end
 
@@ -2099,11 +2198,17 @@ local function bsUpdate()
   -- Stage clear state
   if bsStageClear then
     bsStageClearTimer = bsStageClearTimer + 1
+    bsSyncPlayerECS()
+    for i, e in ipairs(bsEnemies) do bsSyncEnemyECS(e, i) end
     return
   end
 
   -- Win/dead state
-  if bsWin or bsPlayer.hp <= 0 then return end
+  if bsWin or bsPlayer.hp <= 0 then
+    bsSyncPlayerECS()
+    for i, e in ipairs(bsEnemies) do bsSyncEnemyECS(e, i) end
+    return
+  end
 
   -- Combo window countdown
   if bsComboWindow > 0 then bsComboWindow = bsComboWindow - 1 end
@@ -2182,7 +2287,7 @@ local function bsUpdate()
       cam_shake(3)
     end
 
-    -- Spawn attack hitbox
+    -- Spawn attack hitbox as ECS entity (lifetime auto-kills it)
     killAll("bsattack")
     local atkRange = bsComboCount == 3 and 22 or 14
     local atkDmg = bsComboCount == 3 and 15 or 8
@@ -2216,73 +2321,10 @@ local function bsUpdate()
     })
   end
 
-  -- Poll attack-vs-enemy collisions
-  while true do
-    local hit = pollCollision()
-    if not hit then break end
-    if hit.tag == "bs_hit" then
-      for i, e in ipairs(bsEnemies) do
-        if e.state ~= "ko" and e.state ~= "stagger" then
-          local dist = abs(e.x - hit.bx) + abs(e.y - hit.by)
-          if dist < 40 then
-            local dmg = bsComboCount == 3 and 15 or (bsKickTimer > 0 and 10 or 8)
-            e.hp = e.hp - dmg
-            e.flashTimer = 6
-            bsFreezeTimer = 2  -- hit stop
-            bsFlashTimer = 3   -- screen flash
-            local kb = bsComboCount == 3 and 6 or 3
-            e.vx = bsPlayer.facing * kb
-            if e.hp <= 0 then
-              e.hp = 0
-              e.state = "ko"
-              e.koTimer = 60
-              e.vx = bsPlayer.facing * 5
-              note(1, "C3", 0.1)
-              cam_shake(4)
-              -- Score: grunt=100, knife=200, boss=500
-              if e.kind == "boss" then bsScore = bsScore + 500
-              elseif e.kind == "knife" then bsScore = bsScore + 200
-              else bsScore = bsScore + 100 end
-              note(2, "G5", 0.05)
-            else
-              e.state = "stagger"
-              e.staggerTimer = 20
-              note(1, "E5", 0.04)
-            end
-            break
-          end
-        end
-      end
-    end
-  end
-
-  -- Update projectiles (knife throws)
-  for i = #bsProjectiles, 1, -1 do
-    local p = bsProjectiles[i]
-    p.x = p.x + p.vx
-    p.life = p.life - 1
-    -- Hit player check
-    if bsPlayer.invincible <= 0 then
-      local pdx = abs(p.x - bsPlayer.x)
-      local pdy = abs(p.y - bsPlayer.y)
-      if pdx < 12 and pdy < 12 then
-        bsPlayer.hp = bsPlayer.hp - 3
-        bsPlayer.invincible = 30
-        note(0, "E3", 0.06)
-        cam_shake(2)
-        bsFlashTimer = 2
-        if bsPlayer.hp < 0 then bsPlayer.hp = 0 end
-        p.life = 0
-      end
-    end
-    if p.life <= 0 then
-      table.remove(bsProjectiles, i)
-    end
-  end
+  -- Collisions are handled by callbacks registered in bsInit
 
   -- Update enemies
   local aliveCount = 0
-  local needRebuild = false
   for i = #bsEnemies, 1, -1 do
     local e = bsEnemies[i]
 
@@ -2291,9 +2333,8 @@ local function bsUpdate()
       e.x = e.x + e.vx * 0.8
       e.vx = e.vx * 0.9
       if e.koTimer <= 0 then
-        if e.entId then kill(e.entId) end
+        if e.entId then kill(e.entId); e.entId = nil end
         table.remove(bsEnemies, i)
-        needRebuild = true
       end
     elseif e.state == "stagger" then
       aliveCount = aliveCount + 1
@@ -2331,18 +2372,20 @@ local function bsUpdate()
         else
           e.state = "idle"
         end
-        -- Throw knife
+        -- Throw knife as ECS entity (vel + lifetime = auto movement + cleanup)
         if e.throwCooldown <= 0 then
           e.throwCooldown = 90
           e.state = "attack"
           e.attackTimer = 10
           note(0, "A4", 0.03)
-          bsProjectiles[#bsProjectiles + 1] = {
-            x = e.x + e.facing * 10,
-            y = e.y,
-            vx = e.facing * 3,
-            life = 120,
-          }
+          spawn({
+            group = "bsknife",
+            pos = { x = e.x + e.facing * 10, y = e.y },
+            vel = { x = e.facing * 3, y = 0 },
+            hitbox = { w = 8, h = 6, ox = -4, oy = -3 },
+            anchor_x = 0.5, anchor_y = 0.5,
+            lifetime = 120,
+          })
         end
       elseif e.kind == "boss" then
         -- Boss: faster, attacks at 25px range
@@ -2396,16 +2439,15 @@ local function bsUpdate()
       -- Clamp enemy Y to lanes
       if e.y < BS_GROUND_Y then e.y = BS_GROUND_Y end
       if e.y > BS_GROUND_BOTTOM then e.y = BS_GROUND_BOTTOM end
-
-      needRebuild = true
     end
 
     if e.flashTimer > 0 then e.flashTimer = e.flashTimer - 1 end
   end
 
-  -- Rebuild ECS entities once per frame if needed
-  if needRebuild then
-    bsRebuildEnemyECS()
+  -- Sync all ECS entities with game state
+  bsSyncPlayerECS()
+  for i, e in ipairs(bsEnemies) do
+    bsSyncEnemyECS(e, i)
   end
 
   -- Check zone completion
@@ -2489,132 +2531,71 @@ local function bsDraw()
 
   bsDrawBackground()
 
-  -- Draw projectiles (knives)
-  for _, p in ipairs(bsProjectiles) do
-    -- Small knife sprite: a line with a dot
-    local kx = flr(p.x)
-    local ky = flr(p.y)
+  -- Draw knife projectiles (ECS handles movement/lifetime, we draw visuals)
+  each("bsknife", function(e)
+    local kx = flr(e.pos.x)
+    local ky = flr(e.pos.y)
     line(kx - 4, ky, kx + 4, ky, 3)
     rectf(kx - 1, ky - 1, 3, 3, 2)
+  end)
+
+  -- Draw shadows (under sprites, which ECS renders automatically)
+  -- Player shadow
+  local p = bsPlayer
+  circf(flr(p.x), flr(p.y) + 8, 7, 1)
+  -- Enemy shadows
+  for _, e in ipairs(bsEnemies) do
+    local shadowR = e.kind == "boss" and 9 or 7
+    circf(flr(e.x), flr(e.y) + 8, shadowR, 1)
   end
 
-  -- Collect all drawables and sort by Y for z-ordering
-  local drawList = {}
+  -- ECS auto-renders sprites for bsplayer, bsenemy (via sprite + pos + flipX)
+  -- ECS auto-renders hitbox debug overlays
 
-  drawList[#drawList + 1] = {
-    y = bsPlayer.y, kind = "player",
-  }
+  -- Punch/kick visual effects (drawn on top of player sprite)
+  if bsAttackTimer > 0 then
+    local fx = p.x + p.facing * 18
+    local fy = p.y - 2
+    if bsComboCount == 3 then
+      circf(flr(fx), flr(fy) - 4, 6, 3)
+      circf(flr(fx), flr(fy) - 4, 4, 2)
+    else
+      circf(flr(fx), flr(fy), 4, 3)
+    end
+  end
+  if bsKickTimer > 0 then
+    local fx = p.x + p.facing * 22
+    line(flr(p.x) + p.facing * 8, flr(p.y), flr(fx), flr(p.y) - 2, 3)
+    circf(flr(fx), flr(p.y) - 1, 3, 2)
+  end
 
+  -- Enemy overlays (boss outline, knife indicator, HP bars)
   for i, e in ipairs(bsEnemies) do
-    drawList[#drawList + 1] = {
-      y = e.y, kind = "enemy", idx = i,
-    }
-  end
+    local bob = 0
+    if e.state == "walk" then
+      bob = flr(math.sin(bsFrame * 0.25 + i) * 2)
+    end
 
-  table.sort(drawList, function(a, b) return a.y < b.y end)
+    -- Boss: draw bigger outline to distinguish
+    if e.kind == "boss" and e.state ~= "ko" then
+      rect(flr(e.x) - 9, flr(e.y) - 9 + bob, 18, 18, 3)
+    end
 
-  for _, d in ipairs(drawList) do
-    if d.kind == "player" then
-      local p = bsPlayer
-      -- Shadow
-      circf(flr(p.x), flr(p.y) + 8, 7, 1)
+    -- Knife thrower: small indicator
+    if e.kind == "knife" and e.state ~= "ko" then
+      rectf(flr(e.x) + e.facing * 8, flr(e.y) - 2, 3, 6, 2)
+    end
 
-      -- Walk bob
-      local bob = 0
-      if p.state == "walk" then
-        bob = flr(math.sin(bsFrame * 0.3) * 2)
-      end
-
-      local sprName = "hero_idle"
-      if p.state == "walk" then sprName = "hero_walk"
-      elseif p.state == "jab" or p.state == "cross" or p.state == "uppercut" then sprName = "hero_punch"
-      elseif p.state == "kick" then sprName = "hero_kick"
-      end
-
-      local flipX = (p.facing < 0)
-
-      if p.invincible <= 0 or flr(p.invincible / 2) % 2 == 0 then
-        sprT(sprite_id(sprName), flr(p.x) - 8, flr(p.y) - 8 + bob, flipX, false)
-      end
-
-      -- Player hitbox debug
-      dbg(flr(p.x) - 6, flr(p.y) - 8, 12, 16)
-
-      -- Punch/kick visual effects
-      if bsAttackTimer > 0 then
-        local fx = p.x + p.facing * 18
-        local fy = p.y - 2
-        if bsComboCount == 3 then
-          circf(flr(fx), flr(fy) - 4, 6, 3)
-          circf(flr(fx), flr(fy) - 4, 4, 2)
-        else
-          circf(flr(fx), flr(fy), 4, 3)
-        end
-      end
-      if bsKickTimer > 0 then
-        local fx = p.x + p.facing * 22
-        line(flr(p.x) + p.facing * 8, flr(p.y), flr(fx), flr(p.y) - 2, 3)
-        circf(flr(fx), flr(p.y) - 1, 3, 2)
-      end
-
-    elseif d.kind == "enemy" then
-      local e = bsEnemies[d.idx]
-      if e then
-        -- Shadow
-        local shadowR = e.kind == "boss" and 9 or 7
-        circf(flr(e.x), flr(e.y) + 8, shadowR, 1)
-
-        -- Walk bob
-        local bob = 0
-        if e.state == "walk" then
-          bob = flr(math.sin(bsFrame * 0.25 + d.idx) * 2)
-        end
-
-        local sprName = "thug_idle"
-        if e.state == "walk" then sprName = "thug_walk"
-        elseif e.state == "stagger" or e.state == "ko" then sprName = "thug_hit"
-        end
-
-        local flipX = (e.facing < 0)
-
-        -- Flash when hit (skip draw frames)
-        if e.flashTimer > 0 and flr(e.flashTimer / 2) % 2 == 0 then
-          -- skip frame for flash effect
-        else
-          if e.state == "ko" then
-            local koOff = (60 - e.koTimer)
-            if koOff > 8 then koOff = 8 end
-            sprT(sprite_id(sprName), flr(e.x) - 8, flr(e.y) - 8 + koOff, flipX, false)
-          else
-            sprT(sprite_id(sprName), flr(e.x) - 8, flr(e.y) - 8 + bob, flipX, false)
-          end
-        end
-
-        -- Enemy hitbox debug
-        dbg(flr(e.x) - 6, flr(e.y) - 8, 12, 16)
-
-        -- Boss: draw bigger outline to distinguish
-        if e.kind == "boss" and e.state ~= "ko" then
-          rect(flr(e.x) - 9, flr(e.y) - 9 + bob, 18, 18, 3)
-        end
-
-        -- Knife thrower: small indicator
-        if e.kind == "knife" and e.state ~= "ko" then
-          rectf(flr(e.x) + e.facing * 8, flr(e.y) - 2, 3, 6, 2)
-        end
-
-        -- HP bar above enemy (only if alive)
-        if e.state ~= "ko" then
-          local barW = e.kind == "boss" and 30 or 20
-          local barX = flr(e.x) - barW / 2
-          local barY = flr(e.y) - 14
-          rectf(barX, barY, barW, 3, 1)
-          local hpW = flr(barW * e.hp / e.maxHp)
-          if hpW > 0 then
-            local barCol = e.kind == "boss" and 3 or 2
-            rectf(barX, barY, hpW, 3, barCol)
-          end
-        end
+    -- HP bar above enemy (only if alive)
+    if e.state ~= "ko" then
+      local barW = e.kind == "boss" and 30 or 20
+      local barX = flr(e.x) - barW / 2
+      local barY = flr(e.y) - 14
+      rectf(barX, barY, barW, 3, 1)
+      local hpW = flr(barW * e.hp / e.maxHp)
+      if hpW > 0 then
+        local barCol = e.kind == "boss" and 3 or 2
+        rectf(barX, barY, hpW, 3, barCol)
       end
     end
   end
@@ -2691,9 +2672,11 @@ local function enterMode(mode)
   killAll("particle")
   killAll("player")
   killAll("npc")
+  killAll("bsplayer")
   killAll("bsenemy")
   killAll("bsattack")
   killAll("bsknife")
+  killAll("bsfx")
   bgm_stop()
   cam_reset()
 
