@@ -1036,12 +1036,18 @@ const Mono = (() => {
   }
 
   // --- Scene auto-detection (SYNCHRONOUS) ---
+  function luaIsFunction(name) {
+    try {
+      lua.doString("_mono_tmp = type(" + name + ")");
+      return lua.global.get("_mono_tmp") === "function";
+    } catch(e) { return false; }
+  }
+
   function autoDetectScenes() {
     for (const name of VALID_SCENES) {
-      let hasInit = false, hasUpdate = false, hasDraw = false;
-      try { hasInit = lua.doString("return type(" + name + "_init)") === "function"; } catch(e) {}
-      try { hasUpdate = lua.doString("return type(" + name + "_update)") === "function"; } catch(e) {}
-      try { hasDraw = lua.doString("return type(" + name + "_draw)") === "function"; } catch(e) {}
+      const hasInit = luaIsFunction(name + "_init");
+      const hasUpdate = luaIsFunction(name + "_update");
+      const hasDraw = luaIsFunction(name + "_draw");
       if (hasUpdate || hasDraw) {
         scenes[name] = {
           init: hasInit ? () => { try { lua.doString(name + "_init()"); } catch(e) { console.warn("Mono: init err[" + name + "]:", e.message); } } : null,
@@ -1122,6 +1128,7 @@ const Mono = (() => {
       stepInput();
       stepUpdate();
       frameCount++;
+      API.frame = frameCount;
       for (const k in keys) keysPrev[k] = keys[k];
     }
     stepRender();
@@ -1338,14 +1345,10 @@ const Mono = (() => {
       }
 
       // Inject Lua-side spawn wrapper
-      lua.doString(SPAWN_WRAPPER_LUA);
+      try { lua.doString(SPAWN_WRAPPER_LUA); } catch(e) { console.error("Mono: spawn wrapper error:", e); }
 
       // Run the game source
-      try {
-        lua.doString(gameSrc);
-      } catch(e) {
-        console.error("Mono: Lua script error:", e);
-      }
+      try { lua.doString(gameSrc); } catch(e) { console.error("Mono: Lua script error:", e); }
 
       // Parse game table (declarative API)
       parseGameTable();
