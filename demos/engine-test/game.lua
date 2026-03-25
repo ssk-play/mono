@@ -659,8 +659,9 @@ local function spritesDraw()
   rectf(pvCX - 30, pvCY - 30, 60, 60, 1)
   rect(pvCX - 31, pvCY - 31, 62, 62, 2)
 
-  -- Draw with current flip state
+  -- Draw with current flip state + hitbox
   sprT(selId, pvCX - 8, pvCY - 8, sprFlipX, sprFlipY)
+  dbg(pvCX - 8, pvCY - 8, 16, 16)
 
   -- Label
   text(selName, pvCX - flr(#selName * 5 / 2), pvCY + 36, 3)
