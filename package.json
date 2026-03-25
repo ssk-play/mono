@@ -22,6 +22,6 @@
   },
   "homepage": "https://github.com/ssk-play/mono#readme",
   "dependencies": {
-    "wasmoon": "^1.16.0"
+    "luau-web": "^1.4.0"
   }
 }

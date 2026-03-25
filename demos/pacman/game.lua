@@ -638,7 +638,7 @@ local function updateGhosts()
           g.entity.pos.y = screenY(g.py)
           g.entity.sprite = ghostSpriteId(g)
         end
-        goto continue_ghost
+        continue
       end
     end
 
@@ -647,35 +647,36 @@ local function updateGhosts()
       if g.entity then
         g.entity.sprite = ghostSpriteId(g)
       end
-      goto continue_ghost
+      continue
     end
 
-    do
-      local atX = abs(g.px - g.col * TILE) < speed + 0.01
-      local atY = abs(g.py - g.row * TILE) < speed + 0.01
+    local atX = abs(g.px - g.col * TILE) < speed + 0.01
+    local atY = abs(g.py - g.row * TILE) < speed + 0.01
+    local skipMove = false
 
-      if atX and atY then
-        g.px = g.col * TILE
-        g.py = g.row * TILE
+    if atX and atY then
+      g.px = g.col * TILE
+      g.py = g.row * TILE
 
-        g.col = wrapCol(g.col)
+      g.col = wrapCol(g.col)
 
-        -- Eaten ghost returned to pen
-        if g.eaten and g.row >= 8 and g.row <= 10 and g.col >= 9 and g.col <= 11 then
-          g.eaten = false
-          g.inPen = true
-          g.exitTimer = 30
-          g.col = 10; g.row = 9
-          g.px = g.col * TILE; g.py = g.row * TILE
-          -- Update ECS entity
-          if g.entity then
-            g.entity.pos.x = screenX(g.px)
-            g.entity.pos.y = screenY(g.py)
-            g.entity.sprite = ghostSpriteId(g)
-          end
-          goto continue_ghost
+      -- Eaten ghost returned to pen
+      if g.eaten and g.row >= 8 and g.row <= 10 and g.col >= 9 and g.col <= 11 then
+        g.eaten = false
+        g.inPen = true
+        g.exitTimer = 30
+        g.col = 10; g.row = 9
+        g.px = g.col * TILE; g.py = g.row * TILE
+        -- Update ECS entity
+        if g.entity then
+          g.entity.pos.x = screenX(g.px)
+          g.entity.pos.y = screenY(g.py)
+          g.entity.sprite = ghostSpriteId(g)
         end
+        skipMove = true
+      end
 
+      if not skipMove then
         g.dir = chooseDir(g, i)
 
         local nc = wrapCol(g.col + DX[g.dir])
@@ -685,7 +686,9 @@ local function updateGhosts()
           g.row = nr
         end
       end
+    end
 
+    if not skipMove then
       -- Move toward target tile
       local tx = g.col * TILE
       local ty = g.row * TILE
@@ -701,8 +704,6 @@ local function updateGhosts()
         g.entity.sprite = ghostSpriteId(g)
       end
     end
-
-    ::continue_ghost::
   end
 end
 

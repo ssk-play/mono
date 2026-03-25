@@ -2,7 +2,7 @@
  * Mono Runtime Engine v2.0 "Mono"
  *
  * 320x240, 4-color grayscale, 30fps, 2ch square wave
- * Lua scripting via Wasmoon, 4KB RAM, rAF fixed timestep
+ * Luau scripting via luau-web, 4KB RAM, rAF fixed timestep
  * Input record/playback, savestate, postMessage IPC
  */
 const Mono = (() => {
@@ -149,7 +149,7 @@ const Mono = (() => {
     scenes[name] = handlers;
   };
 
-  API.go = function(name, opts) {
+  API.go = async function(name, opts) {
     if (VALID_SCENES.indexOf(name) === -1) {
       console.warn('Mono: invalid scene "' + name + '"');
       return;
@@ -160,7 +160,7 @@ const Mono = (() => {
     currentSceneName = name;
     currentScene = scenes[name] || null;
     if (currentScene && currentScene.init && (!opts || !opts.skipInit)) {
-      currentScene.init();
+      await currentScene.init();
     }
   };
 
@@ -941,111 +941,157 @@ const Mono = (() => {
     }
   }
 
-  // --- Lua VM (module-scoped) ---
-  let lua = null;
+  // --- Luau VM (module-scoped, via luau-web) ---
+  let luau = null;
 
-  // --- Lua API Bridge ---
-  function registerLuaAPI() {
-    // Graphics
-    lua.global.set('cls', (c) => API.cls(c || 0));
-    lua.global.set('pix', API.pix);
-    lua.global.set('line', API.line);
-    lua.global.set('rect', API.rect);
-    lua.global.set('rectf', API.rectf);
-    lua.global.set('circ', API.circ);
-    lua.global.set('circf', API.circf);
-    lua.global.set('spr', API.spr);
-    lua.global.set('sprT', API.sprT);
-    lua.global.set('sprRot', API.sprRot);
-    lua.global.set('gpix', API.gpix);
-    lua.global.set('text', API.text);
+  // Build the globals object passed to LuauState.createAsync
+  function buildLuaGlobals() {
+    return {
+      // Graphics
+      cls: (c) => API.cls(c || 0),
+      pix: API.pix,
+      line: API.line,
+      rect: API.rect,
+      rectf: API.rectf,
+      circ: API.circ,
+      circf: API.circf,
+      spr: API.spr,
+      sprT: API.sprT,
+      sprRot: API.sprRot,
+      gpix: API.gpix,
+      text: API.text,
 
-    // Tilemap
-    lua.global.set('mget', API.mget);
-    lua.global.set('mset', API.mset);
-    lua.global.set('map', API.map);
+      // Tilemap
+      mget: API.mget,
+      mset: API.mset,
+      map: API.map,
 
-    // Input
-    lua.global.set('btn', API.btn);
-    lua.global.set('btnp', API.btnp);
+      // Input
+      btn: API.btn,
+      btnp: API.btnp,
 
-    // Sound
-    lua.global.set('note', API.note);
-    lua.global.set('sfx_stop', API.stop);
-    lua.global.set('bgm', (tracks, bpm, loop) => {
-      // tracks comes as Lua table, convert to JS array
-      const arr = [];
-      for (let i = 1; ; i++) {
-        const t = tracks.get(i); // Lua 1-indexed
-        if (t === undefined || t === null) break;
-        arr.push(t);
-      }
-      API.bgm(arr, bpm, loop);
-    });
-    lua.global.set('bgm_stop', API.bgmStop);
-
-    // Scene
-    lua.global.set('go', (name) => API.go(name));
-    lua.global.set('scene_name', () => API.currentScene());
-
-    // Math
-    lua.global.set('rnd', API.rnd);
-    lua.global.set('flr', Math.floor);
-    lua.global.set('abs', Math.abs);
-    lua.global.set('seed', API.seed);
-
-    // Debug
-    lua.global.set('dbg', API.dbg);
-    lua.global.set('dbgC', API.dbgC);
-    lua.global.set('dbgPt', API.dbgPt);
-
-    // Frame (as function since it changes)
-    lua.global.set('frame', () => API.frame);
-
-    // Overlap
-    lua.global.set('overlap', API.overlap);
-
-    // ECS
-    lua.global.set('spawn', (components) => {
-      // Convert Lua table to JS object
-      const obj = {};
-      if (components && typeof components === 'object') {
-        for (const [k, v] of Object.entries(components)) {
-          if (v && typeof v === 'object' && !Array.isArray(v)) {
-            obj[k] = Object.assign({}, v);
-          } else {
-            obj[k] = v;
+      // Sound
+      note: API.note,
+      sfx_stop: API.stop,
+      bgm: (tracks, bpm, loop) => {
+        // tracks comes as Luau table (JS array from luau-web)
+        const arr = [];
+        if (Array.isArray(tracks)) {
+          for (let i = 0; i < tracks.length; i++) arr.push(tracks[i]);
+        } else if (tracks && typeof tracks === 'object') {
+          for (let i = 1; ; i++) {
+            const t = tracks[i];
+            if (t === undefined || t === null) break;
+            arr.push(t);
           }
         }
-      }
-      return API.spawn(obj);
-    });
-    lua.global.set('kill', API.kill);
-    lua.global.set('killAll', API.killAll);
-    lua.global.set('each', (group, fn) => API.each(group, fn));
-    lua.global.set('ecount', API.count);
-    lua.global.set('onCollide', API.onCollide);
-    lua.global.set('clearCollisions', API.clearCollisions);
+        API.bgm(arr, bpm, loop);
+      },
+      bgm_stop: API.bgmStop,
 
-    // Sprite definition (supports visual format and classic)
-    lua.global.set('defSprite', (id, data) => {
-      if (typeof data === 'string' && data.includes('\n')) {
-        sprites[id] = parseVisualSprite(data);
-      } else {
-        API.sprite(id, data);
-      }
-    });
+      // Scene
+      go: (name) => API.go(name),
+      scene_name: () => API.currentScene(),
 
-    // RAM peek/poke
-    lua.global.set('peek', (addr) => ram[addr & 0xFFF]);
-    lua.global.set('poke', (addr, val) => { ram[addr & 0xFFF] = val & 0xFF; });
-    lua.global.set('peek16', (addr) => { addr &= 0xFFF; return ram[addr] | (ram[addr+1] << 8); });
-    lua.global.set('poke16', (addr, val) => { addr &= 0xFFF; ram[addr] = val & 0xFF; ram[addr+1] = (val >> 8) & 0xFF; });
+      // Math
+      rnd: API.rnd,
+      flr: Math.floor,
+      abs: Math.abs,
+      seed: API.seed,
+
+      // Debug
+      dbg: API.dbg,
+      dbgC: API.dbgC,
+      dbgPt: API.dbgPt,
+
+      // Frame (as function since it changes)
+      frame: () => API.frame,
+
+      // Overlap
+      overlap: API.overlap,
+
+      // ECS
+      spawn: (components) => {
+        // Convert Luau table to JS object
+        const obj = {};
+        if (components && typeof components === 'object') {
+          for (const [k, v] of Object.entries(components)) {
+            if (v && typeof v === 'object' && !Array.isArray(v)) {
+              obj[k] = Object.assign({}, v);
+            } else {
+              obj[k] = v;
+            }
+          }
+        }
+        return API.spawn(obj);
+      },
+      kill: API.kill,
+      killAll: API.killAll,
+      each: (group, fn) => API.each(group, fn),
+      ecount: API.count,
+      onCollide: API.onCollide,
+      clearCollisions: API.clearCollisions,
+
+      // Sprite definition (supports visual format and classic)
+      defSprite: (id, data) => {
+        if (typeof data === 'string' && data.includes('\n')) {
+          sprites[id] = parseVisualSprite(data);
+        } else {
+          API.sprite(id, data);
+        }
+      },
+
+      // RAM peek/poke
+      peek: (addr) => ram[addr & 0xFFF],
+      poke: (addr, val) => { ram[addr & 0xFFF] = val & 0xFF; },
+      peek16: (addr) => { addr &= 0xFFF; return ram[addr] | (ram[addr+1] << 8); },
+      poke16: (addr, val) => { addr &= 0xFFF; ram[addr] = val & 0xFF; ram[addr+1] = (val >> 8) & 0xFF; },
+
+      // Sprite name lookup (populated by parseVisualSprites)
+      sprite_id: (name) => spriteNames[name] || 0,
+
+      // State accessors (layout populated by buildStateAccessors)
+      S_get: (name) => {
+        const l = _stateLayout[name]; if (!l) return 0;
+        if (l.type === 'u8') return ram[l.offset];
+        if (l.type === 'u16') return ram[l.offset] | (ram[l.offset+1] << 8);
+        if (l.type === 'i8') { const v = ram[l.offset]; return v > 127 ? v - 256 : v; }
+        if (l.type === 'i16') { const v = ram[l.offset] | (ram[l.offset+1] << 8); return v > 32767 ? v - 65536 : v; }
+        if (l.type === 'u32') return ram[l.offset] | (ram[l.offset+1] << 8) | (ram[l.offset+2] << 16) | (ram[l.offset+3] << 24);
+        if (l.type === 'i32') { const v = ram[l.offset] | (ram[l.offset+1] << 8) | (ram[l.offset+2] << 16) | (ram[l.offset+3] << 24); return v; }
+        return 0;
+      },
+      S_set: (name, val) => {
+        const l = _stateLayout[name]; if (!l) return;
+        if (l.type === 'u8' || l.type === 'i8') { ram[l.offset] = val & 0xFF; }
+        else if (l.type === 'u16' || l.type === 'i16') { ram[l.offset] = val & 0xFF; ram[l.offset+1] = (val >> 8) & 0xFF; }
+        else if (l.type === 'u32' || l.type === 'i32') { ram[l.offset] = val & 0xFF; ram[l.offset+1] = (val >> 8) & 0xFF; ram[l.offset+2] = (val >> 16) & 0xFF; ram[l.offset+3] = (val >> 24) & 0xFF; }
+      },
+
+      // Print (useful for Luau debugging)
+      print: (...args) => console.log("[Luau]", ...args),
+    };
+  }
+
+  // Helper: get a Luau global by name
+  async function luauGet(name) {
+    try {
+      const result = await luau.loadstring("return " + name, "get")();
+      // luau-web wraps return values in an array
+      return Array.isArray(result) ? result[0] : result;
+    }
+    catch(e) { return undefined; }
+  }
+
+  // Helper: run Luau code
+  async function luauExec(code, chunkName) {
+    await luau.loadstring(code, chunkName || "chunk")();
   }
 
   // --- Declarative Game Table Parser ---
   let spriteIdCounter = 1;
   const spriteNames = {};
+  let _stateLayout = {};
 
   function parseVisualSprites(spritesTable) {
     for (const [name, data] of spritesTable) {
@@ -1054,11 +1100,10 @@ const Mono = (() => {
       spriteNames[name] = spriteIdCounter;
       spriteIdCounter++;
     }
-    // Expose sprite name lookup to Lua
-    lua.global.set('sprite_id', (name) => spriteNames[name] || 0);
+    // sprite_id is already available as a Luau global (set in createAsync globals)
   }
 
-  function buildStateAccessors(stateTable) {
+  async function buildStateAccessors(stateTable) {
     let offset = 0;
     const layout = {};
 
@@ -1071,75 +1116,62 @@ const Mono = (() => {
       }
     }
 
-    lua.global.set('S_get', (name) => {
-      const l = layout[name]; if (!l) return 0;
-      if (l.type === 'u8') return ram[l.offset];
-      if (l.type === 'u16') return ram[l.offset] | (ram[l.offset+1] << 8);
-      if (l.type === 'i8') { const v = ram[l.offset]; return v > 127 ? v - 256 : v; }
-      if (l.type === 'i16') { const v = ram[l.offset] | (ram[l.offset+1] << 8); return v > 32767 ? v - 65536 : v; }
-      if (l.type === 'u32') return ram[l.offset] | (ram[l.offset+1] << 8) | (ram[l.offset+2] << 16) | (ram[l.offset+3] << 24);
-      if (l.type === 'i32') { const v = ram[l.offset] | (ram[l.offset+1] << 8) | (ram[l.offset+2] << 16) | (ram[l.offset+3] << 24); return v; }
-      return 0;
-    });
-    lua.global.set('S_set', (name, val) => {
-      const l = layout[name]; if (!l) return;
-      if (l.type === 'u8' || l.type === 'i8') { ram[l.offset] = val & 0xFF; }
-      else if (l.type === 'u16' || l.type === 'i16') { ram[l.offset] = val & 0xFF; ram[l.offset+1] = (val >> 8) & 0xFF; }
-      else if (l.type === 'u32' || l.type === 'i32') { ram[l.offset] = val & 0xFF; ram[l.offset+1] = (val >> 8) & 0xFF; ram[l.offset+2] = (val >> 16) & 0xFF; ram[l.offset+3] = (val >> 24) & 0xFF; }
-    });
+    // S_get and S_set are already in Luau globals (set in createAsync).
+    // We store the layout in module scope so those closures can access it.
+    _stateLayout = layout;
 
-    // Create S as a proxy table in Lua
-    lua.doString(`
+    // Create S as a proxy table in Luau
+    await luauExec(`
       S = setmetatable({}, {
         __index = function(_, k) return S_get(k) end,
         __newindex = function(_, k, v) S_set(k, v) end,
       })
-    `);
+    `, "S_proxy");
   }
 
-  function registerSounds(soundsTable) {
+  async function registerSounds(soundsTable) {
     // Sounds table: name → { note, dur } or similar
-    // Expose as Lua functions
+    // Expose as Luau functions via loadstring
     for (const [name, def] of soundsTable) {
-      lua.global.set('sfx_' + name, () => {
-        if (typeof def === 'object' && def.get) {
-          const n = def.get('note') || def.get(1);
-          const d = def.get('dur') || def.get(2) || 0.1;
-          const ch = def.get('ch') || def.get(3) || 0;
-          API.note(ch, n, d);
-        }
-      });
+      const sfxName = 'sfx_' + name;
+      if (typeof def === 'object') {
+        const n = def.note || def[1];
+        const d = def.dur || def[2] || 0.1;
+        const ch = def.ch || def[3] || 0;
+        // Create a Luau global function that calls note()
+        await luauExec("function " + sfxName + "() note(" + ch + ", \"" + n + "\", " + d + ") end", sfxName);
+      }
     }
   }
 
-  function parseGameTable() {
-    const gameTable = lua.global.get('game');
+  async function parseGameTable() {
+    const gameTable = await luauGet('game');
     if (!gameTable) return;
 
     // Parse sprites (visual format)
-    const spritesT = gameTable.get('sprites');
-    if (spritesT) parseVisualSprites(spritesT);
+    const spritesT = gameTable.sprites || gameTable['sprites'];
+    if (spritesT) parseVisualSprites(Object.entries(spritesT));
 
     // Parse state -> RAM layout
-    const stateT = gameTable.get('state');
-    if (stateT) buildStateAccessors(stateT);
+    const stateT = gameTable.state || gameTable['state'];
+    if (stateT) await buildStateAccessors(Object.entries(stateT));
 
     // Parse sounds
-    const soundsT = gameTable.get('sounds');
-    if (soundsT) registerSounds(soundsT);
+    const soundsT = gameTable.sounds || gameTable['sounds'];
+    if (soundsT) await registerSounds(Object.entries(soundsT));
   }
 
-  // --- Scene auto-detection from Lua globals ---
-  function autoDetectScenes() {
+  // --- Scene auto-detection from Luau globals ---
+  async function autoDetectScenes() {
     for (const name of VALID_SCENES) {
-      const initFn = lua.global.get(name + "_init");
-      const updateFn = lua.global.get(name + "_update");
-      const drawFn = lua.global.get(name + "_draw");
-      if (updateFn || drawFn) {
+      const hasInit = (await luauGet("type(" + name + "_init)")) === "function";
+      const hasUpdate = (await luauGet("type(" + name + "_update)")) === "function";
+      const hasDraw = (await luauGet("type(" + name + "_draw)")) === "function";
+      if (hasUpdate || hasDraw) {
         scenes[name] = {
-          init: typeof initFn === 'function' ? initFn : null,
-          update: typeof updateFn === 'function' ? updateFn : null,
-          draw: typeof drawFn === 'function' ? drawFn : null,
+          init: hasInit ? async () => { try { await luau.loadstring(name + "_init()", name + "_init")(); } catch(e) { console.error("Mono init:", e); } } : null,
+          update: hasUpdate ? async () => { try { await luau.loadstring(name + "_update()", name + "_update")(); } catch(e) { console.error("Mono update:", e); } } : null,
+          draw: hasDraw ? async () => { try { await luau.loadstring(name + "_draw()", name + "_draw")(); } catch(e) { console.error("Mono draw:", e); } } : null,
         };
       }
     }
@@ -1194,18 +1226,18 @@ const Mono = (() => {
     for (const k in keys) keysPrev[k] = keys[k];
   }
 
-  function stepUpdate() {
+  async function stepUpdate() {
     if (paused) return;
     bgmTick();
     if (currentScene && currentScene.update) {
-      try { currentScene.update(); } catch(e) { console.error("Mono update error:", e); }
+      try { await currentScene.update(); } catch(e) { console.error("Mono update:", e); }
     }
     ecsUpdate();
   }
 
-  function stepRender() {
+  async function stepRender() {
     if (currentScene && currentScene.draw) {
-      try { currentScene.draw(); } catch(e) { console.error("Mono draw error:", e); }
+      try { await currentScene.draw(); } catch(e) { console.error("Mono draw:", e); }
     }
     ecsRender();
 
@@ -1226,18 +1258,18 @@ const Mono = (() => {
     ctx.putImageData(buf, 0, 0);
   }
 
-  function loop(timestamp) {
+  async function loop(timestamp) {
     if (!lastTime) lastTime = timestamp;
     accumulated += (timestamp - lastTime) * API.speed;
     lastTime = timestamp;
-    if (accumulated > FRAME_MS * 5) accumulated = FRAME_MS * 5; // cap
+    if (accumulated > FRAME_MS * 5) accumulated = FRAME_MS * 5; // frame skip cap
     while (accumulated >= FRAME_MS) {
       stepInput();
-      stepUpdate();
+      await stepUpdate();
       accumulated -= FRAME_MS;
       API.frame++;
     }
-    stepRender();
+    await stepRender();
     requestAnimationFrame(loop);
   }
 
@@ -1295,34 +1327,41 @@ const Mono = (() => {
       }
     });
 
-    // --- Lua VM init ---
-    // Resolve wasm path relative to engine.js location
-    const scripts = document.getElementsByTagName('script');
-    let engineBase = '';
-    for (const s of scripts) {
-      if (s.src && s.src.includes('engine.js')) {
-        engineBase = s.src.substring(0, s.src.lastIndexOf('/') + 1);
-        break;
-      }
-    }
-    const wasmUri = engineBase + 'wasmoon/glue.wasm';
-    const factory = new wasmoon.LuaFactory(wasmUri);
-    lua = await factory.createEngine();
-
-    // Register all API functions as Lua globals
-    registerLuaAPI();
-
-    // Fetch and run game.lua
+    // --- Luau VM init (via luau-web) ---
     if (opts && opts.game) {
+      // Resolve engine.js base path for locating luau-web module
+      const scripts = document.getElementsByTagName('script');
+      let engineBase = '';
+      for (const s of scripts) {
+        if (s.src && s.src.includes('engine.js')) {
+          engineBase = s.src.substring(0, s.src.lastIndexOf('/') + 1);
+          break;
+        }
+      }
+      // Dynamic import of luau-web (ES module)
+      let LuauState;
+      if (window.LuauWeb && window.LuauWeb.LuauState) {
+        LuauState = window.LuauWeb.LuauState;
+      } else {
+        const mod = await import(engineBase + 'luau-web/luau-web.js');
+        LuauState = mod.LuauState;
+      }
+      luau = await LuauState.createAsync(buildLuaGlobals());
+
+      // Fetch and run game.lua (Luau)
       const src = await fetch(opts.game).then(r => r.text());
-      await lua.doString(src);
+      try {
+        await luau.loadstring(src, opts.game)();
+      } catch(e) {
+        console.error("Mono: Luau script error:", e);
+      }
+
+      // Parse declarative game table (sprites, state, sounds)
+      await parseGameTable();
+
+      // Auto-detect scenes from Luau globals
+      await autoDetectScenes();
     }
-
-    // Parse declarative game table (sprites, state, sounds)
-    parseGameTable();
-
-    // Auto-detect scenes from Lua globals
-    autoDetectScenes();
 
     // Start first scene if title exists
     if (scenes["title"]) {
