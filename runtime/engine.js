@@ -449,11 +449,11 @@ const Mono = (() => {
   // --- Input ---
   const VALID_KEYS = {up:1,down:1,left:1,right:1,a:1,b:1,start:1,select:1};
   function btn(k) {
-    if(!VALID_KEYS[k]) console.warn("Mono: invalid key \""+k+"\". Use: up/down/left/right/a/b/start/select");
+    if(!VALID_KEYS[k]) console.error("Mono: invalid key \""+k+"\". Use: up/down/left/right/a/b/start/select");
     return !!keys[k];
   }
   function btnp(k) {
-    if(!VALID_KEYS[k]) console.warn("Mono: invalid key \""+k+"\". Use: up/down/left/right/a/b/start/select");
+    if(!VALID_KEYS[k]) console.error("Mono: invalid key \""+k+"\". Use: up/down/left/right/a/b/start/select");
     return !!keys[k] && !keysPrev[k];
   }
 
@@ -548,7 +548,7 @@ const Mono = (() => {
     for (let i = 0; i < entities.length; i++) {
       const e = entities[i];
       if (e._alive && (!group || e.group === group)) {
-        try { fn(e); } catch(err) { console.warn("Mono: each() callback error:", err); }
+        try { fn(e); } catch(err) { console.error("Mono: each() callback error:", err); }
       }
     }
   }
@@ -673,7 +673,7 @@ const Mono = (() => {
           if (ecsOverlap(ha, hb)) {
             if (handler.callback) {
               // Callback mode: call directly, do NOT auto-kill
-              try { handler.callback(a, b); } catch(err) { console.warn("Mono: onCollide callback error:", err); }
+              try { handler.callback(a, b); } catch(err) { console.error("Mono: onCollide callback error:", err); }
             } else {
               // Poll mode: queue collision, auto-kill both
               collisionQueue.push({
@@ -1050,9 +1050,9 @@ const Mono = (() => {
       const hasDraw = luaIsFunction(name + "_draw");
       if (hasUpdate || hasDraw) {
         scenes[name] = {
-          init: hasInit ? () => { try { lua.doString(name + "_init()"); } catch(e) { console.warn("Mono: init err[" + name + "]:", e.message); } } : null,
-          update: hasUpdate ? () => { try { lua.doString(name + "_update()"); } catch(e) { console.warn("Mono: update err[" + name + "]:", e.message); } } : null,
-          draw: hasDraw ? () => { try { lua.doString(name + "_draw()"); } catch(e) { console.warn("Mono: draw err[" + name + "]:", e.message); } } : null,
+          init: hasInit ? () => { try { lua.doString(name + "_init()"); } catch(e) { console.error("Mono: init err[" + name + "]:", e.message); } } : null,
+          update: hasUpdate ? () => { try { lua.doString(name + "_update()"); } catch(e) { console.error("Mono: update err[" + name + "]:", e.message); } } : null,
+          draw: hasDraw ? () => { try { lua.doString(name + "_draw()"); } catch(e) { console.error("Mono: draw err[" + name + "]:", e.message); } } : null,
         };
       }
     }

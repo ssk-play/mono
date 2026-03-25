@@ -1045,6 +1045,7 @@ function play_update()
     if btnp("a") or btnp("start") then
       enterMode(menuCursor + 1)
       note(0, "C5", 0.05)
+      return
     end
   else
     -- Start returns to menu from any test mode
