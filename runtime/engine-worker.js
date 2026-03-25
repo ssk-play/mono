@@ -819,8 +819,7 @@ function stepInput() {
   if (keys["select"] && !keysPrev["select"] && currentSceneName === "play") {
     paused = !paused;
   }
-
-  for (const k in keys) keysPrev[k] = keys[k];
+  // NOTE: keysPrev updated at END of frame (after stepUpdate + stepRender)
 }
 
 async function stepUpdate() {
@@ -877,6 +876,8 @@ async function gameLoop() {
       stepInput();
       await stepUpdate();
       frameCount++;
+      // Update keysPrev AFTER update so btnp() works in Lua
+      for (const k in keys) keysPrev[k] = keys[k];
     }
     await stepRender();
 
