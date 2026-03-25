@@ -369,7 +369,18 @@ function ecsSpawn(components) {
   return e;
 }
 
-function ecsKill(e) { if (e) e._alive = false; }
+function ecsKill(e) {
+  if (!e) return;
+  // e might be a luau proxy — find by _id in the real entities array
+  const id = e._id;
+  if (id) {
+    for (let i = 0; i < entities.length; i++) {
+      if (entities[i]._id === id) { entities[i]._alive = false; return; }
+    }
+  }
+  // Fallback: direct mutation
+  if (e._alive !== undefined) e._alive = false;
+}
 
 function ecsKillAll(group) {
   for (let i = entities.length - 1; i >= 0; i--) {
