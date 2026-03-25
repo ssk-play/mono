@@ -587,8 +587,7 @@ const Mono = (() => {
       e.hitbox.type = "circle";
     } else if (e.hitbox && e.hitbox.w !== undefined) {
       e.hitbox.type = "rect";
-      if (e.hitbox.ox === undefined) e.hitbox.ox = 0;
-      if (e.hitbox.oy === undefined) e.hitbox.oy = 0;
+      // Don't set ox/oy defaults — let ecsHitbox use anchor-based centering
     }
     entities.push(e);
     return e;
@@ -1351,8 +1350,15 @@ const Mono = (() => {
       if (px !== undefined && px !== null) obj.pos = { x: px, y: py || 0 };
       if (vx !== undefined && vx !== null) obj.vel = { x: vx, y: vy || 0 };
       if (sprId !== undefined && sprId !== null && sprId > 0) obj.sprite = sprId;
-      if (hbType === "r") obj.hitbox = { w: hbA, h: hbB, ox: hbC || 0, oy: hbD || 0 };
-      else if (hbType === "c") obj.hitbox = { r: hbA, ox: hbB || 0, oy: hbC || 0 };
+      if (hbType === "r") {
+        obj.hitbox = { w: hbA, h: hbB };
+        if (hbC) obj.hitbox.ox = hbC;
+        if (hbD) obj.hitbox.oy = hbD;
+      } else if (hbType === "c") {
+        obj.hitbox = { r: hbA };
+        if (hbB) obj.hitbox.ox = hbB;
+        if (hbC) obj.hitbox.oy = hbC;
+      }
       if (grav) obj.gravity = grav;
       if (life) obj.lifetime = life;
       if (offscr) obj.offscreen = true;
