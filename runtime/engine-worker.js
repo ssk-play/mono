@@ -738,25 +738,22 @@ function buildLuaGlobals() {
     cam: camSet, cam_get: camGet, cam_shake: camShakeSet, cam_reset: camReset,
     frame: () => frameCount,
     overlap,
-    spawn: (components) => {
-      // Deep clone luau proxy → plain JS object
-      let obj;
-      try {
-        obj = JSON.parse(JSON.stringify(components));
-      } catch(e) {
-        obj = {};
+    _spawnRaw: (group, px, py, vx, vy, sprId, hbType, hbA, hbB, hbC, hbD, grav, life, offscr, extra) => {
+      const obj = { group: group };
+      if (px !== undefined && px !== null) obj.pos = { x: px, y: py || 0 };
+      if (vx !== undefined && vx !== null) obj.vel = { x: vx, y: vy || 0 };
+      if (sprId !== undefined && sprId !== null && sprId > 0) obj.sprite = sprId;
+      if (hbType === "r") obj.hitbox = { w: hbA, h: hbB, ox: hbC || 0, oy: hbD || 0 };
+      else if (hbType === "c") obj.hitbox = { r: hbA, ox: hbB || 0, oy: hbC || 0 };
+      if (grav) obj.gravity = grav;
+      if (life) obj.lifetime = life;
+      if (offscr) obj.offscreen = true;
+      // extra is a JSON string for custom fields
+      if (extra) {
         try {
-          for (const k in components) {
-            const v = components[k];
-            if (v && typeof v === 'object') {
-              const inner = {};
-              for (const ik in v) inner[ik] = v[ik];
-              obj[k] = inner;
-            } else {
-              obj[k] = v;
-            }
-          }
-        } catch(e2) { /* fallback failed */ }
+          const ex = JSON.parse(extra);
+          for (const k in ex) obj[k] = ex[k];
+        } catch(e) {}
       }
       return ecsSpawn(obj);
     },
@@ -930,6 +927,56 @@ self.onmessage = async function(e) {
       const mod = await import(msg.luauWebUrl);
       const LuauState = mod.LuauState;
       luau = await LuauState.createAsync(buildLuaGlobals());
+
+      // Inject Lua-side spawn wrapper that decomposes tables into flat args
+      await luau.loadstring(`
+        function spawn(t)
+          local hbType, hbA, hbB, hbC, hbD = nil, nil, nil, nil, nil
+          if t.hitbox then
+            if t.hitbox.r then
+              hbType = "c"
+              hbA = t.hitbox.r
+              hbB = t.hitbox.ox
+              hbC = t.hitbox.oy
+            else
+              hbType = "r"
+              hbA = t.hitbox.w
+              hbB = t.hitbox.h
+              hbC = t.hitbox.ox
+              hbD = t.hitbox.oy
+            end
+          end
+          local px, py = nil, nil
+          if t.pos then px = t.pos.x; py = t.pos.y end
+          local vx, vy = nil, nil
+          if t.vel then vx = t.vel.x; vy = t.vel.y end
+          local extra = nil
+          -- Collect custom fields as JSON
+          local customs = {}
+          local known = {group=1,pos=1,vel=1,sprite=1,hitbox=1,gravity=1,lifetime=1,offscreen=1}
+          for k, v in pairs(t) do
+            if not known[k] then
+              if type(v) == "boolean" then customs[k] = v
+              elseif type(v) == "number" then customs[k] = v
+              elseif type(v) == "string" then customs[k] = v
+              end
+            end
+          end
+          -- Simple JSON encode for flat custom fields
+          local parts = {}
+          for k, v in pairs(customs) do
+            if type(v) == "string" then
+              table.insert(parts, '"' .. k .. '":"' .. v .. '"')
+            elseif type(v) == "boolean" then
+              table.insert(parts, '"' .. k .. '":' .. tostring(v))
+            else
+              table.insert(parts, '"' .. k .. '":' .. tostring(v))
+            end
+          end
+          if #parts > 0 then extra = "{" .. table.concat(parts, ",") .. "}" end
+          return _spawnRaw(t.group, px, py, vx, vy, t.sprite, hbType, hbA, hbB, hbC, hbD, t.gravity, t.lifetime, t.offscreen, extra)
+        end
+      `, "spawn_wrapper")();
 
       // Run the game source
       try {
