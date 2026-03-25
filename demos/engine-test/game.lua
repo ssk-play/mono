@@ -2024,6 +2024,7 @@ local function bsRebuildEnemyECS()
 end
 
 local function bsInit()
+  bsGenBuildings()
   bsPlayer = {
     x = 40, y = 180,
     hp = 100, maxHp = 100,
@@ -2432,20 +2433,33 @@ local function bsUpdate()
   cam(flr(bsCamX), 0)
 end
 
+-- Pre-generate buildings once (not every frame!)
+local bsBuildings = {}
+local function bsGenBuildings()
+  bsBuildings = {}
+  for bx = 0, BS_LEVEL_W - 1, 48 do
+    local bh = 30 + flr(rnd(30))
+    local wins = {}
+    for wy = 100 - bh + 4, 96, 8 do
+      for wx = bx + 4, bx + 36, 10 do
+        if rnd(1) > 0.4 then
+          wins[#wins + 1] = {x = wx, y = wy}
+        end
+      end
+    end
+    bsBuildings[#bsBuildings + 1] = {x = bx, h = bh, wins = wins}
+  end
+end
+
 local function bsDrawBackground()
   -- Sky
   rectf(0, 0, BS_LEVEL_W, 100, 0)
 
-  -- Buildings silhouette (background layer)
-  for bx = 0, BS_LEVEL_W - 1, 48 do
-    local bh = 30 + flr(rnd(30))
-    rectf(bx, 100 - bh, 40, bh, 1)
-    for wy = 100 - bh + 4, 96, 8 do
-      for wx = bx + 4, bx + 36, 10 do
-        if rnd(1) > 0.4 then
-          rectf(wx, wy, 4, 4, 2)
-        end
-      end
+  -- Buildings silhouette (pre-generated)
+  for _, b in ipairs(bsBuildings) do
+    rectf(b.x, 100 - b.h, 40, b.h, 1)
+    for _, w in ipairs(b.wins) do
+      rectf(w.x, w.y, 4, 4, 2)
     end
   end
 
