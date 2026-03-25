@@ -1335,123 +1335,140 @@ const Mono = (() => {
 
   // --- Build Lua globals ---
   function buildLuaGlobals() {
-    return {
-      cls: (c) => cls(c || 0),
-      pix, line, rect, rectf, circ, circf,
-      spr, sprT, sprRot, sprScale, gpix, draw: drawSprite,
+    // Raw functions registered with underscore prefix (_cls, _spr, etc.)
+    // plus backward-compatible non-prefixed aliases (cls, spr, etc.)
+    const goFn = (name) => {
+      sceneGo(name);
+      const sc = scenes[name];
+      if (sc && sc.init) sc.init();
+    };
+    const spawnRawFn = (group, px, py, vx, vy, sprId, hbType, hbA, hbB, hbC, hbD, grav, life, offscr, anchorX, anchorY, extra) => {
+      const obj = { group: group };
+      if (px !== undefined && px !== null) obj.pos = { x: px, y: py || 0 };
+      if (vx !== undefined && vx !== null) obj.vel = { x: vx, y: vy || 0 };
+      if (sprId !== undefined && sprId !== null && sprId > 0) obj.sprite = sprId;
+      if (hbType === "r") obj.hitbox = { w: hbA, h: hbB, ox: hbC || 0, oy: hbD || 0 };
+      else if (hbType === "c") obj.hitbox = { r: hbA, ox: hbB || 0, oy: hbC || 0 };
+      if (grav) obj.gravity = grav;
+      if (life) obj.lifetime = life;
+      if (offscr) obj.offscreen = true;
+      if (anchorX) obj.anchor_x = anchorX;
+      if (anchorY) obj.anchor_y = anchorY;
+      if (extra) {
+        try {
+          const ex = JSON.parse(extra);
+          for (const k in ex) obj[k] = ex[k];
+        } catch(e) {}
+      }
+      const e = ecsSpawn(obj);
+      return e._id;
+    };
+    const ecsSetFn = (id, field, value) => {
+      for (let i = 0; i < entities.length; i++) {
+        if (entities[i]._id === id && entities[i]._alive) {
+          if (field === "x" && entities[i].pos) { entities[i].pos.x = value; }
+          else if (field === "y" && entities[i].pos) { entities[i].pos.y = value; }
+          else if (field === "vx" && entities[i].vel) { entities[i].vel.x = value; }
+          else if (field === "vy" && entities[i].vel) { entities[i].vel.y = value; }
+          else if (field === "sprite") { entities[i].sprite = value; }
+          else if (field === "flipX") { entities[i].flipX = value; }
+          else if (field === "z") { entities[i].z = value; }
+          else if (field === "lifetime") { entities[i].lifetime = value; }
+          else { entities[i][field] = value; }
+          return;
+        }
+      }
+    };
+    const ecsGetFn = (id, field) => {
+      for (let i = 0; i < entities.length; i++) {
+        if (entities[i]._id === id && entities[i]._alive) {
+          if (field === "x" && entities[i].pos) return entities[i].pos.x;
+          if (field === "y" && entities[i].pos) return entities[i].pos.y;
+          return entities[i][field] || false;
+        }
+      }
+      return false;
+    };
+    const defSpriteFn = (id, data) => {
+      if (typeof data === 'string' && data.includes('\n')) {
+        sprites[id] = parseVisualSprite(data);
+        computeSpriteBounds(id);
+      } else {
+        spriteDefine(id, data);
+      }
+    };
+    const clsFn = (c) => cls(c || 0);
+    const eachFn = (group, fn) => ecsEach(group, fn);
+    const onCollideFn = (a, b, tagOrFn) => ecsOnCollide(a, b, tagOrFn);
+    const frameFn = () => frameCount;
+    const sceneNameFn = () => currentSceneName;
+    const peekFn = (addr) => ram[addr & 0xFFF];
+    const pokeFn = (addr, val) => { ram[addr & 0xFFF] = val & 0xFF; };
+    const peek16Fn = (addr) => { const a = addr & 0xFFF; return ram[a] | (ram[a+1] << 8); };
+    const poke16Fn = (addr, val) => { const a = addr & 0xFFF; ram[a] = val & 0xFF; ram[a+1] = (val >> 8) & 0xFF; };
+    const spriteIdFn = (name) => spriteNames[name] || 0;
+    const sGetFn = (name) => {
+      const l = _stateLayout[name]; if (!l) return 0;
+      if (l.type === 'u8') return ram[l.offset];
+      if (l.type === 'u16') return ram[l.offset] | (ram[l.offset+1] << 8);
+      if (l.type === 'i8') { const v = ram[l.offset]; return v > 127 ? v - 256 : v; }
+      if (l.type === 'i16') { const v = ram[l.offset] | (ram[l.offset+1] << 8); return v > 32767 ? v - 65536 : v; }
+      if (l.type === 'u32') return ram[l.offset] | (ram[l.offset+1] << 8) | (ram[l.offset+2] << 16) | (ram[l.offset+3] << 24);
+      if (l.type === 'i32') { const v = ram[l.offset] | (ram[l.offset+1] << 8) | (ram[l.offset+2] << 16) | (ram[l.offset+3] << 24); return v; }
+      return 0;
+    };
+    const sSetFn = (name, val) => {
+      const l = _stateLayout[name]; if (!l) return;
+      if (l.type === 'u8' || l.type === 'i8') { ram[l.offset] = val & 0xFF; }
+      else if (l.type === 'u16' || l.type === 'i16') { ram[l.offset] = val & 0xFF; ram[l.offset+1] = (val >> 8) & 0xFF; }
+      else if (l.type === 'u32' || l.type === 'i32') { ram[l.offset] = val & 0xFF; ram[l.offset+1] = (val >> 8) & 0xFF; ram[l.offset+2] = (val >> 16) & 0xFF; ram[l.offset+3] = (val >> 24) & 0xFF; }
+    };
+    const printFn = (...args) => console.log("[Lua]", ...args);
+
+    // Map of canonical name → function
+    const fns = {
+      cls: clsFn,
+      pix: pix, line: line, rect: rect, rectf: rectf, circ: circ, circf: circf,
+      spr: spr, sprT: sprT, sprRot: sprRot, sprScale: sprScale, gpix: gpix, draw: drawSprite,
       text: drawText,
-      mget, mset, map: mapDraw,
-      btn, btnp,
-      note: notePlay,
-      sfx_stop: noteStop,
-      bgm, bgm_stop: stopBgm,
-      bgm_vol: bgmVolSet,
-      go: (name) => {
-        sceneGo(name);
-        const sc = scenes[name];
-        if (sc && sc.init) sc.init();
-      },
-      scene_name: () => currentSceneName,
-      rnd, flr: Math.floor, abs: Math.abs, seed: seedSet,
-      dbg, dbgC, dbgPt,
+      mget: mget, mset: mset, map: mapDraw,
+      btn: btn, btnp: btnp,
+      note: notePlay, sfx_stop: noteStop,
+      bgm: bgm, bgm_stop: stopBgm, bgm_vol: bgmVolSet,
+      go: goFn, scene_name: sceneNameFn,
+      rnd: rnd, flr: Math.floor, abs: Math.abs, seed: seedSet,
+      dbg: dbg, dbgC: dbgC, dbgPt: dbgPt,
       cam: camSet, cam_get_x: camGetX, cam_get_y: camGetY, cam_shake: camShakeSet, cam_reset: camReset,
       tween: tweenTo, tween_clear: tweenClear,
-      frame: () => frameCount,
-      overlap,
-      _spawnRaw: (group, px, py, vx, vy, sprId, hbType, hbA, hbB, hbC, hbD, grav, life, offscr, anchorX, anchorY, extra) => {
-        const obj = { group: group };
-        if (px !== undefined && px !== null) obj.pos = { x: px, y: py || 0 };
-        if (vx !== undefined && vx !== null) obj.vel = { x: vx, y: vy || 0 };
-        if (sprId !== undefined && sprId !== null && sprId > 0) obj.sprite = sprId;
-        if (hbType === "r") obj.hitbox = { w: hbA, h: hbB, ox: hbC || 0, oy: hbD || 0 };
-        else if (hbType === "c") obj.hitbox = { r: hbA, ox: hbB || 0, oy: hbC || 0 };
-        if (grav) obj.gravity = grav;
-        if (life) obj.lifetime = life;
-        if (offscr) obj.offscreen = true;
-        if (anchorX) obj.anchor_x = anchorX;
-        if (anchorY) obj.anchor_y = anchorY;
-        if (extra) {
-          try {
-            const ex = JSON.parse(extra);
-            for (const k in ex) obj[k] = ex[k];
-          } catch(e) {}
-        }
-        const e = ecsSpawn(obj);
-        return e._id;
-      },
-      ecs_set: (id, field, value) => {
-        for (let i = 0; i < entities.length; i++) {
-          if (entities[i]._id === id && entities[i]._alive) {
-            if (field === "x" && entities[i].pos) { entities[i].pos.x = value; }
-            else if (field === "y" && entities[i].pos) { entities[i].pos.y = value; }
-            else if (field === "vx" && entities[i].vel) { entities[i].vel.x = value; }
-            else if (field === "vy" && entities[i].vel) { entities[i].vel.y = value; }
-            else if (field === "sprite") { entities[i].sprite = value; }
-            else if (field === "flipX") { entities[i].flipX = value; }
-            else if (field === "z") { entities[i].z = value; }
-            else if (field === "lifetime") { entities[i].lifetime = value; }
-            else { entities[i][field] = value; }
-            return;
-          }
-        }
-      },
-      ecs_get: (id, field) => {
-        for (let i = 0; i < entities.length; i++) {
-          if (entities[i]._id === id && entities[i]._alive) {
-            if (field === "x" && entities[i].pos) return entities[i].pos.x;
-            if (field === "y" && entities[i].pos) return entities[i].pos.y;
-            return entities[i][field] || false;
-          }
-        }
-        return false;
-      },
-      kill: ecsKill,
-      killAll: ecsKillAll,
-      each: (group, fn) => ecsEach(group, fn),
-      ecount: ecsCount,
-      onCollide: (a, b, tagOrFn) => ecsOnCollide(a, b, tagOrFn),
-      pollCollision: ecsPopCollision,
-      clearCollisions: ecsClearCollisions,
-      defSprite: (id, data) => {
-        if (typeof data === 'string' && data.includes('\n')) {
-          sprites[id] = parseVisualSprite(data);
-          computeSpriteBounds(id);
-        } else {
-          spriteDefine(id, data);
-        }
-      },
-      peek: (addr) => ram[addr & 0xFFF],
-      poke: (addr, val) => { ram[addr & 0xFFF] = val & 0xFF; },
-      peek16: (addr) => { const a = addr & 0xFFF; return ram[a] | (ram[a+1] << 8); },
-      poke16: (addr, val) => { const a = addr & 0xFFF; ram[a] = val & 0xFF; ram[a+1] = (val >> 8) & 0xFF; },
-      sprite_id: (name) => spriteNames[name] || 0,
-      S_get: (name) => {
-        const l = _stateLayout[name]; if (!l) return 0;
-        if (l.type === 'u8') return ram[l.offset];
-        if (l.type === 'u16') return ram[l.offset] | (ram[l.offset+1] << 8);
-        if (l.type === 'i8') { const v = ram[l.offset]; return v > 127 ? v - 256 : v; }
-        if (l.type === 'i16') { const v = ram[l.offset] | (ram[l.offset+1] << 8); return v > 32767 ? v - 65536 : v; }
-        if (l.type === 'u32') return ram[l.offset] | (ram[l.offset+1] << 8) | (ram[l.offset+2] << 16) | (ram[l.offset+3] << 24);
-        if (l.type === 'i32') { const v = ram[l.offset] | (ram[l.offset+1] << 8) | (ram[l.offset+2] << 16) | (ram[l.offset+3] << 24); return v; }
-        return 0;
-      },
-      S_set: (name, val) => {
-        const l = _stateLayout[name]; if (!l) return;
-        if (l.type === 'u8' || l.type === 'i8') { ram[l.offset] = val & 0xFF; }
-        else if (l.type === 'u16' || l.type === 'i16') { ram[l.offset] = val & 0xFF; ram[l.offset+1] = (val >> 8) & 0xFF; }
-        else if (l.type === 'u32' || l.type === 'i32') { ram[l.offset] = val & 0xFF; ram[l.offset+1] = (val >> 8) & 0xFF; ram[l.offset+2] = (val >> 16) & 0xFF; ram[l.offset+3] = (val >> 24) & 0xFF; }
-      },
-      print: (...args) => console.log("[Lua]", ...args),
+      frame: frameFn, overlap: overlap,
+      _spawnRaw: spawnRawFn,
+      ecs_set: ecsSetFn, ecs_get: ecsGetFn,
+      kill: ecsKill, killAll: ecsKillAll,
+      each: eachFn, ecount: ecsCount,
+      onCollide: onCollideFn, pollCollision: ecsPopCollision, clearCollisions: ecsClearCollisions,
+      defSprite: defSpriteFn,
+      peek: peekFn, poke: pokeFn, peek16: peek16Fn, poke16: poke16Fn,
+      sprite_id: spriteIdFn,
+      S_get: sGetFn, S_set: sSetFn,
+      print: printFn,
     };
+
+    // Build result: register each function under both _name (raw) and name (compat alias)
+    const result = {};
+    for (const [name, fn] of Object.entries(fns)) {
+      result[name] = fn;                     // backward-compatible: cls, spr, btn, ...
+      result["_" + name] = fn;               // raw underscore: _cls, _spr, _btn, ...
+    }
+    return result;
   }
 
-  // Lua-side spawn wrapper code (injected after boot)
+  // Lua-side spawn wrapper code (injected before game.lua)
   const SPAWN_WRAPPER_LUA = `
     function cam_get()
-      return cam_get_x(), cam_get_y()
+      return _cam_get_x(), _cam_get_y()
     end
 
-    function spawn(t)
+    function _spawn_raw_wrapper(t)
       local hbType, hbA, hbB, hbC, hbD = nil, nil, nil, nil, nil
       if t.hitbox then
         if t.hitbox.r then
@@ -1493,8 +1510,149 @@ const Mono = (() => {
         end
       end
       if #parts > 0 then extra = "{" .. table.concat(parts, ",") .. "}" end
-      return _spawnRaw(t.group, px, py, vx, vy, t.sprite, hbType, hbA, hbB, hbC, hbD, t.gravity, t.lifetime, t.offscreen, t.anchor_x, t.anchor_y, extra)
+      return __spawnRaw(t.group, px, py, vx, vy, t.sprite, hbType, hbA, hbB, hbC, hbD, t.gravity, t.lifetime, t.offscreen, t.anchor_x, t.anchor_y, extra)
     end
+
+    -- Backward-compatible spawn (procedural API)
+    function spawn(t)
+      return _spawn_raw_wrapper(t)
+    end
+  `;
+
+  // OOP wrapper Lua code (injected after game.lua)
+  const OOP_WRAPPER_LUA = `
+    ----------------------------------------------------------------
+    -- Graphics object
+    ----------------------------------------------------------------
+    Gfx = {}
+    function Gfx:cls(c)                   _cls(c or 0) end
+    function Gfx:pix(x,y,c)              _pix(x,y,c) end
+    function Gfx:line(x1,y1,x2,y2,c)     _line(x1,y1,x2,y2,c) end
+    function Gfx:rect(x,y,w,h,c)         _rect(x,y,w,h,c) end
+    function Gfx:rectf(x,y,w,h,c)        _rectf(x,y,w,h,c) end
+    function Gfx:circ(x,y,r,c)           _circ(x,y,r,c) end
+    function Gfx:circf(x,y,r,c)          _circf(x,y,r,c) end
+    function Gfx:spr(id,x,y,...)          _spr(id,x,y,...) end
+    function Gfx:sprT(id,x,y,...)         _sprT(id,x,y,...) end
+    function Gfx:sprRot(id,cx,cy,a)       _sprRot(id,cx,cy,a) end
+    function Gfx:sprScale(id,cx,cy,s,...) _sprScale(id,cx,cy,s,...) end
+    function Gfx:draw(id,x,y,...)         _draw(id,x,y,...) end
+    function Gfx:gpix(x,y)               return _gpix(x,y) end
+    function Gfx:text(str,x,y,c)         _text(str,x,y,c) end
+
+    ----------------------------------------------------------------
+    -- Camera object
+    ----------------------------------------------------------------
+    Camera = {}
+    function Camera:set(x,y)   _cam(x,y) end
+    function Camera:get()      return _cam_get_x(), _cam_get_y() end
+    function Camera:shake(amt) _cam_shake(amt) end
+    function Camera:reset()    _cam_reset() end
+
+    ----------------------------------------------------------------
+    -- Input object
+    ----------------------------------------------------------------
+    Input = {}
+    function Input:btn(k)  return _btn(k) end
+    function Input:btnp(k) return _btnp(k) end
+
+    ----------------------------------------------------------------
+    -- Audio object
+    ----------------------------------------------------------------
+    Audio = {}
+    function Audio:note(ch,n,d)          _note(ch,n,d) end
+    function Audio:stop(ch)              _sfx_stop(ch) end
+    function Audio:bgm(t1,t2,bpm,loop)  _bgm(t1,t2,bpm,loop) end
+    function Audio:bgmStop()             _bgm_stop() end
+    function Audio:bgmVol(v)             _bgm_vol(v) end
+
+    ----------------------------------------------------------------
+    -- Entity class (returned by Entity.spawn / Ecs:spawn)
+    ----------------------------------------------------------------
+    Entity = {}
+    Entity.__index = Entity
+
+    local ENTITY_FIELDS = {
+      _id=true, group=true, pos=true, vel=true, sprite=true,
+      hitbox=true, flipX=true, scale=true, z=true, gravity=true,
+      lifetime=true, offscreen=true, anchor_x=true, anchor_y=true,
+      anim=true,
+    }
+
+    Entity.__newindex = function(self, key, val)
+      if not ENTITY_FIELDS[key] then
+        error("Entity has no field '" .. key .. "'", 2)
+      end
+      rawset(self, key, val)
+    end
+
+    function Entity.spawn(t)
+      local id = _spawn_raw_wrapper(t)
+      local self = setmetatable({_id = id}, Entity)
+      return self
+    end
+
+    function Entity:set(field, value)  _ecs_set(self._id, field, value) end
+    function Entity:get(field)         return _ecs_get(self._id, field) end
+    function Entity:kill()             _kill(self._id); self._id = nil end
+    function Entity:alive()            return self._id ~= nil end
+
+    -- Convenience property access
+    function Entity:x()               return _ecs_get(self._id, "x") end
+    function Entity:y()               return _ecs_get(self._id, "y") end
+    function Entity:move(dx, dy)
+      _ecs_set(self._id, "x", _ecs_get(self._id, "x") + dx)
+      _ecs_set(self._id, "y", _ecs_get(self._id, "y") + dy)
+    end
+
+    ----------------------------------------------------------------
+    -- ECS manager
+    ----------------------------------------------------------------
+    Ecs = {}
+    function Ecs:spawn(t)                  return Entity.spawn(t) end
+    function Ecs:killAll(group)            _killAll(group) end
+    function Ecs:each(group, fn)           _each(group, fn) end
+    function Ecs:count(group)              return _ecount(group) end
+    function Ecs:onCollide(a,b,tagOrFn)    _onCollide(a,b,tagOrFn) end
+    function Ecs:poll()                    return _pollCollision() end
+    function Ecs:clearCollisions()         _clearCollisions() end
+
+    ----------------------------------------------------------------
+    -- Scene manager
+    ----------------------------------------------------------------
+    Scene = {}
+    function Scene:go(name)    _go(name) end
+    function Scene:name()      return _scene_name() end
+
+    ----------------------------------------------------------------
+    -- Debug
+    ----------------------------------------------------------------
+    Debug = {}
+    function Debug:rect(x,y,w,h)   _dbg(x,y,w,h) end
+    function Debug:circ(x,y,r)     _dbgC(x,y,r) end
+    function Debug:point(x,y)      _dbgPt(x,y) end
+
+    ----------------------------------------------------------------
+    -- Tilemap
+    ----------------------------------------------------------------
+    Map = {}
+    function Map:get(x,y)                      return _mget(x,y) end
+    function Map:set(x,y,id)                   _mset(x,y,id) end
+    function Map:draw(mx,my,mw,mh,sx,sy)       _map(mx,my,mw,mh,sx,sy) end
+
+    ----------------------------------------------------------------
+    -- Tween
+    ----------------------------------------------------------------
+    Tween = {}
+    function Tween:start(id,field,to,frames,ease) _tween(id,field,to,frames,ease) end
+    function Tween:clear()                        _tween_clear() end
+
+    ----------------------------------------------------------------
+    -- Math helpers
+    ----------------------------------------------------------------
+    Rng = {}
+    function Rng:rnd(max)   return _rnd(max) end
+    function Rng:seed(s)    _seed(s) end
   `;
 
   // --- Public API ---
@@ -1578,11 +1736,14 @@ const Mono = (() => {
         lua.global.set(name, fn);
       }
 
-      // Inject Lua-side spawn wrapper
+      // Inject Lua-side spawn wrapper (before game code, so spawn() is available)
       try { lua.doString(SPAWN_WRAPPER_LUA); } catch(e) { console.error("Mono: spawn wrapper error:", e); }
 
       // Run the game source
       try { lua.doString(gameSrc); } catch(e) { console.error("Mono: Lua script error:", e); }
+
+      // Inject OOP wrappers (after game code, so they don't interfere with procedural API)
+      try { lua.doString(OOP_WRAPPER_LUA); } catch(e) { console.error("Mono: OOP wrapper error:", e); }
 
       // Parse game table (declarative API)
       parseGameTable();
