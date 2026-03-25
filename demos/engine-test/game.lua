@@ -715,15 +715,11 @@ local function spritesDraw()
   local autoAngle: number = sprTimer * 0.06
   sprRot(selId, demoX + 8, 82, autoAngle)
 
-  -- 2. Bounce scale (pulse via offset)
-  text("PULSE", demoX - 6, 105, 2)
-  local pulse: number = math.sin(sprTimer * 0.12) * 3
-  local px: number = flr(demoX + 8 - pulse / 2)
-  local py: number = flr(125 - pulse / 2)
-  -- Draw sprite centered, offset by pulse
-  sprT(selId, px - 8, py - 8)
-  -- Bounding circle to show pulse
-  circ(demoX + 8, 125, flr(10 + pulse), 2)
+  -- 2. Scale animation
+  text("SCALE", demoX - 6, 105, 2)
+  local sc: number = 1 + math.sin(sprTimer * 0.08) * 0.8
+  sprScale(selId, demoX + 8, 125, sc)
+  text(tostring(flr(sc * 100) / 100) .. "x", demoX - 4, 142, 1)
 
   -- 3. Flip animation (alternating flip-x every 15 frames)
   text("FLIP", demoX - 4, 148, 2)

@@ -218,6 +218,28 @@ function sprT(id, x, y, flipX, flipY) {
   }
   if(debugSprite) debugSprBoxes.push({x:x,y:y});
 }
+function sprScale(id, cx, cy, scale, flipX, flipY) {
+  const s = sprites[id]; if (!s) return;
+  const SS = SPR_SIZE, half = SS / 2;
+  cx = Math.floor(cx + camOX); cy = Math.floor(cy + camOY);
+  const scaledHalf = half * scale;
+  const invScale = 1 / scale;
+  const imin = Math.floor(-scaledHalf), imax = Math.ceil(scaledHalf);
+  for (let py = imin; py < imax; py++) {
+    for (let px = imin; px < imax; px++) {
+      let srcX = Math.floor(px * invScale + half);
+      let srcY = Math.floor(py * invScale + half);
+      if (flipX) srcX = SS - 1 - srcX;
+      if (flipY) srcY = SS - 1 - srcY;
+      if (srcX < 0 || srcX >= SS || srcY < 0 || srcY >= SS) continue;
+      const c = s[srcY * SS + srcX];
+      if (c === 0) continue;
+      const dx = cx + px, dy = cy + py;
+      if (dx >= 0 && dx < W && dy >= 0 && dy < H) buf32[dy * W + dx] = COLOR_U32[c];
+    }
+  }
+  if (debugSprite) debugSprBoxes.push({x: cx - Math.floor(scaledHalf), y: cy - Math.floor(scaledHalf)});
+}
 function sprRot(id, cx, cy, angle) {
   const s = sprites[id]; if (!s) return;
   const SS=SPR_SIZE, half=SS/2, range=Math.ceil(half*1.42);
@@ -696,7 +718,7 @@ function buildLuaGlobals() {
   return {
     cls: (c) => cls(c || 0),
     pix, line, rect, rectf, circ, circf,
-    spr, sprT, sprRot, gpix,
+    spr, sprT, sprRot, sprScale, gpix,
     text,
     mget, mset, map: mapDraw,
     btn, btnp,
