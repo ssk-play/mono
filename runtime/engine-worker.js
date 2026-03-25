@@ -810,11 +810,7 @@ function stepInput() {
     }
   }
 
-  if (keys["start"] && !keysPrev["start"] && currentSceneName === "title") {
-    sceneGo("play");
-    const sc = scenes["play"];
-    if (sc && sc.init) sc.init();
-  }
+  // NOTE: title→play auto-transition removed. Games handle start button themselves.
 
   if (keys["select"] && !keysPrev["select"] && currentSceneName === "play") {
     paused = !paused;
