@@ -156,6 +156,7 @@ const Mono = (() => {
     }
     if (bgmPlaying) API.bgmStop();
     paused = false;
+    ecsClear();
     currentSceneName = name;
     currentScene = scenes[name] || null;
     if (currentScene && currentScene.init && (!opts || !opts.skipInit)) {
@@ -479,6 +480,191 @@ const Mono = (() => {
   API.overlap = function(x1,y1,w1,h1, x2,y2,w2,h2) {
     return x1+w1>x2 && x1<x2+w2 && y1+h1>y2 && y1<y2+h2;
   };
+
+  // --- ECS (Entity-Component-System) ---
+  const entities = [];
+  let entityIdCounter = 0;
+  const collisionHandlers = []; // [{groupA, groupB, fn}, ...]
+
+  API.spawn = function(components) {
+    const e = Object.assign({ _id: ++entityIdCounter, _alive: true }, components);
+    // Normalize hitbox
+    if (e.hitbox && e.hitbox.r !== undefined && e.hitbox.w === undefined) {
+      e.hitbox.type = "circle"; // { r, type:"circle" }
+    } else if (e.hitbox && e.hitbox.w !== undefined) {
+      e.hitbox.type = "rect"; // { w, h, ox, oy, type:"rect" }
+      if (e.hitbox.ox === undefined) e.hitbox.ox = 0;
+      if (e.hitbox.oy === undefined) e.hitbox.oy = 0;
+    }
+    entities.push(e);
+    return e;
+  };
+
+  API.kill = function(e) {
+    if (e) e._alive = false;
+  };
+
+  API.killAll = function(group) {
+    for (let i = entities.length - 1; i >= 0; i--) {
+      if (!group || entities[i].group === group) entities[i]._alive = false;
+    }
+  };
+
+  API.each = function(group, fn) {
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (e._alive && (!group || e.group === group)) fn(e);
+    }
+  };
+
+  API.count = function(group) {
+    let n = 0;
+    for (let i = 0; i < entities.length; i++) {
+      if (entities[i]._alive && (!group || entities[i].group === group)) n++;
+    }
+    return n;
+  };
+
+  API.onCollide = function(groupA, groupB, fn) {
+    collisionHandlers.push({ groupA, groupB, fn });
+  };
+
+  API.clearCollisions = function() { collisionHandlers.length = 0; };
+
+  // Internal: get hitbox center + shape for an entity
+  function ecsHitbox(e) {
+    if (!e.pos || !e.hitbox) return null;
+    const hb = e.hitbox;
+    if (hb.type === "circle") {
+      return { type: "c", cx: e.pos.x + (hb.ox || 0), cy: e.pos.y + (hb.oy || 0), r: hb.r };
+    } else {
+      const ox = hb.ox || 0, oy = hb.oy || 0;
+      return { type: "r", x: e.pos.x + ox, y: e.pos.y + oy, w: hb.w, h: hb.h };
+    }
+  }
+
+  function ecsOverlap(a, b) {
+    if (!a || !b) return false;
+    if (a.type === "c" && b.type === "c") {
+      const dx = a.cx - b.cx, dy = a.cy - b.cy, dr = a.r + b.r;
+      return dx * dx + dy * dy < dr * dr;
+    }
+    if (a.type === "r" && b.type === "r") {
+      return a.x + a.w > b.x && a.x < b.x + b.w && a.y + a.h > b.y && a.y < b.y + b.h;
+    }
+    // circle vs rect
+    const c = a.type === "c" ? a : b;
+    const r = a.type === "r" ? a : b;
+    const cx = Math.max(r.x, Math.min(c.cx, r.x + r.w));
+    const cy = Math.max(r.y, Math.min(c.cy, r.y + r.h));
+    const dx = c.cx - cx, dy = c.cy - cy;
+    return dx * dx + dy * dy < c.r * c.r;
+  }
+
+  // ECS system: called each update frame
+  function ecsUpdate() {
+    // Remove dead entities
+    for (let i = entities.length - 1; i >= 0; i--) {
+      if (!entities[i]._alive) entities.splice(i, 1);
+    }
+
+    // Auto-remove offscreen entities (if offscreen component set)
+    const margin = SPR_SIZE * 2;
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (e._alive && e.offscreen && e.pos) {
+        if (e.pos.x < -margin || e.pos.x > W + margin || e.pos.y < -margin || e.pos.y > H + margin) {
+          e._alive = false;
+        }
+      }
+    }
+
+    // Velocity
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (e._alive && e.pos && e.vel) {
+        e.pos.x += e.vel.x || 0;
+        e.pos.y += e.vel.y || 0;
+      }
+    }
+
+    // Gravity
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (e._alive && e.vel && e.gravity) {
+        e.vel.y += e.gravity;
+      }
+    }
+
+    // Lifetime
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (e._alive && e.lifetime !== undefined) {
+        e.lifetime--;
+        if (e.lifetime <= 0) e._alive = false;
+      }
+    }
+
+    // Animation
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (e._alive && e.anim) {
+        e.anim.timer = (e.anim.timer || 0) + 1;
+        if (e.anim.timer >= (e.anim.speed || 8)) {
+          e.anim.timer = 0;
+          e.anim.index = ((e.anim.index || 0) + 1) % e.anim.frames.length;
+          e.sprite = e.anim.frames[e.anim.index];
+        }
+      }
+    }
+
+    // Collision detection
+    for (let h = 0; h < collisionHandlers.length; h++) {
+      const handler = collisionHandlers[h];
+      for (let i = 0; i < entities.length; i++) {
+        const a = entities[i];
+        if (!a._alive || a.group !== handler.groupA) continue;
+        const ha = ecsHitbox(a);
+        for (let j = 0; j < entities.length; j++) {
+          const b = entities[j];
+          if (!b._alive || b.group !== handler.groupB || a === b) continue;
+          const hb = ecsHitbox(b);
+          if (ecsOverlap(ha, hb)) {
+            handler.fn(a, b);
+          }
+        }
+      }
+    }
+  }
+
+  // ECS render: auto-draw entities with sprite+pos, auto-debug hitboxes
+  function ecsRender() {
+    for (let i = 0; i < entities.length; i++) {
+      const e = entities[i];
+      if (!e._alive || !e.pos) continue;
+      // Auto-draw sprite
+      if (e.sprite !== undefined) {
+        const x = Math.floor(e.pos.x), y = Math.floor(e.pos.y);
+        const flipX = e.flipX || false, flipY = e.flipY || false;
+        API.sprT(e.sprite, x, y, flipX, flipY);
+      }
+      // Auto-debug hitbox
+      if (e.hitbox) {
+        const hb = ecsHitbox(e);
+        if (hb) {
+          if (hb.type === "c") API.dbgC(hb.cx, hb.cy, hb.r);
+          else API.dbg(hb.x, hb.y, hb.w, hb.h);
+        }
+      }
+    }
+  }
+
+  // Clear ECS state on scene change
+  function ecsClear() {
+    entities.length = 0;
+    collisionHandlers.length = 0;
+    entityIdCounter = 0;
+  }
 
   // --- Demo Record/Playback (frame-level, scene-independent) ---
   const KEY_BITS = ["up","down","left","right","a","b","start","select"];
@@ -819,6 +1005,28 @@ const Mono = (() => {
     // Overlap
     lua.global.set('overlap', API.overlap);
 
+    // ECS
+    lua.global.set('spawn', (components) => {
+      // Convert Lua table to JS object
+      const obj = {};
+      if (components && typeof components === 'object') {
+        for (const [k, v] of Object.entries(components)) {
+          if (v && typeof v === 'object' && !Array.isArray(v)) {
+            obj[k] = Object.assign({}, v);
+          } else {
+            obj[k] = v;
+          }
+        }
+      }
+      return API.spawn(obj);
+    });
+    lua.global.set('kill', API.kill);
+    lua.global.set('killAll', API.killAll);
+    lua.global.set('each', (group, fn) => API.each(group, fn));
+    lua.global.set('ecount', API.count);
+    lua.global.set('onCollide', API.onCollide);
+    lua.global.set('clearCollisions', API.clearCollisions);
+
     // Sprite definition (supports visual format and classic)
     lua.global.set('defSprite', (id, data) => {
       if (typeof data === 'string' && data.includes('\n')) {
@@ -992,12 +1200,14 @@ const Mono = (() => {
     if (currentScene && currentScene.update) {
       try { currentScene.update(); } catch(e) { console.error("Mono update error:", e); }
     }
+    ecsUpdate();
   }
 
   function stepRender() {
     if (currentScene && currentScene.draw) {
       try { currentScene.draw(); } catch(e) { console.error("Mono draw error:", e); }
     }
+    ecsRender();
 
     // Pause overlay
     if (paused) {
