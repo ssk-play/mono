@@ -2537,6 +2537,9 @@ local function bsDraw()
         sprT(sprite_id(sprName), flr(p.x) - 8, flr(p.y) - 8 + bob, flipX, false)
       end
 
+      -- Player hitbox debug
+      dbg(flr(p.x) - 6, flr(p.y) - 8, 12, 16)
+
       -- Punch/kick visual effects
       if bsAttackTimer > 0 then
         local fx = p.x + p.facing * 18
@@ -2586,6 +2589,9 @@ local function bsDraw()
             sprT(sprite_id(sprName), flr(e.x) - 8, flr(e.y) - 8 + bob, flipX, false)
           end
         end
+
+        -- Enemy hitbox debug
+        dbg(flr(e.x) - 6, flr(e.y) - 8, 12, 16)
 
         -- Boss: draw bigger outline to distinguish
         if e.kind == "boss" and e.state ~= "ko" then
