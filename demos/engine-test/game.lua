@@ -1,5 +1,5 @@
 -- Engine Test Suite: Menu-based tests for Mono Engine v2
--- Tests: shooter, camera, sprites, input, sound
+-- Tests: shooter, camera, sprites, input, sound, tilemap, mini RPG
 
 local W = 320
 local H = 240
@@ -191,6 +191,121 @@ defVisual("star2", [[
 ................
 ]])
 
+-- Tile sprites for tilemap and RPG modes
+defVisual("tile_wall", [[
+3333333333333333
+3222222222222223
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3211111111111123
+3222222222222223
+3333333333333333
+]])
+
+defVisual("tile_floor", [[
+1...............
+................
+....1...........
+................
+................
+..........1.....
+................
+................
+......1.........
+................
+................
+...........1....
+................
+.1..............
+................
+...........1....
+]])
+
+defVisual("tile_grass", [[
+.......2........
+..2.........2...
+................
+....2.........2.
+2...............
+........2.......
+...2............
+..........2.....
+.2..............
+..........2.....
+....2...........
+................
+2.........2.....
+........2.......
+...2............
+.........2......
+]])
+
+defVisual("tile_deco", [[
+......3333......
+.....333333.....
+....33322333....
+...3332222333...
+..333222222333..
+.33322222222333.
+3332222222222333
+3322222222222233
+3322222222222233
+3332222222222333
+.33322222222333.
+..333222222333..
+...3332222333...
+....33322333....
+.....333333.....
+......3333......
+]])
+
+defVisual("tile_path", [[
+2222222222222222
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2111111111111112
+2222222222222222
+]])
+
+defVisual("npc", [[
+......1111......
+.....111111.....
+....11311311....
+....11111111....
+.....111111.....
+......3333......
+.....333333.....
+....33333333....
+...3333333333...
+....33333333....
+.....333333.....
+......3333......
+.....33..33.....
+....33....33....
+...33......33...
+..33........33..
+]])
+
 ---------------------------------------------------------------
 -- SHARED STATE
 ---------------------------------------------------------------
@@ -200,10 +315,12 @@ local MODE_CAMERA = 2
 local MODE_SPRITES = 3
 local MODE_INPUT = 4
 local MODE_SOUND = 5
+local MODE_TILEMAP = 6
+local MODE_RPG = 7
 
 local currentMode = MODE_MENU
 local menuCursor = 0
-local menuItems = { "SHOOTER", "CAMERA", "SPRITES", "INPUT", "SOUND" }
+local menuItems = { "SHOOTER", "CAMERA", "SPRITES", "INPUT", "SOUND", "TILEMAP", "MINI RPG" }
 local titleBlink = 0
 
 ---------------------------------------------------------------
@@ -1025,6 +1142,452 @@ local function soundDraw()
 end
 
 ---------------------------------------------------------------
+-- TILEMAP TEST STATE
+---------------------------------------------------------------
+local TMAP_W = 20
+local TMAP_H = 15
+local tmapCurX = 0
+local tmapCurY = 0
+local tmapBlink = 0
+-- Tile types: 0=empty, 1=wall, 2=floor, 3=decoration
+local TMAP_TILE_NAMES = {"EMPTY", "WALL", "FLOOR", "DECO"}
+local tmapTileSprIds = {}  -- filled at init
+
+local function tilemapInit()
+  tmapCurX = 0
+  tmapCurY = 0
+  tmapBlink = 0
+  tmapTileSprIds[0] = 0
+  tmapTileSprIds[1] = sprite_id("tile_wall")
+  tmapTileSprIds[2] = sprite_id("tile_floor")
+  tmapTileSprIds[3] = sprite_id("tile_deco")
+
+  -- Initialize tilemap with a border of walls and floor inside
+  for ty = 0, TMAP_H - 1 do
+    for tx = 0, TMAP_W - 1 do
+      if tx == 0 or tx == TMAP_W - 1 or ty == 0 or ty == TMAP_H - 1 then
+        mset(tx, ty, tmapTileSprIds[1])  -- wall border
+      else
+        mset(tx, ty, tmapTileSprIds[2])  -- floor inside
+      end
+    end
+  end
+  -- Place some decorations
+  mset(5, 5, tmapTileSprIds[3])
+  mset(10, 7, tmapTileSprIds[3])
+  mset(14, 3, tmapTileSprIds[3])
+  mset(8, 12, tmapTileSprIds[3])
+end
+
+local function tilemapUpdate()
+  tmapBlink = tmapBlink + 1
+
+  -- Move cursor
+  if btnp("up") and tmapCurY > 0 then
+    tmapCurY = tmapCurY - 1
+    note(0, "G5", 0.02)
+  end
+  if btnp("down") and tmapCurY < TMAP_H - 1 then
+    tmapCurY = tmapCurY + 1
+    note(0, "G5", 0.02)
+  end
+  if btnp("left") and tmapCurX > 0 then
+    tmapCurX = tmapCurX - 1
+    note(0, "G5", 0.02)
+  end
+  if btnp("right") and tmapCurX < TMAP_W - 1 then
+    tmapCurX = tmapCurX + 1
+    note(0, "G5", 0.02)
+  end
+
+  -- A cycles tile type at cursor
+  if btnp("a") then
+    local cur = mget(tmapCurX, tmapCurY)
+    -- Find which type index this is
+    local curIdx = 0
+    for k, v in pairs(tmapTileSprIds) do
+      if v == cur then curIdx = k break end
+    end
+    local nextIdx = (curIdx + 1) % 4
+    mset(tmapCurX, tmapCurY, tmapTileSprIds[nextIdx])
+    note(0, "C5", 0.04)
+  end
+end
+
+local function tilemapDraw()
+  cls(0)
+
+  -- Draw the map using map() function
+  map(0, 0, 0, 0, TMAP_W, TMAP_H)
+
+  -- Blinking cursor overlay
+  if flr(tmapBlink / 8) % 2 == 0 then
+    rect(tmapCurX * SS, tmapCurY * SS, SS, SS, 3)
+  else
+    rect(tmapCurX * SS, tmapCurY * SS, SS, SS, 2)
+  end
+
+  -- HUD
+  local curTile = mget(tmapCurX, tmapCurY)
+  local tileName = "EMPTY"
+  for k, v in pairs(tmapTileSprIds) do
+    if v == curTile then tileName = TMAP_TILE_NAMES[k + 1] break end
+  end
+
+  rectf(0, H - 24, W, 24, 0)
+  text("TILEMAP " .. TMAP_W .. "x" .. TMAP_H, 4, H - 22, 3)
+  text("POS:" .. tmapCurX .. "," .. tmapCurY .. " TILE:" .. tileName .. " ID:" .. curTile, 4, H - 12, 2)
+  text("[A] CYCLE  [START] MENU", 150, H - 12, 1)
+  drawInputMonitor()
+end
+
+---------------------------------------------------------------
+-- MINI RPG TEST STATE
+---------------------------------------------------------------
+local RPG_MAP_W = 40
+local RPG_MAP_H = 30
+local rpgPX = 5     -- player tile X
+local rpgPY = 5     -- player tile Y
+local rpgTargetX = 5
+local rpgTargetY = 5
+local rpgMoving = false
+local rpgMoveTimer = 0
+local rpgMoveFrames = 8
+local rpgMoveFromX = 0
+local rpgMoveFromY = 0
+local rpgCamX = 0
+local rpgCamY = 0
+local rpgDialogText = ""
+local rpgDialogActive = false
+local rpgNearNPC = false
+local rpgNPCList = {}
+local rpgFrame = 0
+
+local rpgWallId = 0
+local rpgFloorId = 0
+local rpgGrassId = 0
+local rpgPathId = 0
+local rpgNpcSprId = 0
+local rpgShipId = 0
+
+local function rpgIsWall(tx, ty)
+  if tx < 0 or tx >= RPG_MAP_W or ty < 0 or ty >= RPG_MAP_H then return true end
+  return mget(tx, ty) == rpgWallId
+end
+
+local function rpgBuildMap()
+  rpgWallId = sprite_id("tile_wall")
+  rpgFloorId = sprite_id("tile_floor")
+  rpgGrassId = sprite_id("tile_grass")
+  rpgPathId = sprite_id("tile_path")
+  rpgNpcSprId = sprite_id("npc")
+  rpgShipId = sprite_id("ship")
+
+  -- Fill with grass
+  for ty = 0, RPG_MAP_H - 1 do
+    for tx = 0, RPG_MAP_W - 1 do
+      mset(tx, ty, rpgGrassId)
+    end
+  end
+
+  -- Build dungeon rooms (walls)
+  -- Room 1: top-left area
+  for tx = 2, 12 do
+    mset(tx, 2, rpgWallId)
+    mset(tx, 10, rpgWallId)
+  end
+  for ty = 2, 10 do
+    mset(2, ty, rpgWallId)
+    mset(12, ty, rpgWallId)
+  end
+  -- Floor inside room 1
+  for ty = 3, 9 do
+    for tx = 3, 11 do
+      mset(tx, ty, rpgFloorId)
+    end
+  end
+  -- Door in room 1
+  mset(7, 10, rpgFloorId)
+
+  -- Room 2: right area
+  for tx = 20, 35 do
+    mset(tx, 5, rpgWallId)
+    mset(tx, 15, rpgWallId)
+  end
+  for ty = 5, 15 do
+    mset(20, ty, rpgWallId)
+    mset(35, ty, rpgWallId)
+  end
+  -- Floor inside room 2
+  for ty = 6, 14 do
+    for tx = 21, 34 do
+      mset(tx, ty, rpgFloorId)
+    end
+  end
+  -- Door in room 2
+  mset(20, 10, rpgFloorId)
+
+  -- Room 3: bottom area
+  for tx = 5, 18 do
+    mset(tx, 18, rpgWallId)
+    mset(tx, 26, rpgWallId)
+  end
+  for ty = 18, 26 do
+    mset(5, ty, rpgWallId)
+    mset(18, ty, rpgWallId)
+  end
+  -- Floor inside room 3
+  for ty = 19, 25 do
+    for tx = 6, 17 do
+      mset(tx, ty, rpgFloorId)
+    end
+  end
+  -- Door in room 3
+  mset(12, 18, rpgFloorId)
+
+  -- Paths connecting rooms (using path tiles)
+  -- Path from room1 door (7,10) down to room3 door (12,18)
+  for ty = 11, 17 do
+    mset(7, ty, rpgPathId)
+    mset(8, ty, rpgPathId)
+  end
+  for tx = 8, 12 do
+    mset(tx, 17, rpgPathId)
+  end
+
+  -- Path from room1 area to room2 door (20,10)
+  for tx = 8, 19 do
+    mset(tx, 11, rpgPathId)
+    mset(tx, 12, rpgPathId)
+  end
+
+  -- Path from room2 down
+  for ty = 16, 22 do
+    mset(25, ty, rpgPathId)
+    mset(26, ty, rpgPathId)
+  end
+
+  -- Some scattered walls as obstacles
+  mset(15, 14, rpgWallId)
+  mset(16, 14, rpgWallId)
+  mset(15, 15, rpgWallId)
+end
+
+local function rpgInit()
+  rpgPX = 5
+  rpgPY = 5
+  rpgTargetX = 5
+  rpgTargetY = 5
+  rpgMoving = false
+  rpgMoveTimer = 0
+  rpgDialogText = ""
+  rpgDialogActive = false
+  rpgNearNPC = false
+  rpgFrame = 0
+
+  killAll("npc")
+
+  rpgBuildMap()
+
+  -- Place player in room 1
+  rpgPX = 6
+  rpgPY = 6
+  rpgTargetX = 6
+  rpgTargetY = 6
+
+  -- Spawn NPCs using ECS
+  rpgNPCList = {
+    { tx = 8, ty = 5, msg = "WELCOME TO THE DUNGEON!\nBE CAREFUL OUT THERE." },
+    { tx = 27, ty = 9, msg = "THIS IS ROOM TWO.\nFIND THE TREASURE!" },
+    { tx = 10, ty = 22, msg = "I GUARD THIS ROOM.\nNOTHING SHALL PASS!" },
+  }
+
+  for i, npc in ipairs(rpgNPCList) do
+    spawn({
+      group = "npc",
+      pos = { x = npc.tx * SS + 8, y = npc.ty * SS + 8 },
+      sprite = rpgNpcSprId,
+      anchor_x = 0.5, anchor_y = 0.5,
+      npcIndex = i,
+      tileX = npc.tx,
+      tileY = npc.ty,
+      z = npc.ty,
+    })
+  end
+end
+
+local function rpgUpdate()
+  rpgFrame = rpgFrame + 1
+
+  -- Dialog handling
+  if rpgDialogActive then
+    if btnp("b") then
+      rpgDialogActive = false
+      rpgDialogText = ""
+    end
+    return  -- freeze movement while dialog open
+  end
+
+  -- Movement (tile-based with smooth interpolation)
+  if rpgMoving then
+    rpgMoveTimer = rpgMoveTimer + 1
+    if rpgMoveTimer >= rpgMoveFrames then
+      rpgPX = rpgTargetX
+      rpgPY = rpgTargetY
+      rpgMoving = false
+      rpgMoveTimer = 0
+    end
+  end
+
+  if not rpgMoving then
+    local dx = 0
+    local dy = 0
+    if btnp("up") then dy = -1
+    elseif btnp("down") then dy = 1
+    elseif btnp("left") then dx = -1
+    elseif btnp("right") then dx = 1
+    end
+
+    if dx ~= 0 or dy ~= 0 then
+      local nx = rpgPX + dx
+      local ny = rpgPY + dy
+      if not rpgIsWall(nx, ny) then
+        rpgMoveFromX = rpgPX
+        rpgMoveFromY = rpgPY
+        rpgTargetX = nx
+        rpgTargetY = ny
+        rpgMoving = true
+        rpgMoveTimer = 0
+        note(0, "G5", 0.02)
+      else
+        note(0, "C3", 0.03)
+      end
+    end
+
+    -- Check proximity to NPCs
+    rpgNearNPC = false
+    each("npc", function(e)
+      local dist = abs(e.tileX - rpgPX) + abs(e.tileY - rpgPY)
+      if dist <= 1 then
+        rpgNearNPC = true
+        if btnp("a") then
+          rpgDialogActive = true
+          rpgDialogText = rpgNPCList[e.npcIndex].msg
+          note(0, "E5", 0.05)
+        end
+      end
+    end)
+  end
+
+  -- Smooth camera follow
+  local playerPixelX = rpgPX * SS
+  local playerPixelY = rpgPY * SS
+  if rpgMoving then
+    local t = rpgMoveTimer / rpgMoveFrames
+    playerPixelX = rpgMoveFromX * SS + (rpgTargetX - rpgMoveFromX) * SS * t
+    playerPixelY = rpgMoveFromY * SS + (rpgTargetY - rpgMoveFromY) * SS * t
+  end
+
+  local targetCamX = playerPixelX - W / 2 + 8
+  local targetCamY = playerPixelY - H / 2 + 8
+  -- Clamp camera
+  local maxCamX = RPG_MAP_W * SS - W
+  local maxCamY = RPG_MAP_H * SS - H
+  if targetCamX < 0 then targetCamX = 0 end
+  if targetCamY < 0 then targetCamY = 0 end
+  if targetCamX > maxCamX then targetCamX = maxCamX end
+  if targetCamY > maxCamY then targetCamY = maxCamY end
+  -- Smooth lerp
+  rpgCamX = rpgCamX + (targetCamX - rpgCamX) * 0.15
+  rpgCamY = rpgCamY + (targetCamY - rpgCamY) * 0.15
+  cam(flr(rpgCamX), flr(rpgCamY))
+
+  -- Update NPC z-order based on tileY
+  each("npc", function(e)
+    e.z = e.tileY
+  end)
+end
+
+local function rpgDraw()
+  cls(0)
+
+  -- Draw tilemap (the full visible area)
+  map(0, 0, 0, 0, RPG_MAP_W, RPG_MAP_H)
+
+  -- Collect drawables for z-order sorting
+  local drawList = {}
+
+  -- Player pixel position (with smooth interpolation)
+  local ppx = rpgPX * SS
+  local ppy = rpgPY * SS
+  if rpgMoving then
+    local t = rpgMoveTimer / rpgMoveFrames
+    ppx = rpgMoveFromX * SS + (rpgTargetX - rpgMoveFromX) * SS * t
+    ppy = rpgMoveFromY * SS + (rpgTargetY - rpgMoveFromY) * SS * t
+  end
+
+  -- Add player to draw list
+  drawList[#drawList + 1] = { y = ppy, kind = "player", px = ppx, py = ppy }
+
+  -- Add NPCs to draw list
+  each("npc", function(e)
+    drawList[#drawList + 1] = { y = e.tileY * SS, kind = "npc", px = e.tileX * SS, py = e.tileY * SS }
+  end)
+
+  -- Sort by y (z-order: lower y drawn first, higher y drawn on top)
+  table.sort(drawList, function(a, b) return a.y < b.y end)
+
+  -- Draw in z-order
+  for i = 1, #drawList do
+    local d = drawList[i]
+    if d.kind == "player" then
+      -- Player shadow
+      circf(flr(d.px) + 8, flr(d.py) + 14, 5, 1)
+      sprT(rpgShipId, flr(d.px), flr(d.py))
+    elseif d.kind == "npc" then
+      -- NPC shadow
+      circf(flr(d.px) + 8, flr(d.py) + 14, 5, 1)
+      sprT(rpgNpcSprId, flr(d.px), flr(d.py))
+      -- Exclamation mark above NPC if player is nearby
+      local dist = abs(flr(d.px / SS) - rpgPX) + abs(flr(d.py / SS) - rpgPY)
+      if dist <= 2 then
+        if flr(rpgFrame / 10) % 2 == 0 then
+          text("!", flr(d.px) + 6, flr(d.py) - 8, 3)
+        end
+      end
+    end
+  end
+
+  -- HUD (drawn in screen space, text is not affected by cam)
+  text("MINI RPG", 4, 4, 3)
+  text("POS:" .. rpgPX .. "," .. rpgPY, 4, 14, 2)
+
+  if rpgNearNPC and not rpgDialogActive then
+    if flr(rpgFrame / 15) % 2 == 0 then
+      text("PRESS A TO TALK", W / 2 - 40, H - 28, 3)
+    end
+  end
+
+  text("[START] MENU", 4, H - 10, 1)
+
+  -- Dialog box
+  if rpgDialogActive then
+    rectf(20, H - 70, W - 40, 50, 0)
+    rect(20, H - 70, W - 40, 50, 3)
+    rect(21, H - 69, W - 42, 48, 2)
+    -- Split text by newline
+    local lineY = 0
+    for dline in rpgDialogText:gmatch("[^\n]+") do
+      text(dline, 30, H - 62 + lineY, 3)
+      lineY = lineY + 12
+    end
+    text("[B] CLOSE", W - 90, H - 26, 1)
+  end
+
+  drawInputMonitor()
+end
+
+---------------------------------------------------------------
 -- MENU HELPERS
 ---------------------------------------------------------------
 local function enterMode(mode)
@@ -1033,6 +1596,7 @@ local function enterMode(mode)
   killAll("enemy")
   killAll("particle")
   killAll("player")
+  killAll("npc")
   bgm_stop()
   cam_reset()
 
@@ -1046,6 +1610,10 @@ local function enterMode(mode)
     inputInit()
   elseif mode == MODE_SOUND then
     soundInit()
+  elseif mode == MODE_TILEMAP then
+    tilemapInit()
+  elseif mode == MODE_RPG then
+    rpgInit()
   end
 end
 
@@ -1102,8 +1670,8 @@ function title_draw()
   end
 
   text("1:HITBOX/2:SPRITE/3:FILL", 60, 200, 1)
-  text("5 TEST MODES INSIDE", 85, 212, 1)
-  text("SHOOTER CAMERA SPRITES INPUT SFX", 25, 224, 1)
+  text("7 TEST MODES INSIDE", 85, 212, 1)
+  text("SHOOTER CAM SPRITE INPUT SFX MAP RPG", 10, 224, 1)
 
   drawInputMonitor()
 end
@@ -1153,6 +1721,10 @@ function play_update()
       inputUpdate()
     elseif currentMode == MODE_SOUND then
       soundUpdate()
+    elseif currentMode == MODE_TILEMAP then
+      tilemapUpdate()
+    elseif currentMode == MODE_RPG then
+      rpgUpdate()
     end
   end
 end
@@ -1172,6 +1744,8 @@ function play_draw()
       "Display all sprites + sprRot demo",
       "Full 8-button visual input monitor",
       "Play notes + toggle BGM",
+      "20x15 tile grid - mget/mset/map test",
+      "Dungeon RPG - cam+ECS+tween+z-order",
     }
 
     for i = 1, #menuItems do
@@ -1205,6 +1779,10 @@ function play_draw()
     inputDraw()
   elseif currentMode == MODE_SOUND then
     soundDraw()
+  elseif currentMode == MODE_TILEMAP then
+    tilemapDraw()
+  elseif currentMode == MODE_RPG then
+    rpgDraw()
   end
 end
 
