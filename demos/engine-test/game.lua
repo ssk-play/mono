@@ -306,6 +306,140 @@ defVisual("npc", [[
 ..33........33..
 ]])
 
+-- Belt-scroll beat-em-up sprites
+defVisual("hero_idle", [[
+................
+......1111......
+.....111111.....
+....11311311....
+....11111111....
+.....111111.....
+......2222......
+.....222222.....
+....22222222....
+...2222222222...
+....22222222....
+......2222......
+.....22..22.....
+....22....22....
+...22......22...
+..11........11..
+]])
+
+defVisual("hero_walk", [[
+................
+......1111......
+.....111111.....
+....11311311....
+....11111111....
+.....111111.....
+......2222......
+.....222222.....
+....22222222....
+...2222222222...
+....22222222....
+......2222......
+.....22..22.....
+....22....22....
+..22..........22
+.11..........11.
+]])
+
+defVisual("hero_punch", [[
+................
+......1111......
+.....111111.....
+....11311311....
+....11111111....
+.....111111.....
+......2222......
+.....222222.....
+....22222222....
+...222222222211.
+....22222222.11.
+......2222......
+.....22..22.....
+....22....22....
+...22......22...
+..11........11..
+]])
+
+defVisual("hero_kick", [[
+................
+......1111......
+.....111111.....
+....11311311....
+....11111111....
+.....111111.....
+......2222......
+.....222222.....
+....22222222....
+...2222222222...
+....22222222....
+......2222......
+.....22..22.....
+....22...22.....
+...22....2222...
+..11.....111111.
+]])
+
+defVisual("thug_idle", [[
+................
+.....333333.....
+....33333333....
+...3331133113...
+...3333333333...
+....33333333....
+.....222222.....
+....22222222....
+...2222222222...
+..222222222222..
+...2222222222...
+.....222222.....
+....22...22.....
+...22.....22....
+..22.......22...
+.11.........11..
+]])
+
+defVisual("thug_walk", [[
+................
+.....333333.....
+....33333333....
+...3331133113...
+...3333333333...
+....33333333....
+.....222222.....
+....22222222....
+...2222222222...
+..222222222222..
+...2222222222...
+.....222222.....
+....22...22.....
+...22.....22....
+.22...........22
+11...........11.
+]])
+
+defVisual("thug_hit", [[
+................
+.......333333...
+......33333333..
+.....3331133113.
+.....3333333333.
+......33333333..
+.......222222...
+......22222222..
+.....2222222222.
+....222222222222
+.....2222222222.
+.......222222...
+......22...22...
+.....22.....22..
+....22.......22.
+...11.........11
+]])
+
 ---------------------------------------------------------------
 -- SHARED STATE
 ---------------------------------------------------------------
@@ -317,13 +451,14 @@ local MODE_INPUT = 4
 local MODE_SOUND = 5
 local MODE_TILEMAP = 6
 local MODE_RPG = 7
+local MODE_BELTSCROLL = 8
 
 local currentMode = MODE_MENU
 local menuCursor = 0
 local menuRepeatTimer = 0
 local menuRepeatFirst = 10  -- frames before repeat starts
 local menuRepeatRate = 4    -- frames between repeats
-local menuItems = { "SHOOTER", "CAMERA", "SPRITES", "INPUT", "SOUND", "TILEMAP", "MINI RPG" }
+local menuItems = { "SHOOTER", "CAMERA", "SPRITES", "INPUT", "SOUND", "TILEMAP", "MINI RPG", "SINGLE DRAGON" }
 local titleBlink = 0
 
 ---------------------------------------------------------------
@@ -1799,6 +1934,762 @@ local function rpgDraw()
 end
 
 ---------------------------------------------------------------
+-- BELT-SCROLL BEAT-EM-UP TEST (SINGLE DRAGON)
+---------------------------------------------------------------
+local BS_LEVEL_W = 1200
+local BS_LEVEL_H = 240
+local BS_GROUND_Y = 140    -- top of walkable lane area
+local BS_GROUND_BOTTOM = 220  -- bottom of walkable lane area
+local BS_WALK_SPEED = 2
+local BS_LANE_SPEED = 1.5
+
+-- Zone definitions: {startX, endX, spawns}
+-- spawns: list of {type, x, y}
+local BS_ZONES = {
+  { left = 0,   right = 400,
+    spawns = {
+      { kind = "grunt", x = 300, y = 170 },
+      { kind = "grunt", x = 340, y = 190 },
+      { kind = "grunt", x = 360, y = 160 },
+    }},
+  { left = 400, right = 800,
+    spawns = {
+      { kind = "grunt", x = 680, y = 175 },
+      { kind = "grunt", x = 720, y = 195 },
+      { kind = "knife", x = 750, y = 160 },
+    }},
+  { left = 800, right = 1200,
+    spawns = {
+      { kind = "grunt", x = 1050, y = 180 },
+      { kind = "boss",  x = 1100, y = 175 },
+    }},
+}
+
+-- Enemy type stats
+local BS_ENEMY_STATS = {
+  grunt = { hp = 6, speed = 1.0, atkRange = 20, atkDmg = 5, color = 3 },
+  knife = { hp = 4, speed = 0.6, atkRange = 100, atkDmg = 3, color = 2 },
+  boss  = { hp = 18, speed = 1.5, atkRange = 25, atkDmg = 8, color = 3 },
+}
+
+local bsPlayer = nil
+local bsEnemies = {}
+local bsProjectiles = {}
+local bsFrame = 0
+local bsCamX = 0
+local bsZone = 1
+local bsZoneActive = false
+local bsZoneCleared = false
+local bsGoArrow = 0
+local bsWin = false
+local bsStageClear = false
+local bsStageClearTimer = 0
+local bsShakeTimer = 0
+local bsFreezeTimer = 0
+local bsScore = 0
+local bsFlashTimer = 0
+
+-- Combo state
+local bsComboCount = 0
+local bsComboWindow = 0
+local bsAttackTimer = 0
+local bsAttackType = ""
+local bsKickTimer = 0
+
+local function bsMakeEnemy(kind, x, y)
+  local stats = BS_ENEMY_STATS[kind]
+  return {
+    x = x, y = y,
+    kind = kind,
+    hp = stats.hp, maxHp = stats.hp,
+    speed = stats.speed,
+    atkRange = stats.atkRange,
+    atkDmg = stats.atkDmg,
+    color = stats.color,
+    vx = 0, vy = 0,
+    state = "walk",
+    staggerTimer = 0,
+    attackTimer = 0,
+    attackCooldown = 30 + flr(rnd(30)),
+    throwCooldown = 90,
+    flashTimer = 0,
+    facing = -1,
+    koTimer = 0,
+    entId = nil,
+  }
+end
+
+local function bsSpawnZone(zone)
+  local z = BS_ZONES[zone]
+  if not z then return end
+  for _, sp in ipairs(z.spawns) do
+    local e = bsMakeEnemy(sp.kind, sp.x, sp.y)
+    bsEnemies[#bsEnemies + 1] = e
+    e.entId = spawn({
+      group = "bsenemy",
+      pos = { x = sp.x, y = sp.y },
+      hitbox = { w = 14, h = 20, ox = -7, oy = -10 },
+      anchor_x = 0.5, anchor_y = 0.5,
+    })
+  end
+  bsZoneActive = true
+  bsZoneCleared = false
+end
+
+local function bsRebuildEnemyECS()
+  killAll("bsenemy")
+  for j, ee in ipairs(bsEnemies) do
+    if ee.state ~= "ko" then
+      ee.entId = spawn({
+        group = "bsenemy",
+        pos = { x = ee.x, y = ee.y },
+        hitbox = { w = 14, h = 20, ox = -7, oy = -10 },
+        anchor_x = 0.5, anchor_y = 0.5,
+      })
+    end
+  end
+end
+
+local function bsInit()
+  bsPlayer = {
+    x = 40, y = 180,
+    hp = 100, maxHp = 100,
+    vx = 0, vy = 0,
+    facing = 1,
+    state = "idle",
+    invincible = 60,
+  }
+  bsEnemies = {}
+  bsProjectiles = {}
+  bsFrame = 0
+  bsCamX = 0
+  bsZone = 1
+  bsZoneActive = false
+  bsZoneCleared = false
+  bsGoArrow = 0
+  bsWin = false
+  bsStageClear = false
+  bsStageClearTimer = 0
+  bsShakeTimer = 0
+  bsFreezeTimer = 0
+  bsScore = 0
+  bsFlashTimer = 0
+  bsComboCount = 0
+  bsComboWindow = 0
+  bsAttackTimer = 0
+  bsAttackType = ""
+  bsKickTimer = 0
+
+  killAll("bsenemy")
+  killAll("bsattack")
+  killAll("bsknife")
+
+  onCollide("bsattack", "bsenemy", "bs_hit")
+  onCollide("bsknife", "player", "bs_knife_hit")
+
+  -- Spawn first zone enemies
+  bsSpawnZone(1)
+end
+
+local function bsUpdate()
+  bsFrame = bsFrame + 1
+
+  -- Freeze frames (hit stop)
+  if bsFreezeTimer > 0 then
+    bsFreezeTimer = bsFreezeTimer - 1
+    return
+  end
+
+  if bsShakeTimer > 0 then bsShakeTimer = bsShakeTimer - 1 end
+  if bsFlashTimer > 0 then bsFlashTimer = bsFlashTimer - 1 end
+  if bsPlayer.invincible > 0 then bsPlayer.invincible = bsPlayer.invincible - 1 end
+
+  -- Stage clear state
+  if bsStageClear then
+    bsStageClearTimer = bsStageClearTimer + 1
+    return
+  end
+
+  -- Win/dead state
+  if bsWin or bsPlayer.hp <= 0 then return end
+
+  -- Combo window countdown
+  if bsComboWindow > 0 then bsComboWindow = bsComboWindow - 1 end
+  if bsComboWindow <= 0 then bsComboCount = 0 end
+  if bsAttackTimer > 0 then bsAttackTimer = bsAttackTimer - 1 end
+  if bsKickTimer > 0 then bsKickTimer = bsKickTimer - 1 end
+
+  -- Player movement
+  local dx = 0
+  local dy = 0
+  if btn("left") then dx = dx - 1; bsPlayer.facing = -1 end
+  if btn("right") then dx = dx + 1; bsPlayer.facing = 1 end
+  if btn("up") then dy = dy - 1 end
+  if btn("down") then dy = dy + 1 end
+
+  -- Normalize diagonal
+  if dx ~= 0 and dy ~= 0 then
+    dx = dx * 0.7071
+    dy = dy * 0.7071
+  end
+
+  bsPlayer.x = bsPlayer.x + dx * BS_WALK_SPEED
+  bsPlayer.y = bsPlayer.y + dy * BS_LANE_SPEED
+
+  -- Clamp player Y to lane area
+  if bsPlayer.y < BS_GROUND_Y then bsPlayer.y = BS_GROUND_Y end
+  if bsPlayer.y > BS_GROUND_BOTTOM then bsPlayer.y = BS_GROUND_BOTTOM end
+
+  -- Clamp player X to current zone boundaries when zone is active (enemies alive)
+  local curZone = BS_ZONES[bsZone]
+  if curZone then
+    if bsZoneActive and not bsZoneCleared then
+      -- Lock player within current zone
+      if bsPlayer.x < curZone.left + 8 then bsPlayer.x = curZone.left + 8 end
+      if bsPlayer.x > curZone.right - 8 then bsPlayer.x = curZone.right - 8 end
+    else
+      -- Free movement but don't go backwards past zone start
+      if bsPlayer.x < curZone.left then bsPlayer.x = curZone.left end
+      if bsPlayer.x > BS_LEVEL_W - 8 then bsPlayer.x = BS_LEVEL_W - 8 end
+    end
+  end
+
+  -- Walk bob animation
+  if dx ~= 0 or dy ~= 0 then
+    bsPlayer.state = "walk"
+  else
+    bsPlayer.state = "idle"
+  end
+
+  -- Override state with attack
+  if bsAttackTimer > 0 then
+    bsPlayer.state = bsAttackType
+  elseif bsKickTimer > 0 then
+    bsPlayer.state = "kick"
+  end
+
+  -- A = punch combo (within 10 frames = next combo step)
+  if btnp("a") and bsKickTimer <= 0 then
+    if bsComboWindow > 0 and bsComboCount < 3 then
+      bsComboCount = bsComboCount + 1
+    else
+      bsComboCount = 1
+    end
+    bsAttackTimer = 8
+    bsComboWindow = 10
+    if bsComboCount == 1 then
+      bsAttackType = "jab"
+      note(0, "C4", 0.04)
+    elseif bsComboCount == 2 then
+      bsAttackType = "cross"
+      note(0, "E4", 0.05)
+    else
+      bsAttackType = "uppercut"
+      note(0, "G4", 0.07)
+      bsShakeTimer = 4
+      cam_shake(3)
+    end
+
+    -- Spawn attack hitbox
+    killAll("bsattack")
+    local atkRange = bsComboCount == 3 and 22 or 14
+    local atkDmg = bsComboCount == 3 and 15 or 8
+    local atkX = bsPlayer.x + bsPlayer.facing * 12
+    spawn({
+      group = "bsattack",
+      pos = { x = atkX, y = bsPlayer.y },
+      hitbox = { w = atkRange, h = 16, ox = -atkRange / 2, oy = -8 },
+      anchor_x = 0.5, anchor_y = 0.5,
+      lifetime = 4,
+      dmg = atkDmg,
+    })
+  end
+
+  -- B = kick (wider hitbox, 15 frame cooldown)
+  if btnp("b") and bsAttackTimer <= 0 and bsKickTimer <= 0 then
+    bsKickTimer = 15
+    bsComboCount = 0
+    bsComboWindow = 0
+    note(0, "D4", 0.06)
+
+    killAll("bsattack")
+    local atkX = bsPlayer.x + bsPlayer.facing * 16
+    spawn({
+      group = "bsattack",
+      pos = { x = atkX, y = bsPlayer.y },
+      hitbox = { w = 26, h = 14, ox = -13, oy = -7 },
+      anchor_x = 0.5, anchor_y = 0.5,
+      lifetime = 5,
+      dmg = 10,
+    })
+  end
+
+  -- Poll attack-vs-enemy collisions
+  while true do
+    local hit = pollCollision()
+    if not hit then break end
+    if hit.tag == "bs_hit" then
+      for i, e in ipairs(bsEnemies) do
+        if e.state ~= "ko" and e.state ~= "stagger" then
+          local dist = abs(e.x - hit.bx) + abs(e.y - hit.by)
+          if dist < 40 then
+            local dmg = bsComboCount == 3 and 15 or (bsKickTimer > 0 and 10 or 8)
+            e.hp = e.hp - dmg
+            e.flashTimer = 6
+            bsFreezeTimer = 2  -- hit stop
+            bsFlashTimer = 3   -- screen flash
+            local kb = bsComboCount == 3 and 6 or 3
+            e.vx = bsPlayer.facing * kb
+            if e.hp <= 0 then
+              e.hp = 0
+              e.state = "ko"
+              e.koTimer = 60
+              e.vx = bsPlayer.facing * 5
+              note(1, "C3", 0.1)
+              cam_shake(4)
+              -- Score: grunt=100, knife=200, boss=500
+              if e.kind == "boss" then bsScore = bsScore + 500
+              elseif e.kind == "knife" then bsScore = bsScore + 200
+              else bsScore = bsScore + 100 end
+              note(2, "G5", 0.05)
+            else
+              e.state = "stagger"
+              e.staggerTimer = 20
+              note(1, "E5", 0.04)
+            end
+            break
+          end
+        end
+      end
+    end
+  end
+
+  -- Update projectiles (knife throws)
+  for i = #bsProjectiles, 1, -1 do
+    local p = bsProjectiles[i]
+    p.x = p.x + p.vx
+    p.life = p.life - 1
+    -- Hit player check
+    if bsPlayer.invincible <= 0 then
+      local pdx = abs(p.x - bsPlayer.x)
+      local pdy = abs(p.y - bsPlayer.y)
+      if pdx < 12 and pdy < 12 then
+        bsPlayer.hp = bsPlayer.hp - 3
+        bsPlayer.invincible = 30
+        note(0, "E3", 0.06)
+        cam_shake(2)
+        bsFlashTimer = 2
+        if bsPlayer.hp < 0 then bsPlayer.hp = 0 end
+        p.life = 0
+      end
+    end
+    if p.life <= 0 then
+      table.remove(bsProjectiles, i)
+    end
+  end
+
+  -- Update enemies
+  local aliveCount = 0
+  local needRebuild = false
+  for i = #bsEnemies, 1, -1 do
+    local e = bsEnemies[i]
+
+    if e.state == "ko" then
+      e.koTimer = e.koTimer - 1
+      e.x = e.x + e.vx * 0.8
+      e.vx = e.vx * 0.9
+      if e.koTimer <= 0 then
+        if e.entId then kill(e.entId) end
+        table.remove(bsEnemies, i)
+        needRebuild = true
+      end
+    elseif e.state == "stagger" then
+      aliveCount = aliveCount + 1
+      e.staggerTimer = e.staggerTimer - 1
+      e.x = e.x + e.vx
+      e.vx = e.vx * 0.85
+      if e.staggerTimer <= 0 then
+        e.state = "walk"
+        e.vx = 0
+      end
+    else
+      aliveCount = aliveCount + 1
+      local pdx = bsPlayer.x - e.x
+      local pdy = bsPlayer.y - e.y
+      local pdist = math.sqrt(pdx * pdx + pdy * pdy)
+      if pdist < 1 then pdist = 1 end
+      e.facing = pdx > 0 and 1 or -1
+
+      if e.attackCooldown > 0 then e.attackCooldown = e.attackCooldown - 1 end
+      if e.throwCooldown > 0 then e.throwCooldown = e.throwCooldown - 1 end
+
+      if e.kind == "knife" then
+        -- Knife thrower: maintain ~100px distance, throw every 90 frames
+        local idealDist = 100
+        if pdist < idealDist - 20 then
+          -- Back away
+          e.state = "walk"
+          e.x = e.x - (pdx / pdist) * e.speed * 0.5
+          e.y = e.y - (pdy / pdist) * e.speed * 0.3
+        elseif pdist > idealDist + 20 then
+          -- Move closer
+          e.state = "walk"
+          e.x = e.x + (pdx / pdist) * e.speed
+          e.y = e.y + (pdy / pdist) * e.speed * 0.7
+        else
+          e.state = "idle"
+        end
+        -- Throw knife
+        if e.throwCooldown <= 0 then
+          e.throwCooldown = 90
+          e.state = "attack"
+          e.attackTimer = 10
+          note(0, "A4", 0.03)
+          bsProjectiles[#bsProjectiles + 1] = {
+            x = e.x + e.facing * 10,
+            y = e.y,
+            vx = e.facing * 3,
+            life = 120,
+          }
+        end
+      elseif e.kind == "boss" then
+        -- Boss: faster, attacks at 25px range
+        if pdist < e.atkRange and e.attackCooldown <= 0 then
+          e.state = "attack"
+          e.attackTimer = 15
+          e.attackCooldown = 30 + flr(rnd(15))
+          if bsPlayer.invincible <= 0 then
+            bsPlayer.hp = bsPlayer.hp - e.atkDmg
+            bsPlayer.invincible = 30
+            note(0, "C3", 0.08)
+            cam_shake(3)
+            bsFlashTimer = 2
+            if bsPlayer.hp < 0 then bsPlayer.hp = 0 end
+          end
+        elseif pdist > e.atkRange + 5 then
+          e.state = "walk"
+          e.x = e.x + (pdx / pdist) * e.speed
+          e.y = e.y + (pdy / pdist) * e.speed * 0.7
+        else
+          e.state = "idle"
+        end
+      else
+        -- Grunt: walk toward player at speed 1, attack at 20px
+        if pdist < e.atkRange and e.attackCooldown <= 0 then
+          e.state = "attack"
+          e.attackTimer = 15
+          e.attackCooldown = 40 + flr(rnd(20))
+          if bsPlayer.invincible <= 0 then
+            bsPlayer.hp = bsPlayer.hp - e.atkDmg
+            bsPlayer.invincible = 30
+            note(0, "C3", 0.08)
+            cam_shake(2)
+            bsFlashTimer = 2
+            if bsPlayer.hp < 0 then bsPlayer.hp = 0 end
+          end
+        elseif pdist > e.atkRange + 4 then
+          e.state = "walk"
+          e.x = e.x + (pdx / pdist) * e.speed
+          e.y = e.y + (pdy / pdist) * e.speed * 0.7
+        else
+          e.state = "idle"
+        end
+      end
+
+      if e.attackTimer > 0 then
+        e.attackTimer = e.attackTimer - 1
+        e.state = "attack"
+      end
+
+      -- Clamp enemy Y to lanes
+      if e.y < BS_GROUND_Y then e.y = BS_GROUND_Y end
+      if e.y > BS_GROUND_BOTTOM then e.y = BS_GROUND_BOTTOM end
+
+      needRebuild = true
+    end
+
+    if e.flashTimer > 0 then e.flashTimer = e.flashTimer - 1 end
+  end
+
+  -- Rebuild ECS entities once per frame if needed
+  if needRebuild then
+    bsRebuildEnemyECS()
+  end
+
+  -- Check zone completion
+  if bsZoneActive and aliveCount == 0 then
+    bsZoneCleared = true
+    if bsZone >= #BS_ZONES then
+      -- All zones done
+      bsStageClear = true
+      bsStageClearTimer = 0
+      note(0, "C5", 0.1)
+      note(1, "E5", 0.1)
+      note(2, "G5", 0.1)
+    end
+  end
+
+  -- Advance to next zone when player walks right past zone boundary
+  if bsZoneCleared and not bsStageClear then
+    bsGoArrow = bsGoArrow + 1
+    if bsPlayer.x > BS_ZONES[bsZone].right - 20 then
+      bsZone = bsZone + 1
+      bsZoneActive = false
+      bsZoneCleared = false
+      bsGoArrow = 0
+      -- Spawn next zone enemies
+      if bsZone <= #BS_ZONES then
+        bsSpawnZone(bsZone)
+      end
+    end
+  end
+
+  -- Camera follows player horizontally, clamped to zone when active
+  local targetCamX = bsPlayer.x - W / 3
+  if curZone then
+    if bsZoneActive and not bsZoneCleared then
+      -- Lock camera to current zone
+      if targetCamX < curZone.left then targetCamX = curZone.left end
+      if targetCamX > curZone.right - W then targetCamX = curZone.right - W end
+    end
+  end
+  if targetCamX < 0 then targetCamX = 0 end
+  if targetCamX > BS_LEVEL_W - W then targetCamX = BS_LEVEL_W - W end
+  bsCamX = bsCamX + (targetCamX - bsCamX) * 0.12
+  cam(flr(bsCamX), 0)
+end
+
+local function bsDrawBackground()
+  -- Sky
+  rectf(0, 0, BS_LEVEL_W, 100, 0)
+
+  -- Buildings silhouette (background layer)
+  for bx = 0, BS_LEVEL_W - 1, 48 do
+    local bh = 30 + flr(rnd(30))
+    rectf(bx, 100 - bh, 40, bh, 1)
+    for wy = 100 - bh + 4, 96, 8 do
+      for wx = bx + 4, bx + 36, 10 do
+        if rnd(1) > 0.4 then
+          rectf(wx, wy, 4, 4, 2)
+        end
+      end
+    end
+  end
+
+  -- Street / ground
+  rectf(0, 100, BS_LEVEL_W, 20, 1)
+  rectf(0, 120, BS_LEVEL_W, 120, 1)
+  -- Road markings
+  for lx = 0, BS_LEVEL_W - 1, 40 do
+    rectf(lx, 108, 20, 2, 2)
+  end
+  rectf(0, 120, BS_LEVEL_W, 2, 2)
+
+  -- Zone boundary indicators (subtle vertical lines)
+  for z = 2, #BS_ZONES do
+    local zx = BS_ZONES[z].left
+    line(zx, 100, zx, BS_LEVEL_H, 1)
+  end
+end
+
+local function bsDraw()
+  cls(0)
+
+  -- Screen flash on hit
+  if bsFlashTimer > 0 then
+    cls(3)
+  end
+
+  bsDrawBackground()
+
+  -- Draw projectiles (knives)
+  for _, p in ipairs(bsProjectiles) do
+    -- Small knife sprite: a line with a dot
+    local kx = flr(p.x)
+    local ky = flr(p.y)
+    line(kx - 4, ky, kx + 4, ky, 3)
+    rectf(kx - 1, ky - 1, 3, 3, 2)
+  end
+
+  -- Collect all drawables and sort by Y for z-ordering
+  local drawList = {}
+
+  drawList[#drawList + 1] = {
+    y = bsPlayer.y, kind = "player",
+  }
+
+  for i, e in ipairs(bsEnemies) do
+    drawList[#drawList + 1] = {
+      y = e.y, kind = "enemy", idx = i,
+    }
+  end
+
+  table.sort(drawList, function(a, b) return a.y < b.y end)
+
+  for _, d in ipairs(drawList) do
+    if d.kind == "player" then
+      local p = bsPlayer
+      -- Shadow
+      circf(flr(p.x), flr(p.y) + 8, 7, 1)
+
+      -- Walk bob
+      local bob = 0
+      if p.state == "walk" then
+        bob = flr(math.sin(bsFrame * 0.3) * 2)
+      end
+
+      local sprName = "hero_idle"
+      if p.state == "walk" then sprName = "hero_walk"
+      elseif p.state == "jab" or p.state == "cross" or p.state == "uppercut" then sprName = "hero_punch"
+      elseif p.state == "kick" then sprName = "hero_kick"
+      end
+
+      local flipX = (p.facing < 0)
+
+      if p.invincible <= 0 or flr(p.invincible / 2) % 2 == 0 then
+        sprT(sprite_id(sprName), flr(p.x) - 8, flr(p.y) - 8 + bob, flipX, false)
+      end
+
+      -- Punch/kick visual effects
+      if bsAttackTimer > 0 then
+        local fx = p.x + p.facing * 18
+        local fy = p.y - 2
+        if bsComboCount == 3 then
+          circf(flr(fx), flr(fy) - 4, 6, 3)
+          circf(flr(fx), flr(fy) - 4, 4, 2)
+        else
+          circf(flr(fx), flr(fy), 4, 3)
+        end
+      end
+      if bsKickTimer > 0 then
+        local fx = p.x + p.facing * 22
+        line(flr(p.x) + p.facing * 8, flr(p.y), flr(fx), flr(p.y) - 2, 3)
+        circf(flr(fx), flr(p.y) - 1, 3, 2)
+      end
+
+    elseif d.kind == "enemy" then
+      local e = bsEnemies[d.idx]
+      if e then
+        -- Shadow
+        local shadowR = e.kind == "boss" and 9 or 7
+        circf(flr(e.x), flr(e.y) + 8, shadowR, 1)
+
+        -- Walk bob
+        local bob = 0
+        if e.state == "walk" then
+          bob = flr(math.sin(bsFrame * 0.25 + d.idx) * 2)
+        end
+
+        local sprName = "thug_idle"
+        if e.state == "walk" then sprName = "thug_walk"
+        elseif e.state == "stagger" or e.state == "ko" then sprName = "thug_hit"
+        end
+
+        local flipX = (e.facing < 0)
+
+        -- Flash when hit (skip draw frames)
+        if e.flashTimer > 0 and flr(e.flashTimer / 2) % 2 == 0 then
+          -- skip frame for flash effect
+        else
+          if e.state == "ko" then
+            local koOff = (60 - e.koTimer)
+            if koOff > 8 then koOff = 8 end
+            sprT(sprite_id(sprName), flr(e.x) - 8, flr(e.y) - 8 + koOff, flipX, false)
+          else
+            sprT(sprite_id(sprName), flr(e.x) - 8, flr(e.y) - 8 + bob, flipX, false)
+          end
+        end
+
+        -- Boss: draw bigger outline to distinguish
+        if e.kind == "boss" and e.state ~= "ko" then
+          rect(flr(e.x) - 9, flr(e.y) - 9 + bob, 18, 18, 3)
+        end
+
+        -- Knife thrower: small indicator
+        if e.kind == "knife" and e.state ~= "ko" then
+          rectf(flr(e.x) + e.facing * 8, flr(e.y) - 2, 3, 6, 2)
+        end
+
+        -- HP bar above enemy (only if alive)
+        if e.state ~= "ko" then
+          local barW = e.kind == "boss" and 30 or 20
+          local barX = flr(e.x) - barW / 2
+          local barY = flr(e.y) - 14
+          rectf(barX, barY, barW, 3, 1)
+          local hpW = flr(barW * e.hp / e.maxHp)
+          if hpW > 0 then
+            local barCol = e.kind == "boss" and 3 or 2
+            rectf(barX, barY, hpW, 3, barCol)
+          end
+        end
+      end
+    end
+  end
+
+  -- "GO ->" arrow when zone cleared
+  if bsZoneCleared and not bsStageClear then
+    if flr(bsGoArrow / 15) % 2 == 0 then
+      -- Draw in world space (affected by cam)
+      local arrowX = BS_ZONES[bsZone].right - 40
+      text("GO ->", arrowX, 100, 3)
+    end
+  end
+
+  -- Stage clear overlay
+  if bsStageClear then
+    -- These use text() which is screen-space
+    text("STAGE CLEAR!", W / 2 - 36, 60, 3)
+    text("SCORE: " .. bsScore, W / 2 - 30, 80, 2)
+    if bsStageClearTimer > 120 then
+      text("PRESS START FOR MENU", W / 2 - 56, 100, 1)
+    end
+  end
+
+  -- Dead overlay
+  if bsPlayer.hp <= 0 then
+    text("GAME OVER", W / 2 - 28, 60, 3)
+    text("SCORE: " .. bsScore, W / 2 - 30, 80, 2)
+  end
+
+  -- HUD (text is screen space, not affected by cam)
+  -- For rectf-based HUD elements, save and reset camera
+  local cx, cy = cam_get()
+  cam(0, 0)
+
+  -- Player HP bar
+  rectf(4, 4, 80, 8, 1)
+  local hpW = flr(80 * bsPlayer.hp / bsPlayer.maxHp)
+  if hpW > 0 then
+    rectf(4, 4, hpW, 8, 3)
+  end
+  rect(4, 4, 80, 8, 2)
+
+  cam(cx, cy)
+
+  -- Text HUD (screen space, no cam reset needed)
+  text("HP", 86, 5, 3)
+  text("SINGLE DRAGON", 4, 16, 3)
+  text("ZONE:" .. bsZone .. "/" .. #BS_ZONES, 4, 26, 2)
+  text("SCORE:" .. bsScore, W - 80, 4, 2)
+
+  -- Combo indicator
+  if bsComboCount > 0 and bsComboWindow > 0 then
+    local comboNames = {"JAB", "CROSS", "UPPER!"}
+    text(comboNames[bsComboCount], W / 2 - 16, 30, 3)
+  end
+
+  -- Enemy count
+  local alive = 0
+  for _, e in ipairs(bsEnemies) do
+    if e.state ~= "ko" then alive = alive + 1 end
+  end
+  text("ENEMIES:" .. alive, W - 80, 14, 2)
+
+  text("[A]PUNCH [B]KICK [START]MENU", 4, H - 10, 1)
+  drawInputMonitor()
+end
+
+---------------------------------------------------------------
 -- MENU HELPERS
 ---------------------------------------------------------------
 local function enterMode(mode)
@@ -1808,6 +2699,9 @@ local function enterMode(mode)
   killAll("particle")
   killAll("player")
   killAll("npc")
+  killAll("bsenemy")
+  killAll("bsattack")
+  killAll("bsknife")
   bgm_stop()
   cam_reset()
 
@@ -1825,6 +2719,8 @@ local function enterMode(mode)
     tilemapInit()
   elseif mode == MODE_RPG then
     rpgInit()
+  elseif mode == MODE_BELTSCROLL then
+    bsInit()
   end
 end
 
@@ -1952,6 +2848,8 @@ function play_update()
       tilemapUpdate()
     elseif currentMode == MODE_RPG then
       rpgUpdate()
+    elseif currentMode == MODE_BELTSCROLL then
+      bsUpdate()
     end
   end
 end
@@ -1973,6 +2871,7 @@ function play_draw()
       "Play notes + toggle BGM",
       "20x15 tile grid - mget/mset/map test",
       "Dungeon RPG - cam+ECS+tween+z-order",
+      "Belt-scroll beat-em-up brawler",
     }
 
     for i = 1, #menuItems do
@@ -2010,6 +2909,8 @@ function play_draw()
     tilemapDraw()
   elseif currentMode == MODE_RPG then
     rpgDraw()
+  elseif currentMode == MODE_BELTSCROLL then
+    bsDraw()
   end
 end
 
