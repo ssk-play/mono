@@ -613,12 +613,19 @@ local function cameraDraw()
 end
 
 ---------------------------------------------------------------
--- SPRITES TEST STATE
+-- SPRITES GALLERY STATE
 ---------------------------------------------------------------
-local sprTestAngle: number = 0
+local sprNames = { "ship", "bullet", "enemy_a1", "enemy_a2", "enemy_b", "particle", "star", "star2" }
+local sprCursor: number = 0
+local sprAngle: number = 0
+local sprFlipX: boolean = false
+local sprFlipY: boolean = false
 
 local function spritesInit()
-  sprTestAngle = 0
+  sprCursor = 0
+  sprAngle = 0
+  sprFlipX = false
+  sprFlipY = false
 end
 
 local function spritesUpdate()
@@ -626,50 +633,93 @@ local function spritesUpdate()
     currentMode = MODE_MENU
     return
   end
-  sprTestAngle = sprTestAngle + 0.05
+  -- Navigate
+  if btnp("left") then
+    sprCursor = sprCursor - 1
+    if sprCursor < 0 then sprCursor = #sprNames - 1 end
+    sprAngle = 0
+    sprFlipX = false
+    sprFlipY = false
+    note(0, "G5", 0.03)
+  end
+  if btnp("right") then
+    sprCursor = sprCursor + 1
+    if sprCursor >= #sprNames then sprCursor = 0 end
+    sprAngle = 0
+    sprFlipX = false
+    sprFlipY = false
+    note(0, "G5", 0.03)
+  end
+  -- Rotate with up/down
+  if btn("up") then sprAngle = sprAngle + 0.05 end
+  if btn("down") then sprAngle = sprAngle - 0.05 end
+  -- Toggle flip with A
+  if btnp("a") then
+    sprFlipX = not sprFlipX
+    note(0, "E5", 0.03)
+  end
 end
 
 local function spritesDraw()
   cls(0)
   text("SPRITE GALLERY", 100, 4, 3)
 
-  local names = { "ship", "bullet", "enemy_a1", "enemy_a2", "enemy_b", "particle", "star", "star2" }
-  local cols: number = 4
-  local startX: number = 30
-  local startY: number = 30
-  local cellW: number = 70
-  local cellH: number = 50
+  -- Thumbnail strip
+  local cols: number = #sprNames
+  local thumbSize: number = 24
+  local stripX: number = flr((W - cols * thumbSize) / 2)
+  local stripY: number = 22
 
-  for idx = 1, #names do
-    local name: string = names[idx]
-    local sid: number = sprite_id(name)
-    local col: number = (idx - 1) % cols
-    local row: number = flr((idx - 1) / cols)
-    local cx: number = startX + col * cellW
-    local cy: number = startY + row * cellH
+  for idx = 1, #sprNames do
+    local sid: number = sprite_id(sprNames[idx])
+    local tx: number = stripX + (idx - 1) * thumbSize
+    local selected: boolean = (sprCursor == idx - 1)
 
-    -- Background cell
-    rect(cx - 2, cy - 2, cellW - 4, cellH - 4, 1)
-
-    -- Sprite name
-    text(name, cx, cy + cellH - 16, 2)
-
-    -- Draw normal sprite
-    sprT(sid, cx + 8, cy + 4)
+    if selected then
+      rectf(tx - 1, stripY - 1, thumbSize, thumbSize, 1)
+      rect(tx - 2, stripY - 2, thumbSize + 2, thumbSize + 2, 3)
+    end
+    sprT(sid, tx + 4, stripY + 4)
   end
 
-  -- Rotating demo section
-  local demoY: number = startY + 2 * cellH + 20
-  text("sprT (normal)", 30, demoY, 2)
-  local demoSpr: number = sprite_id("enemy_b")
-  sprT(demoSpr, 140, demoY - 4)
+  -- Selected sprite info
+  local selName: string = sprNames[sprCursor + 1]
+  local selId: number = sprite_id(selName)
 
-  text("sprRot (rotating)", 30, demoY + 30, 2)
-  sprRot(demoSpr, 156, demoY + 34, sprTestAngle)
+  -- Large preview area
+  local pvX: number = W / 2
+  local pvY: number = 110
 
-  text("Angle: " .. tostring(flr(sprTestAngle * 100) / 100), 190, demoY + 30, 1)
+  -- Background box
+  rectf(pvX - 40, pvY - 40, 80, 80, 1)
+  rect(pvX - 41, pvY - 41, 82, 82, 2)
 
-  text("[B] MENU", 4, H - 10, 1)
+  -- Normal (top-left of preview)
+  text("NORMAL", pvX - 80, pvY - 36, 2)
+  sprT(selId, pvX - 76, pvY - 26)
+
+  -- Flipped
+  text("FLIP-X", pvX - 80, pvY - 4, 2)
+  sprT(selId, pvX - 76, pvY + 6, sprFlipX, sprFlipY)
+
+  -- Rotated (center of preview)
+  sprRot(selId, pvX, pvY, sprAngle)
+
+  -- Flip indicator
+  local flipLabel: string = "FLIP:"
+  if sprFlipX then flipLabel = flipLabel .. " X" end
+  if sprFlipY then flipLabel = flipLabel .. " Y" end
+  if not sprFlipX and not sprFlipY then flipLabel = flipLabel .. " NONE" end
+
+  -- Info panel
+  text(selName, pvX - 40, pvY + 46, 3)
+  text("ID: " .. tostring(selId), pvX - 40, pvY + 56, 2)
+  text("ANGLE: " .. tostring(flr(sprAngle * 100) / 100), pvX - 40, pvY + 66, 2)
+  text(flipLabel, pvX - 40, pvY + 76, 2)
+
+  -- Controls
+  text("LR:SELECT  UD:ROTATE  A:FLIP", 30, H - 20, 1)
+  text("[START] MENU", 4, H - 10, 1)
   drawInputMonitor()
 end
 
