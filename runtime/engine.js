@@ -658,10 +658,14 @@ const Mono = (() => {
   function ecsHitbox(e) {
     if (!e.pos || !e.hitbox) return null;
     const hb = e.hitbox;
+    const ax = e.anchor_x !== undefined ? e.anchor_x : 0;
+    const ay = e.anchor_y !== undefined ? e.anchor_y : 0;
     if (hb.type === "circle") {
       return { type: "c", cx: e.pos.x + (hb.ox || 0), cy: e.pos.y + (hb.oy || 0), r: hb.r };
     } else {
-      const ox = hb.ox || 0, oy = hb.oy || 0;
+      // Center hitbox on pos when anchor is 0.5
+      const ox = hb.ox !== undefined ? hb.ox : -(hb.w * ax);
+      const oy = hb.oy !== undefined ? hb.oy : -(hb.h * ay);
       return { type: "r", x: e.pos.x + ox, y: e.pos.y + oy, w: hb.w, h: hb.h };
     }
   }
