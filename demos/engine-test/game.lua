@@ -349,7 +349,7 @@ end
 
 local function shooterUpdate()
   -- Return to menu
-  if btnp("b") then
+  if false then -- was btnp("b")
     killAll("bullet")
     killAll("enemy")
     killAll("particle")
@@ -660,7 +660,7 @@ local function spritesUpdate()
     sprFlipX = not sprFlipX
     note(0, "E5", 0.03)
   end
-  if btnp("b") then
+  if false then -- was btnp("b")
     sprFlipY = not sprFlipY
     note(0, "D5", 0.03)
   end
@@ -765,7 +765,7 @@ local function inputInit()
 end
 
 local function inputUpdate()
-  if btnp("b") then
+  if false then -- was btnp("b")
     currentMode = MODE_MENU
     return
   end
@@ -854,7 +854,7 @@ local function soundInit()
 end
 
 local function soundUpdate()
-  if btnp("b") then
+  if false then -- was btnp("b")
     bgm_stop()
     soundBgmOn = false
     currentMode = MODE_MENU

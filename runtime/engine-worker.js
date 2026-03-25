@@ -739,13 +739,24 @@ function buildLuaGlobals() {
     frame: () => frameCount,
     overlap,
     spawn: (components) => {
-      // luau-web returns Proxy objects that may not support Object.entries/keys
-      // Use a deep-clone via JSON roundtrip to get plain JS objects
+      // luau-web tables: log what we receive to understand the type
+      if (frameCount < 5) {
+        try {
+          const t = typeof components;
+          const ctor = components && components.constructor && components.constructor.name;
+          const keys = Object.keys(components);
+          const keysIn = []; for (const k in components) keysIn.push(k);
+          const json = JSON.stringify(components);
+          postMessage({type:"log", msg:"spawn: type=" + t + " ctor=" + ctor + " keys=" + keys.length + " forin=" + keysIn.length + " json=" + (json ? json.substring(0, 100) : "null")});
+        } catch(e) {
+          postMessage({type:"log", msg:"spawn inspect err: " + e.message});
+        }
+      }
+      // Try JSON roundtrip
       let obj;
       try {
         obj = JSON.parse(JSON.stringify(components));
       } catch(e) {
-        // Fallback: manual for-in copy
         obj = {};
         for (const k in components) {
           const v = components[k];
@@ -757,6 +768,9 @@ function buildLuaGlobals() {
             obj[k] = v;
           }
         }
+      }
+      if (frameCount < 5) {
+        postMessage({type:"log", msg:"spawn result: " + JSON.stringify(obj).substring(0, 200)});
       }
       return ecsSpawn(obj);
     },
