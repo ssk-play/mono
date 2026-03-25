@@ -262,6 +262,9 @@ end
 
 function title_update()
   titleBlink = titleBlink + 1
+  if btnp("a") or btnp("start") then
+    go("play")
+  end
 end
 
 function title_draw()
