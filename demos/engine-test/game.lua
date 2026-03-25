@@ -615,27 +615,23 @@ end
 ---------------------------------------------------------------
 local sprNames = { "ship", "bullet", "enemy_a1", "enemy_a2", "enemy_b", "particle", "star", "star2" }
 local sprCursor: number = 0
-local sprAngle: number = 0
 local sprFlipX: boolean = false
 local sprFlipY: boolean = false
+local sprTimer: number = 0
 
 local function spritesInit()
   sprCursor = 0
-  sprAngle = 0
   sprFlipX = false
   sprFlipY = false
+  sprTimer = 0
 end
 
 local function spritesUpdate()
-  if btnp("b") then
-    currentMode = MODE_MENU
-    return
-  end
+  sprTimer = sprTimer + 1
   -- Navigate
   if btnp("left") then
     sprCursor = sprCursor - 1
     if sprCursor < 0 then sprCursor = #sprNames - 1 end
-    sprAngle = 0
     sprFlipX = false
     sprFlipY = false
     note(0, "G5", 0.03)
@@ -643,18 +639,18 @@ local function spritesUpdate()
   if btnp("right") then
     sprCursor = sprCursor + 1
     if sprCursor >= #sprNames then sprCursor = 0 end
-    sprAngle = 0
     sprFlipX = false
     sprFlipY = false
     note(0, "G5", 0.03)
   end
-  -- Rotate with up/down
-  if btn("up") then sprAngle = sprAngle + 0.05 end
-  if btn("down") then sprAngle = sprAngle - 0.05 end
-  -- Toggle flip with A
+  -- Toggle flip
   if btnp("a") then
     sprFlipX = not sprFlipX
     note(0, "E5", 0.03)
+  end
+  if btnp("b") then
+    sprFlipY = not sprFlipY
+    note(0, "D5", 0.03)
   end
 end
 
@@ -663,60 +659,93 @@ local function spritesDraw()
   text("SPRITE GALLERY", 100, 4, 3)
 
   -- Thumbnail strip
-  local cols: number = #sprNames
-  local thumbSize: number = 24
-  local stripX: number = flr((W - cols * thumbSize) / 2)
-  local stripY: number = 22
+  local thumbSize: number = 28
+  local stripX: number = flr((W - #sprNames * thumbSize) / 2)
+  local stripY: number = 20
 
   for idx = 1, #sprNames do
     local sid: number = sprite_id(sprNames[idx])
     local tx: number = stripX + (idx - 1) * thumbSize
     local selected: boolean = (sprCursor == idx - 1)
 
+    -- Cell background
     if selected then
-      rectf(tx - 1, stripY - 1, thumbSize, thumbSize, 1)
-      rect(tx - 2, stripY - 2, thumbSize + 2, thumbSize + 2, 3)
+      rectf(tx, stripY, thumbSize - 2, thumbSize - 2, 1)
+      rect(tx - 1, stripY - 1, thumbSize, thumbSize, 3)
+    else
+      rect(tx, stripY, thumbSize - 2, thumbSize - 2, 1)
     end
-    sprT(sid, tx + 4, stripY + 4)
+    sprT(sid, tx + 5, stripY + 5)
   end
 
-  -- Selected sprite info
   local selName: string = sprNames[sprCursor + 1]
   local selId: number = sprite_id(selName)
 
-  -- Large preview area
-  local pvX: number = W / 2
-  local pvY: number = 110
+  -- === Main preview: large center with flip applied ===
+  local pvCX: number = W / 2
+  local pvCY: number = 105
 
-  -- Background box
-  rectf(pvX - 40, pvY - 40, 80, 80, 1)
-  rect(pvX - 41, pvY - 41, 82, 82, 2)
+  -- Preview background
+  rectf(pvCX - 30, pvCY - 30, 60, 60, 1)
+  rect(pvCX - 31, pvCY - 31, 62, 62, 2)
 
-  -- Normal (top-left of preview)
-  text("NORMAL", pvX - 80, pvY - 36, 2)
-  sprT(selId, pvX - 76, pvY - 26)
+  -- Draw with current flip state
+  sprT(selId, pvCX - 8, pvCY - 8, sprFlipX, sprFlipY)
 
-  -- Flipped
-  text("FLIP-X", pvX - 80, pvY - 4, 2)
-  sprT(selId, pvX - 76, pvY + 6, sprFlipX, sprFlipY)
+  -- Label
+  text(selName, pvCX - flr(#selName * 5 / 2), pvCY + 36, 3)
 
-  -- Rotated (center of preview)
-  sprRot(selId, pvX, pvY, sprAngle)
+  -- === Animated demos (right side) ===
+  local demoX: number = 250
 
-  -- Flip indicator
+  -- 1. Auto-rotation
+  text("ROTATE", demoX - 8, 58, 2)
+  local autoAngle: number = sprTimer * 0.06
+  sprRot(selId, demoX + 8, 82, autoAngle)
+
+  -- 2. Bounce scale (pulse via offset)
+  text("PULSE", demoX - 6, 105, 2)
+  local pulse: number = math.sin(sprTimer * 0.12) * 3
+  local px: number = flr(demoX + 8 - pulse / 2)
+  local py: number = flr(125 - pulse / 2)
+  -- Draw sprite centered, offset by pulse
+  sprT(selId, px - 8, py - 8)
+  -- Bounding circle to show pulse
+  circ(demoX + 8, 125, flr(10 + pulse), 2)
+
+  -- 3. Flip animation (alternating flip-x every 15 frames)
+  text("FLIP", demoX - 4, 148, 2)
+  local flipPhase: boolean = (flr(sprTimer / 15) % 2 == 1)
+  sprT(selId, demoX, 162, flipPhase, false)
+
+  -- === Static demos (left side) ===
+  local leftX: number = 20
+
+  -- Normal
+  text("NORMAL", leftX, 58, 2)
+  sprT(selId, leftX + 2, 68)
+
+  -- Flip-X
+  text("FLIP-X", leftX, 92, 2)
+  sprT(selId, leftX + 2, 102, true, false)
+
+  -- Flip-Y
+  text("FLIP-Y", leftX, 126, 2)
+  sprT(selId, leftX + 2, 136, false, true)
+
+  -- Both
+  text("BOTH", leftX, 160, 2)
+  sprT(selId, leftX + 2, 170, true, true)
+
+  -- === Flip state indicator ===
   local flipLabel: string = "FLIP:"
   if sprFlipX then flipLabel = flipLabel .. " X" end
   if sprFlipY then flipLabel = flipLabel .. " Y" end
-  if not sprFlipX and not sprFlipY then flipLabel = flipLabel .. " NONE" end
-
-  -- Info panel
-  text(selName, pvX - 40, pvY + 46, 3)
-  text("ID: " .. tostring(selId), pvX - 40, pvY + 56, 2)
-  text("ANGLE: " .. tostring(flr(sprAngle * 100) / 100), pvX - 40, pvY + 66, 2)
-  text(flipLabel, pvX - 40, pvY + 76, 2)
+  if not sprFlipX and not sprFlipY then flipLabel = flipLabel .. " -" end
+  text(flipLabel, pvCX - 20, pvCY + 46, 2)
 
   -- Controls
-  text("LR:SELECT  UD:ROTATE  A:FLIP", 30, H - 20, 1)
+  text("LR:SEL A:FLIPX B:FLIPY UD:ROT", 20, H - 20, 1)
   text("[START] MENU", 4, H - 10, 1)
   drawInputMonitor()
 end
