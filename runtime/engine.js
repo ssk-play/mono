@@ -1054,9 +1054,9 @@ const Mono = (() => {
       const hasDraw = luaIsFunction(name + "_draw");
       if (hasUpdate || hasDraw) {
         scenes[name] = {
-          init: hasInit ? () => { try { lua.doString(name + "_init()"); } catch(e) { console.error("Mono: init err[" + name + "]:", e.message); } } : null,
-          update: hasUpdate ? () => { try { lua.doString(name + "_update()"); } catch(e) { console.error("Mono: update err[" + name + "]:", e.message); } } : null,
-          draw: hasDraw ? () => { try { lua.doString(name + "_draw()"); } catch(e) { console.error("Mono: draw err[" + name + "]:", e.message); } } : null,
+          init: hasInit ? () => { try { lua.doString(name + "_init()"); } catch(e) { if(!window._merr)window._merr=[]; window._merr.push("init["+name+"]:"+e.message); } } : null,
+          update: hasUpdate ? () => { try { lua.doString(name + "_update()"); } catch(e) { if(!window._merr)window._merr=[]; if(window._merr.length<20)window._merr.push("upd["+name+"]:"+e.message); } } : null,
+          draw: hasDraw ? () => { try { lua.doString(name + "_draw()"); } catch(e) { if(!window._merr)window._merr=[]; if(window._merr.length<20)window._merr.push("draw["+name+"]:"+e.message); } } : null,
         };
       }
     }

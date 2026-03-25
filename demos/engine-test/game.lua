@@ -292,15 +292,7 @@ local function spawnExplosion(x, y)
   for i = 1, count do
     local angle = rnd(6.28)
     local speed = rnd(2.5) + 0.5
-    spawn({
-      group = "particle",
-      pos = { x = x, y = y },
-      vel = { x = speed * math.cos(angle), y = speed * math.sin(angle) - 1.5 },
-      gravity = 0.1,
-      lifetime = flr(rnd(10)) + 15,
-      sprite = partId,
-      offscreen = true,
-    })
+    _spawnRaw("particle", x, y, speed * math.cos(angle), speed * math.sin(angle) - 1.5, partId, nil, nil, nil, nil, nil, 0.1, flr(rnd(10)) + 15, true, nil)
   end
   note(1, "C5", 0.06)
 end
@@ -325,10 +317,7 @@ local function shooterInit()
   onCollide("bullet", "enemy", "bullet_enemy")
   onCollide("player", "enemy", "player_enemy")
 
-  bgm({
-    "E4 . G4 . A4 . G4 . E4 . D4 . E4 . G4 . A4 . B4 . A4 . G4 . E4 . D4 . C4 . D4 .",
-    "C3 - - - E3 - - - A2 - - - E3 - - - C3 - - - G2 - - - A2 - - - E3 - - -",
-  }, 180, true)
+  -- bgm disabled for testing
 end
 
 local function shooterUpdate()
@@ -396,14 +385,7 @@ local function shooterUpdate()
   end
   if btn("a") and shootCooldown <= 0 and ecount("bullet") < MAX_BULLETS then
     local bulletId = sprite_id("bullet")
-    spawn({
-      group = "bullet",
-      pos = { x = playerX + 5, y = playerY - 4 },
-      vel = { x = 0, y = BULLET_SPEED },
-      sprite = bulletId,
-      hitbox = { r = 3, ox = 3, oy = 2 },
-      offscreen = true,
-    })
+    _spawnRaw("bullet", playerX + 5, playerY - 4, 0, BULLET_SPEED, bulletId, "c", 3, 3, 2, nil, nil, nil, true, nil)
     shootCooldown = 6
     note(0, "A5", 0.03)
   end
@@ -420,39 +402,13 @@ local function shooterUpdate()
     if etype == 0 then
       local ea1 = sprite_id("enemy_a1")
       local ea2 = sprite_id("enemy_a2")
-      spawn({
-        group = "enemy",
-        pos = { x = ex, y = -SS },
-        vel = { x = rnd(2) - 1, y = ENEMY_SPEED + rnd(0.5) },
-        sprite = ea1,
-        anim = { frames = { ea1, ea2 }, speed = 10, timer = 0, index = 0 },
-        hitbox = { w = 14, h = 10, ox = 1, oy = 1 },
-        offscreen = true,
-        isRotating = false,
-      })
+      _spawnRaw("enemy", ex, -SS, rnd(2) - 1, ENEMY_SPEED + rnd(0.5), ea1, "r", 14, 10, 1, 1, nil, nil, true, nil)
     elseif etype == 1 then
       local ebId = sprite_id("enemy_b")
-      spawn({
-        group = "enemy",
-        pos = { x = ex, y = -SS },
-        vel = { x = rnd(1.6) - 0.8, y = ENEMY_SPEED + rnd(0.3) },
-        hitbox = { r = 6, ox = 8, oy = 7 },
-        offscreen = true,
-        isRotating = true,
-        rotAngle = rnd(6.28),
-        rotSprite = ebId,
-      })
+      _spawnRaw("enemy", ex, -SS, rnd(1.6) - 0.8, ENEMY_SPEED + rnd(0.3), ebId, "c", 6, 8, 7, nil, nil, nil, true, nil)
     else
       local ea1 = sprite_id("enemy_a1")
-      spawn({
-        group = "enemy",
-        pos = { x = ex, y = -SS },
-        vel = { x = rnd(2.4) - 1.2, y = ENEMY_SPEED + 0.8 },
-        sprite = ea1,
-        hitbox = { w = 14, h = 10, ox = 1, oy = 1 },
-        offscreen = true,
-        isRotating = false,
-      })
+      _spawnRaw("enemy", ex, -SS, rnd(2.4) - 1.2, ENEMY_SPEED + 0.8, ea1, "r", 14, 10, 1, 1, nil, nil, true, nil)
     end
   end
 
@@ -469,11 +425,7 @@ local function shooterUpdate()
 
   killAll("player")
   if invincible <= 0 or flr(invincible / 3) % 2 == 0 then
-    spawn({
-      group = "player",
-      pos = { x = playerX, y = playerY },
-      hitbox = { w = 12, h = 14, ox = 2, oy = 1 },
-    })
+    _spawnRaw("player", playerX, playerY, nil, nil, nil, "r", 12, 14, 2, 1, nil, nil, nil, nil)
   end
 end
 
