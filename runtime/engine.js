@@ -283,7 +283,8 @@ const Mono = (() => {
   let camOX = 0, camOY = 0;
 
   function camSet(x, y) { camX = x; camY = y; }
-  function camGet() { return [camX, camY]; }
+  function camGetX() { return camX; }
+  function camGetY() { return camY; }
   function camShakeSet(amt) { camShake = amt; }
   function camReset() { camX = 0; camY = 0; camShake = 0; }
 
@@ -1294,7 +1295,7 @@ const Mono = (() => {
       scene_name: () => currentSceneName,
       rnd, flr: Math.floor, abs: Math.abs, seed: seedSet,
       dbg, dbgC, dbgPt,
-      cam: camSet, cam_get: camGet, cam_shake: camShakeSet, cam_reset: camReset,
+      cam: camSet, cam_get_x: camGetX, cam_get_y: camGetY, cam_shake: camShakeSet, cam_reset: camReset,
       tween: tweenTo, tween_clear: tweenClear,
       frame: () => frameCount,
       overlap,
@@ -1360,6 +1361,10 @@ const Mono = (() => {
 
   // Lua-side spawn wrapper code (injected after boot)
   const SPAWN_WRAPPER_LUA = `
+    function cam_get()
+      return cam_get_x(), cam_get_y()
+    end
+
     function spawn(t)
       local hbType, hbA, hbB, hbC, hbD = nil, nil, nil, nil, nil
       if t.hitbox then
