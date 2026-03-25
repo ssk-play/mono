@@ -758,10 +758,63 @@ const Mono = (() => {
     }
   }
 
+  // --- Tween system ---
+  const tweens = [];
+
+  // tween(target, prop, from, to, duration, [ease])
+  // target: object (e.g. entity.pos), prop: string key
+  // ease: "linear" (default), "in", "out", "inout"
+  function tweenAdd(target, prop, from, to, duration, ease) {
+    if (!target || !prop) return;
+    tweens.push({ target, prop, from, to, duration, elapsed: 0, ease: ease || "linear" });
+  }
+
+  function tweenEase(t, ease) {
+    if (ease === "in") return t * t;
+    if (ease === "out") return 1 - (1 - t) * (1 - t);
+    if (ease === "inout") return t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
+    return t; // linear
+  }
+
+  function tweenUpdate() {
+    for (let i = tweens.length - 1; i >= 0; i--) {
+      const tw = tweens[i];
+      tw.elapsed++;
+      const t = Math.min(1, tw.elapsed / tw.duration);
+      const v = tw.from + (tw.to - tw.from) * tweenEase(t, tw.ease);
+      tw.target[tw.prop] = v;
+      if (t >= 1) tweens.splice(i, 1);
+    }
+  }
+
+  function tweenClear() { tweens.length = 0; }
+
+  // Lua-friendly: tween_to(entity_id, prop_path, to, duration, ease)
+  // prop_path: "pos.x", "pos.y", or flat prop name
+  function tweenTo(targetId, propPath, to, duration, ease) {
+    // Find entity by id
+    let target = null;
+    for (let i = 0; i < entities.length; i++) {
+      if (entities[i]._id === targetId) { target = entities[i]; break; }
+    }
+    if (!target) return;
+
+    const parts = propPath.split(".");
+    let obj = target;
+    for (let i = 0; i < parts.length - 1; i++) {
+      obj = obj[parts[i]];
+      if (!obj) return;
+    }
+    const prop = parts[parts.length - 1];
+    const from = obj[prop] || 0;
+    tweenAdd(obj, prop, from, to, duration, ease);
+  }
+
   function ecsClear() {
     entities.length = 0;
     collisionHandlers.length = 0;
     collisionQueue.length = 0;
+    tweens.length = 0;
     entityIdCounter = 0;
   }
 
@@ -1148,6 +1201,7 @@ const Mono = (() => {
       currentScene.update();
     }
     ecsUpdate();
+    tweenUpdate();
   }
 
   function stepRender() {
@@ -1208,6 +1262,7 @@ const Mono = (() => {
       rnd, flr: Math.floor, abs: Math.abs, seed: seedSet,
       dbg, dbgC, dbgPt,
       cam: camSet, cam_get: camGet, cam_shake: camShakeSet, cam_reset: camReset,
+      tween: tweenTo, tween_clear: tweenClear,
       frame: () => frameCount,
       overlap,
       _spawnRaw: (group, px, py, vx, vy, sprId, hbType, hbA, hbB, hbC, hbD, grav, life, offscr, anchorX, anchorY, extra) => {
