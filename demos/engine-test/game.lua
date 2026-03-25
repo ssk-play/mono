@@ -287,6 +287,9 @@ local scrollY = 0
 local shooterScore = 0
 local shooterLives = 3
 local shooterLevel = 1
+local weaponType = 0  -- 0=single, 1=double, 2=spread, 3=rapid
+local WEAPON_NAMES = {"SINGLE", "DOUBLE", "SPREAD", "RAPID"}
+local WEAPON_COUNT = 4
 
 local function spawnExplosion(x, y)
   local partId = sprite_id("particle")
@@ -303,6 +306,7 @@ local function shooterInit()
   shooterScore = 0
   shooterLives = 3
   shooterLevel = 1
+  weaponType = 0
   playerX = W / 2 - SS / 2
   playerY = H - 30
   shootCooldown = 0
@@ -383,13 +387,39 @@ local function shooterUpdate()
     invincible = invincible - 1
   end
 
+  -- Weapon rotation
+  if btnp("b") then
+    weaponType = (weaponType + 1) % WEAPON_COUNT
+    note(0, "C5", 0.05)
+  end
+
   if shootCooldown > 0 then
     shootCooldown = shootCooldown - 1
   end
+  local bulletId = sprite_id("bullet")
   if btn("a") and shootCooldown <= 0 and ecount("bullet") < MAX_BULLETS then
-    local bulletId = sprite_id("bullet")
-    _spawnRaw("bullet", playerX + 8, playerY - 4, 0, BULLET_SPEED, bulletId, "c", 3, 0, 0, nil, nil, nil, true, 0.5, 0.5, nil)
-    shootCooldown = 6
+    local cx = playerX + 8
+    local cy = playerY - 4
+    if weaponType == 0 then
+      -- Single shot
+      _spawnRaw("bullet", cx, cy, 0, BULLET_SPEED, bulletId, "c", 3, 0, 0, nil, nil, nil, true, 0.5, 0.5, nil)
+      shootCooldown = 6
+    elseif weaponType == 1 then
+      -- Double shot
+      _spawnRaw("bullet", cx - 5, cy, 0, BULLET_SPEED, bulletId, "c", 3, 0, 0, nil, nil, nil, true, 0.5, 0.5, nil)
+      _spawnRaw("bullet", cx + 5, cy, 0, BULLET_SPEED, bulletId, "c", 3, 0, 0, nil, nil, nil, true, 0.5, 0.5, nil)
+      shootCooldown = 8
+    elseif weaponType == 2 then
+      -- Spread (3-way)
+      _spawnRaw("bullet", cx, cy, 0, BULLET_SPEED, bulletId, "c", 3, 0, 0, nil, nil, nil, true, 0.5, 0.5, nil)
+      _spawnRaw("bullet", cx, cy, -2, BULLET_SPEED, bulletId, "c", 3, 0, 0, nil, nil, nil, true, 0.5, 0.5, nil)
+      _spawnRaw("bullet", cx, cy, 2, BULLET_SPEED, bulletId, "c", 3, 0, 0, nil, nil, nil, true, 0.5, 0.5, nil)
+      shootCooldown = 10
+    elseif weaponType == 3 then
+      -- Rapid
+      _spawnRaw("bullet", cx, cy, 0, BULLET_SPEED * 1.5, bulletId, "c", 3, 0, 0, nil, nil, nil, true, 0.5, 0.5, nil)
+      shootCooldown = 3
+    end
     note(0, "A5", 0.03)
   end
 
@@ -463,7 +493,7 @@ local function shooterDraw()
 
   text("SCORE:" .. shooterScore, 4, 4, 3)
   text("LV:" .. shooterLevel, 140, 4, 2)
-  text("B:" .. ecount("bullet") .. " E:" .. ecount("enemy") .. " P:" .. ecount("particle"), 4, 14, 2)
+  text("[B]" .. WEAPON_NAMES[weaponType + 1], 4, 14, 2)
 
   for i = 1, shooterLives do
     sprT(shipId, W - 20 * i, 1)
