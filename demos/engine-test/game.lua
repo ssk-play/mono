@@ -464,26 +464,7 @@ local titleBlink = 0
 ---------------------------------------------------------------
 -- INPUT MONITOR (drawn on every screen)
 ---------------------------------------------------------------
-function drawInputMonitor()
-  local y = 0
-  local x = 220
-  local ul = btn("up") and 3 or 1
-  local dl = btn("down") and 3 or 1
-  local ll = btn("left") and 3 or 1
-  local rl = btn("right") and 3 or 1
-  text("U", x + 10, y, ul)
-  text("L", x, y + 8, ll)
-  text("R", x + 20, y + 8, rl)
-  text("D", x + 10, y + 16, dl)
-  local al = btn("a") and 3 or 1
-  local bl = btn("b") and 3 or 1
-  local sl = btn("start") and 3 or 1
-  local sel = btn("select") and 3 or 1
-  text("A", x + 50, y + 4, al)
-  text("B", x + 60, y + 4, bl)
-  text("ST", x + 72, y, sl)
-  text("SE", x + 72, y + 10, sel)
-end
+-- drawInputMonitor removed — use engine debug pad overlay (key 4) instead
 
 ---------------------------------------------------------------
 -- TILEMAP SETUP (scrolling starfield for shooter)
@@ -826,8 +807,7 @@ local function shooterDraw()
       text("PRESS A TO RETRY", 95, 150, 3)
     end
     text("[B] BACK TO MENU", 95, 180, 1)
-    drawInputMonitor()
-    return
+      return
   end
 
   drawStars()
@@ -852,7 +832,6 @@ local function shooterDraw()
   end
 
   text("[B] MENU", 4, H - 10, 1)
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -962,7 +941,6 @@ local function cameraDraw()
   text("MAP:" .. CAM_MAP_W .. "x" .. CAM_MAP_H, 4, 24, 1)
   text("[A] SHAKE  [B] DASH  [START] MENU", 4, H - 10, 1)
   text("ARROWS: MOVE", 4, H - 20, 1)
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -1103,7 +1081,6 @@ local function spritesDraw()
   -- Controls
   text("LR:SEL A:FLIPX B:FLIPY UD:ROT", 20, H - 20, 1)
   text("[START] MENU", 4, H - 10, 1)
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -1187,7 +1164,6 @@ local function inputDraw()
   -- Note: B returns to menu, shown at bottom
   text("(B exits to menu after release)", 50, H - 20, 1)
   text("[B] MENU", 4, H - 10, 1)
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -1276,7 +1252,6 @@ local function soundDraw()
   text("[A] TOGGLE BGM", 105, 200, 2)
 
   text("[B] MENU", 4, H - 10, 1)
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -1461,7 +1436,6 @@ local function tilemapDraw()
     end
   end
 
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -1930,7 +1904,6 @@ local function rpgDraw()
     text("[A] CLOSE", W - 90, H - 26, 1)
   end
 
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -2686,7 +2659,6 @@ local function bsDraw()
   text("ENEMIES:" .. alive, W - 80, 14, 2)
 
   text("[A]PUNCH [B]KICK [START]MENU", 4, H - 10, 1)
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -2780,7 +2752,6 @@ function title_draw()
   text("7 TEST MODES INSIDE", 85, 212, 1)
   text("SHOOTER CAM SPRITE INPUT SFX MAP RPG", 10, 224, 1)
 
-  drawInputMonitor()
 end
 
 ---------------------------------------------------------------
@@ -2894,8 +2865,7 @@ function play_draw()
     line(30, menuStartY + #menuItems * menuSpacing + 4, 290, menuStartY + #menuItems * menuSpacing + 4, 1)
     text("UP/DOWN: SELECT   A/START: ENTER", 40, menuStartY + #menuItems * menuSpacing + 12, 2)
 
-    drawInputMonitor()
-  elseif currentMode == MODE_SHOOTER then
+    elseif currentMode == MODE_SHOOTER then
     shooterDraw()
   elseif currentMode == MODE_CAMERA then
     cameraDraw()
@@ -2933,5 +2903,4 @@ function gameover_draw()
   if flr(frame() / 20) % 2 == 0 then
     text("PRESS A TO CONTINUE", 85, 140, 3)
   end
-  drawInputMonitor()
 end
