@@ -88,8 +88,8 @@ Open `http://localhost:8000` in a browser.
 
 | Property        | Value                                           |
 |-----------------|-------------------------------------------------|
-| Resolution      | 320 x 240 pixels                                |
-| Color palette   | 4 grayscale: 0=dark `#1a1a1a`, 1=medium-dark `#6b6b6b`, 2=medium-light `#b0b0b0`, 3=white `#e8e8e8` |
+| Resolution      | 160 x 144 pixels                                |
+| Color palette   | 16 grayscale (4-bit): 0 `#000000` to 15 `#ffffff`, evenly spaced |
 | Sprite size     | 16 x 16 pixels (default)                        |
 | Frame rate      | 30 FPS                                          |
 | Input           | 8 buttons: up, down, left, right, a, b, start, select |

@@ -1,7 +1,7 @@
 # Mono — Claude Code Project Instructions
 
 ## Project
-Mono is a constraint-driven fantasy game console (320x240, 4 grayscale colors, 16x16 sprites, Lua 5.4 via Wasmoon).
+Mono is a constraint-driven fantasy game console (160x144, 16 grayscale colors, 16x16 sprites, Lua 5.4 via Wasmoon).
 
 ## Key Files
 - `runtime/engine.js` — Single-file game engine (Wasmoon + canvas + ECS + audio)

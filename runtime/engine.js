@@ -3,19 +3,26 @@
  *
  * Single-file, main-thread engine using Wasmoon (Lua 5.4).
  * No Worker, no postMessage for game logic.
- * 320x240, 4-color grayscale, 30fps, 2ch square wave.
+ * 160x144, 16-color grayscale, 30fps, 2ch square wave.
  *
  * Mono.boot("screen", { game: "game.lua" })
  */
 const Mono = (() => {
   "use strict";
 
-  const W = 320;
-  const H = 240;
+  const W = 160;
+  const H = 144;
   const FPS = 30;
   const FRAME_MS = 1000 / FPS;
   let SPR_SIZE = 16;
-  const COLORS = ["#1a1a1a", "#6b6b6b", "#b0b0b0", "#e8e8e8"];
+  const COLORS = (() => {
+    const c = [];
+    for (let i = 0; i < 16; i++) {
+      const v = Math.round((i / 15) * 255);
+      c.push(`#${v.toString(16).padStart(2, '0').repeat(3)}`);
+    }
+    return c;
+  })();
 
   function hexToABGR(hex) {
     const r = parseInt(hex.slice(1, 3), 16);

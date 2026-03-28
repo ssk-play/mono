@@ -4,7 +4,7 @@
     {
       "name": "mono",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8090", "-d", "/Users/ssk/work/playground/graybox"],
+      "runtimeArgs": ["-m", "http.server", "8090", "-d", "/Users/ssk/work/playground/mono"],
       "port": 8090
     }
   ]
